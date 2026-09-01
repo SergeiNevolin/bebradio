@@ -144,21 +144,22 @@ input:focus {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 32px;
+  gap: 24px;
+  margin-top: 64px;
 }
 
-.home h1 {
-  font-size: 36px;
-  font-weight: 700;
+.home-title {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--text);
 }
 
-.home h1 span {
-  color: var(--primary);
-}
-
-.home p {
+.home-subtitle {
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 14px;
+  text-transform: lowercase;
+  margin-top: -16px;
 }
 
 .home-actions {
