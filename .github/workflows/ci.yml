@@ -85,6 +85,11 @@ jobs:
       - name: Pull latest changes
         run: git pull origin main
 
+      - name: Create .env file
+        run: |
+          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
+
       - name: Stop existing containers
         run: docker compose -f docker-compose.prod.yml down
 
