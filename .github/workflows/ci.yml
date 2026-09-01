@@ -79,8 +79,11 @@ jobs:
       - name: Stop existing containers
         run: docker compose -f docker-compose.prod.yml down
 
-      - name: Build and start containers
-        run: docker compose -f docker-compose.prod.yml up -d --build --no-cache
+      - name: Build
+        run: docker compose -f docker-compose.prod.yml build --no-cache
+
+      - name: Run containers
+        run: docker compose -f docker-compose.prod.yml up -d
 
       - name: Clean up unused images
         run: docker image prune -f
