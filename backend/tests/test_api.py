@@ -530,6 +530,62 @@ async def test_private_room_still_accessible_by_id(client):
     assert res.json()["is_private"] is True
 
 
+# --- Room deletion tests ---
+
+
+@pytest.mark.asyncio
+async def test_delete_room_owner(client):
+    token = await _register(client)
+    create = await client.post("/api/rooms", json={"name": "D"}, headers=_auth_header(token))
+    room_id = create.json()["id"]
+
+    res = await client.delete(f"/api/rooms/{room_id}", headers=_auth_header(token))
+    assert res.status_code == 200
+    assert res.json()["ok"] is True
+
+    assert room_id not in store.rooms
+    assert (await client.get(f"/api/rooms/{room_id}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_room_not_owner(client):
+    owner = await _register(client, name="Owner", email="owner@test.com")
+    other = await _register(client, name="Other", email="other@test.com")
+    create = await client.post("/api/rooms", json={"name": "D"}, headers=_auth_header(owner))
+    room_id = create.json()["id"]
+
+    res = await client.delete(f"/api/rooms/{room_id}", headers=_auth_header(other))
+    assert res.status_code == 403
+    assert (await client.get(f"/api/rooms/{room_id}")).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_delete_room_no_auth(client):
+    token = await _register(client)
+    create = await client.post("/api/rooms", json={"name": "D"}, headers=_auth_header(token))
+    room_id = create.json()["id"]
+    res = await client.delete(f"/api/rooms/{room_id}")
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_delete_room_not_found(client):
+    token = await _register(client)
+    res = await client.delete("/api/rooms/XXXXXX", headers=_auth_header(token))
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_deleted_room_disappears_from_list(client):
+    token = await _register(client)
+    create = await client.post("/api/rooms", json={"name": "D"}, headers=_auth_header(token))
+    room_id = create.json()["id"]
+    assert len((await client.get("/api/rooms")).json()) == 1
+
+    await client.delete(f"/api/rooms/{room_id}", headers=_auth_header(token))
+    assert (await client.get("/api/rooms")).json() == []
+
+
 # --- Chat tests ---
 
 

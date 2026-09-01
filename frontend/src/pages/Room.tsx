@@ -21,6 +21,8 @@ export default function Room() {
   const [unlocking, setUnlocking] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsPassword, setSettingsPassword] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [copied, setCopied] = useState(false)
   const [userVote, setUserVote] = useState<1 | -1 | 0>(0)
@@ -51,6 +53,13 @@ export default function Room() {
           ws.close()
           return
         }
+        if (data.type === 'room_deleted') {
+          unmountedRef.current = true
+          ws.close()
+          clearRoomAccess(roomId!)
+          navigate('/', { replace: true })
+          return
+        }
         if (data.type === 'chat') {
           setChatMessages((prev) => [...prev.slice(-99), data.message])
         } else {
@@ -70,7 +79,7 @@ export default function Room() {
     ws.onerror = () => {
       ws.close()
     }
-  }, [roomId])
+  }, [roomId, navigate])
 
   const fetchRoom = useCallback(async (): Promise<RoomState | null> => {
     try {
@@ -208,6 +217,28 @@ export default function Room() {
         }
       }
     } catch { /* ignore */ }
+  }
+
+  const handleDeleteRoom = async () => {
+    if (!window.confirm('Delete this room for everyone? This cannot be undone.')) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/rooms/${roomId}`, {
+        method: 'DELETE',
+        headers: { ...authHeaders() },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(data.error || 'Failed to delete room')
+      }
+      unmountedRef.current = true
+      wsRef.current?.close()
+      clearRoomAccess(roomId!)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete room')
+      setDeleting(false)
+    }
   }
 
   const handleSendChat = (text: string) => {
@@ -384,6 +415,26 @@ export default function Room() {
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div
+                className="settings-danger"
+                style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border, rgba(128,128,128,0.25))' }}
+              >
+                <div className="toggle-label" style={{ fontWeight: 600, marginBottom: 4 }}>
+                  Delete room
+                </div>
+                <div className="toggle-label" style={{ marginBottom: 8, opacity: 0.7, fontSize: 13 }}>
+                  Removes the room, its queue and chat for everyone. This cannot be undone.
+                </div>
+                {deleteError && <div className="error-msg" style={{ marginBottom: 8 }}>{deleteError}</div>}
+                <button
+                  className="btn btn-sm btn-danger"
+                  onClick={handleDeleteRoom}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Delete this room'}
+                </button>
               </div>
             </div>
           </div>
