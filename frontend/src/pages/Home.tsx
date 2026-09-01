@@ -23,7 +23,19 @@ export default function Home() {
   const [roomsLoading, setRoomsLoading] = useState(true)
   const [passwordPrompt, setPasswordPrompt] = useState<string | null>(null)
   const [promptPassword, setPromptPassword] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
   const navigate = useNavigate()
+
+  const openCreate = () => {
+    setError('')
+    setRoomPassword('')
+    setShowCreate(true)
+  }
+
+  const closeCreate = () => {
+    setShowCreate(false)
+    setRoomPassword('')
+  }
 
   const fetchRooms = async () => {
     try {
@@ -59,6 +71,7 @@ export default function Home() {
       }
       const data = await res.json()
       if (data.access) setRoomAccess(data.id, data.access)
+      setShowCreate(false)
       navigate(`/room/${data.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create room')
@@ -126,21 +139,11 @@ export default function Home() {
           placeholder="Room name"
           value={roomName}
           onChange={(e) => setRoomName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+          onKeyDown={(e) => e.key === 'Enter' && roomName.trim() && openCreate()}
         />
-        <button className="btn" onClick={handleCreate} disabled={loading}>
+        <button className="btn" onClick={openCreate} disabled={loading || !roomName.trim()}>
           Create
         </button>
-      </div>
-
-      <div className="home-actions">
-        <input
-          type="password"
-          placeholder="Room password (optional)"
-          value={roomPassword}
-          onChange={(e) => setRoomPassword(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-        />
       </div>
 
       <div className="home-actions">
@@ -157,7 +160,58 @@ export default function Home() {
         </button>
       </div>
 
-      {error && <div className="error-msg">{error}</div>}
+      {error && !showCreate && !passwordPrompt && <div className="error-msg">{error}</div>}
+
+      {showCreate && (
+        <div className="modal-overlay" onClick={closeCreate}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Create a room</h3>
+              <button className="btn-close" onClick={closeCreate}>×</button>
+            </div>
+            <div className="modal-body">
+              <label className="toggle-label" htmlFor="create-room-name">Room name</label>
+              <input
+                id="create-room-name"
+                type="text"
+                autoFocus
+                placeholder="Room name"
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                style={{ width: '100%', marginTop: 6, marginBottom: 14 }}
+              />
+              <label className="toggle-label" htmlFor="create-room-password">Password (optional)</label>
+              <input
+                id="create-room-password"
+                type="password"
+                placeholder="Leave empty for an open room"
+                value={roomPassword}
+                onChange={(e) => setRoomPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                style={{ width: '100%', marginTop: 6 }}
+              />
+              <p style={{ marginTop: 8, fontSize: 13, opacity: 0.7 }}>
+                With a password, listeners must enter it before they can open the room.
+              </p>
+              {error && <div className="error-msg" style={{ marginTop: 12 }}>{error}</div>}
+              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <button
+                  className="btn"
+                  onClick={handleCreate}
+                  disabled={loading || !roomName.trim()}
+                  style={{ flex: 1 }}
+                >
+                  {loading ? 'Creating...' : 'Create room'}
+                </button>
+                <button className="btn btn-secondary" onClick={closeCreate} disabled={loading}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {passwordPrompt && (
         <div className="modal-overlay" onClick={() => setPasswordPrompt(null)}>
