@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { setRoomAccess } from '../lib/roomAccess'
 
 interface RoomListItem {
   id: string
@@ -8,16 +9,20 @@ interface RoomListItem {
   user_count: number
   track_count: number
   is_playing: boolean
+  has_password: boolean
 }
 
 export default function Home() {
   const { authHeaders } = useAuth()
   const [roomName, setRoomName] = useState('')
+  const [roomPassword, setRoomPassword] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [rooms, setRooms] = useState<RoomListItem[]>([])
   const [roomsLoading, setRoomsLoading] = useState(true)
+  const [passwordPrompt, setPasswordPrompt] = useState<string | null>(null)
+  const [promptPassword, setPromptPassword] = useState('')
   const navigate = useNavigate()
 
   const fetchRooms = async () => {
@@ -43,13 +48,17 @@ export default function Home() {
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ name: roomName.trim() }),
+        body: JSON.stringify({
+          name: roomName.trim(),
+          password: roomPassword.trim() || null,
+        }),
       })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to create room')
       }
       const data = await res.json()
+      if (data.access) setRoomAccess(data.id, data.access)
       navigate(`/room/${data.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create room')
@@ -66,9 +75,41 @@ export default function Home() {
     try {
       const res = await fetch(`/api/rooms/${code}`)
       if (!res.ok) throw new Error()
+      const data = await res.json()
+      if (data.locked) {
+        setPasswordPrompt(code)
+        setPromptPassword('')
+        return
+      }
       navigate(`/room/${code}`)
     } catch {
       setError('Room not found')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const submitPassword = async () => {
+    if (!passwordPrompt || !promptPassword) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/rooms/${passwordPrompt}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: promptPassword }),
+      })
+      if (!res.ok) {
+        setError('Incorrect room password')
+        return
+      }
+      const data = await res.json()
+      setRoomAccess(passwordPrompt, data.access)
+      const code = passwordPrompt
+      setPasswordPrompt(null)
+      navigate(`/room/${code}`)
+    } catch {
+      setError('Could not join room')
     } finally {
       setLoading(false)
     }
@@ -94,6 +135,16 @@ export default function Home() {
 
       <div className="home-actions">
         <input
+          type="password"
+          placeholder="Room password (optional)"
+          value={roomPassword}
+          onChange={(e) => setRoomPassword(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+        />
+      </div>
+
+      <div className="home-actions">
+        <input
           type="text"
           placeholder="Enter room code"
           value={joinCode}
@@ -108,6 +159,39 @@ export default function Home() {
 
       {error && <div className="error-msg">{error}</div>}
 
+      {passwordPrompt && (
+        <div className="modal-overlay" onClick={() => setPasswordPrompt(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Password required</h3>
+              <button className="btn-close" onClick={() => setPasswordPrompt(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: 12, fontSize: 14 }}>
+                Room <strong>{passwordPrompt}</strong> is password protected.
+              </p>
+              <input
+                type="password"
+                autoFocus
+                placeholder="Room password"
+                value={promptPassword}
+                onChange={(e) => setPromptPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitPassword()}
+                style={{ width: '100%' }}
+              />
+              <button
+                className="btn"
+                onClick={submitPassword}
+                disabled={loading || !promptPassword}
+                style={{ marginTop: 12, width: '100%' }}
+              >
+                Enter room
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="room-list-section">
         <h2>Active Rooms</h2>
         {roomsLoading ? (
@@ -119,7 +203,10 @@ export default function Home() {
             {rooms.map((room) => (
               <div key={room.id} className="room-list-item" onClick={() => handleJoin(room.id)}>
                 <div className="room-list-item-info">
-                  <div className="room-list-item-name">{room.name}</div>
+                  <div className="room-list-item-name">
+                    {room.has_password && <span title="Password protected">🔒 </span>}
+                    {room.name}
+                  </div>
                   <div className="room-list-item-meta">
                     <span className="room-list-item-code">{room.id}</span>
                     {room.is_playing && <span className="room-list-item-playing">LIVE</span>}

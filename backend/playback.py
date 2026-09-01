@@ -8,8 +8,11 @@ def go_next(room: Room) -> bool:
     if not room.queue:
         return False
 
-    room.queue.pop(room.current_index)
-    room.current_index = max(0, min(room.current_index, len(room.queue) - 1))
+    # current_index can drift out of range if the queue shrank elsewhere;
+    # clamp before popping so we never raise IndexError.
+    idx = max(0, min(room.current_index, len(room.queue) - 1))
+    room.queue.pop(idx)
+    room.current_index = max(0, min(idx, len(room.queue) - 1))
     room.position = 0
 
     if not room.queue:
