@@ -34,9 +34,13 @@ describe('Home password rooms', () => {
     mockFetch(() => [])
   })
 
-  it('renders an optional room password field', async () => {
+  it('opens a create-room window with an optional password field', async () => {
     render(<MemoryRouter><Home /></MemoryRouter>)
-    expect(screen.getByPlaceholderText('Room password (optional)')).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText('Room name'), { target: { value: 'Party' } })
+    fireEvent.click(screen.getByText('Create'))
+
+    expect(await screen.findByText('Create a room')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Leave empty for an open room')).toBeInTheDocument()
   })
 
   it('sends the password when creating a room and stores the access token', async () => {
@@ -49,8 +53,10 @@ describe('Home password rooms', () => {
 
     render(<MemoryRouter><Home /></MemoryRouter>)
     fireEvent.change(screen.getByPlaceholderText('Room name'), { target: { value: 'Party' } })
-    fireEvent.change(screen.getByPlaceholderText('Room password (optional)'), { target: { value: 's3cret' } })
     fireEvent.click(screen.getByText('Create'))
+
+    fireEvent.change(await screen.findByPlaceholderText('Leave empty for an open room'), { target: { value: 's3cret' } })
+    fireEvent.click(screen.getByText('Create room'))
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/room/ABC123'))
 

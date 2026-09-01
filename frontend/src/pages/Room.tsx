@@ -348,9 +348,17 @@ export default function Room() {
                 <span className="toggle-label">Private room (hidden from public list)</span>
               </label>
 
-              <div className="settings-password">
-                <div className="toggle-label" style={{ marginBottom: 8 }}>
-                  {room?.has_password ? 'Password protected' : 'No password'}
+              <div
+                className="settings-password"
+                style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border, rgba(128,128,128,0.25))' }}
+              >
+                <div className="toggle-label" style={{ fontWeight: 600, marginBottom: 4 }}>
+                  Room password
+                </div>
+                <div className="toggle-label" style={{ marginBottom: 8, opacity: 0.7, fontSize: 13 }}>
+                  {room?.has_password
+                    ? 'This room is password protected.'
+                    : 'Anyone with the code can join.'}
                 </div>
                 <input
                   type="password"
