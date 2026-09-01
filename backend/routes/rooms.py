@@ -23,7 +23,14 @@ from schemas import (
     PlaybackRequest,
     RoomSettingsRequest,
 )
-from store import get_or_load_room, list_public_rooms, rooms, save_room, save_tracks
+from store import (
+    delete_room_from_db,
+    get_or_load_room,
+    list_public_rooms,
+    rooms,
+    save_room,
+    save_tracks,
+)
 from youtube import fetch_track
 
 router = APIRouter(prefix="/api")
@@ -105,6 +112,20 @@ async def update_room_settings(
     await save_room(room)
     await manager.broadcast(room.id, room.to_dict())
     return room.to_dict()
+
+
+@router.delete("/rooms/{room_id}")
+async def delete_room(room_id: str, user=Depends(require_user)):
+    room = await get_or_load_room(room_id)
+    if room is None:
+        return JSONResponse(status_code=404, content={"error": "Room not found"})
+    if room.owner_id != user.id:
+        return JSONResponse(status_code=403, content={"error": "Only the room owner can delete the room"})
+
+    await manager.broadcast(room.id, {"type": "room_deleted", "room_id": room.id})
+    rooms.pop(room.id, None)
+    await delete_room_from_db(room.id)
+    return {"ok": True}
 
 
 @router.post("/rooms/{room_id}/join")
