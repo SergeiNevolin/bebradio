@@ -25,7 +25,8 @@ services:
       - ./backend:/app
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/bebradio
-      - SECRET_KEY=change-me-in-production
+      - SECRET_KEY=dev-secret-key
+      - CORS_ORIGINS=http://localhost:3000
     depends_on:
       postgres:
         condition: service_healthy

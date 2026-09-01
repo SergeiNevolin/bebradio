@@ -161,7 +161,6 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
     }
   }
 
-  const busy = adding || searching
   const showNoResults = searched && !searching && results.length === 0 && query.trim().length > 1 && !isUrl(query)
 
   return (

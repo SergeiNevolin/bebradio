@@ -29,8 +29,8 @@ export default function Login() {
       <div style={{ position: 'absolute', top: 20, right: 20 }}>
         <ThemeToggle />
       </div>
-      <h1>Listen <span>Together</span></h1>
-      <p>Sign in to your account</p>
+      <h1 className="home-title">bebradio</h1>
+      <p className="home-subtitle">Sign in to your account</p>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 400 }}>
         <input

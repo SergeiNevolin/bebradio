@@ -76,8 +76,8 @@ export default function Home() {
 
   return (
     <div className="home">
-      <h1>Listen <span>Together</span></h1>
-      <p>Listen to music together with friends in real-time</p>
+      <h1 className="home-title">bebradio</h1>
+      <p className="home-subtitle">listen together</p>
 
       <div className="home-actions">
         <input
@@ -113,7 +113,7 @@ export default function Home() {
         {roomsLoading ? (
           <div className="room-list-empty">Loading...</div>
         ) : rooms.length === 0 ? (
-          <div className="room-list-empty">No active rooms yet. Create one above.</div>
+          <div className="room-list-empty">No active rooms yet</div>
         ) : (
           <div className="room-list">
             {rooms.map((room) => (

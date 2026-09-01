@@ -113,7 +113,7 @@ describe('AddTrack', () => {
   it('shows searching spinner during search', async () => {
     vi.useFakeTimers()
     let resolveFetch: (v: unknown) => void
-    global.fetch = vi.fn().mockImplementation(() =>
+    globalThis.fetch = vi.fn().mockImplementation(() =>
       new Promise((r) => { resolveFetch = r })
     )
 
@@ -132,7 +132,7 @@ describe('AddTrack', () => {
 
   it('shows no results message when search returns empty', async () => {
     vi.useFakeTimers()
-    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve([]) })
+    globalThis.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve([]) })
 
     renderWithToast(<AddTrack onAdd={vi.fn()} />)
     const input = screen.getByPlaceholderText('Search or paste YouTube URL...')

@@ -1,0 +1,112 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t bebradio-backend ./backend
+
+      - name: Build frontend image
+        run: docker build -t bebradio-frontend ./frontend
+
+  deploy:
+    name: Deploy to Production
+    runs-on: finland-runner
+    needs: [backend-tests, frontend-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull latest changes
+        run: git pull origin main
+
+      - name: Stop existing containers
+        run: docker compose -f docker-compose.prod.yml down
+
+      - name: Build and start containers
+        run: docker compose -f docker-compose.prod.yml up -d --build
+
+      - name: Wait for services to be ready
+        shell: bash
+        run: |
+          echo "Waiting for backend to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/docs > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Backend failed to start"
+              docker compose -f docker-compose.prod.yml logs backend
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Clean up unused images
+        run: docker image prune -f
