@@ -235,8 +235,8 @@ function mockAudioPlaying() {
     if (tag === 'audio') {
       Object.defineProperty(el, 'paused', { value: false, writable: true, configurable: true })
       Object.defineProperty(el, 'currentTime', { value: 0, writable: true, configurable: true })
-      el.play = vi.fn().mockResolvedValue(undefined)
-      el.pause = vi.fn()
+      Object.defineProperty(el, 'play', { value: vi.fn().mockResolvedValue(undefined), writable: true, configurable: true })
+      Object.defineProperty(el, 'pause', { value: vi.fn(), writable: true, configurable: true })
     }
     return el
   }) as typeof document.createElement
