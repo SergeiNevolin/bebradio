@@ -36,6 +36,26 @@ def decode_token(token: str) -> str | None:
         return None
 
 
+def create_room_token(room_id: str) -> str:
+    """Grant access to a password-protected room after the password was verified."""
+    payload = {
+        "room": room_id,
+        "scope": "room_access",
+        "exp": time.time() + JWT_EXPIRE_HOURS * 3600,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def verify_room_token(token: str | None, room_id: str) -> bool:
+    if not token:
+        return False
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return False
+    return payload.get("scope") == "room_access" and payload.get("room") == room_id
+
+
 async def find_user_by_id(user_id: str) -> UserModel | None:
     async with get_session() as session:
         result = await session.execute(select(UserModel).where(UserModel.id == user_id))

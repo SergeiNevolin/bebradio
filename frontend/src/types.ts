@@ -22,9 +22,15 @@ export interface RoomState {
   user_count: number
   allow_anonymous_add: boolean
   is_private: boolean
+  has_password: boolean
   track_votes: { likes: number; dislikes: number }
   skip_voters: string[]
   messages?: { id: string; user_id: string; username: string; text: string; created_at: number }[]
+  // Present only on the stripped payload returned for a locked room the
+  // caller has not unlocked yet.
+  locked?: boolean
+  // Issued to the room owner (and after a successful password check via /join).
+  access?: string
 }
 
 export interface PlayerProps {

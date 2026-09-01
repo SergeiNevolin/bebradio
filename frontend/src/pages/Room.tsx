@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { getRoomAccess, setRoomAccess, clearRoomAccess } from '../lib/roomAccess'
 import Player from '../components/Player'
 import Queue from '../components/Queue'
 import AddTrack from '../components/AddTrack'
@@ -11,11 +12,15 @@ import type { RoomState } from '../types'
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
-  const { user, authHeaders } = useAuth()
+  const { user, token, authHeaders } = useAuth()
   const [room, setRoom] = useState<RoomState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [locked, setLocked] = useState(false)
+  const [passwordInput, setPasswordInput] = useState('')
+  const [unlocking, setUnlocking] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsPassword, setSettingsPassword] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [copied, setCopied] = useState(false)
   const [userVote, setUserVote] = useState<1 | -1 | 0>(0)
@@ -23,6 +28,7 @@ export default function Room() {
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const unmountedRef = useRef(false)
 
   const isOwner = user && room && user.id === room.owner_id
   const canAddTrack = user || room?.allow_anonymous_add
@@ -31,13 +37,20 @@ export default function Room() {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}`
+    const access = getRoomAccess(roomId!)
+    const query = access ? `?access=${encodeURIComponent(access)}` : ''
+    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}${query}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
+        if (data.error && data.locked) {
+          setLocked(true)
+          ws.close()
+          return
+        }
         if (data.type === 'chat') {
           setChatMessages((prev) => [...prev.slice(-99), data.message])
         } else {
@@ -50,6 +63,7 @@ export default function Room() {
     }
 
     ws.onclose = () => {
+      if (unmountedRef.current) return
       reconnectTimer.current = setTimeout(connectWs, 2000)
     }
 
@@ -58,27 +72,45 @@ export default function Room() {
     }
   }, [roomId])
 
-  useEffect(() => {
-    const fetchRoom = async () => {
-      try {
-        const res = await fetch(`/api/rooms/${roomId}`)
-        if (!res.ok) throw new Error()
-        const data = await res.json() as RoomState
-        setRoom(data)
-      } catch {
-        setError('Room not found')
-      } finally {
-        setLoading(false)
+  const fetchRoom = useCallback(async (): Promise<RoomState | null> => {
+    try {
+      const access = getRoomAccess(roomId!)
+      const query = access ? `?access=${encodeURIComponent(access)}` : ''
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`/api/rooms/${roomId}${query}`, { headers })
+      if (!res.ok) throw new Error()
+      const data = await res.json() as RoomState
+      if (data.locked) {
+        setRoom(data as RoomState)
+        setLocked(true)
+        return null
       }
+      if (data.access) setRoomAccess(roomId!, data.access)
+      setLocked(false)
+      setRoom(data)
+      return data
+    } catch {
+      setError('Room not found')
+      return null
+    } finally {
+      setLoading(false)
     }
-    fetchRoom()
-    connectWs()
+  }, [roomId, token])
+
+  useEffect(() => {
+    unmountedRef.current = false
+    let cancelled = false
+    fetchRoom().then((data) => {
+      if (!cancelled && data) connectWs()
+    })
 
     return () => {
+      cancelled = true
+      unmountedRef.current = true
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
       wsRef.current?.close()
     }
-  }, [roomId, connectWs])
+  }, [roomId, fetchRoom, connectWs])
 
   const sendWs = (msg: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -86,9 +118,39 @@ export default function Room() {
     }
   }
 
+  const handleUnlock = async () => {
+    if (!passwordInput) return
+    setUnlocking(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: passwordInput }),
+      })
+      if (!res.ok) {
+        setError('Incorrect room password')
+        return
+      }
+      const data = await res.json()
+      setRoomAccess(roomId!, data.access)
+      setPasswordInput('')
+      setLocked(false)
+      setLoading(true)
+      const fresh = await fetchRoom()
+      if (fresh) connectWs()
+    } catch {
+      setError('Could not join room')
+    } finally {
+      setUnlocking(false)
+    }
+  }
+
   const handleAddTrack = async (url: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const res = await fetch(`/api/rooms/${roomId}/queue`, {
+      const access = getRoomAccess(roomId!)
+      const query = access ? `?access=${encodeURIComponent(access)}` : ''
+      const res = await fetch(`/api/rooms/${roomId}/queue${query}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ url }),
@@ -122,14 +184,29 @@ export default function Room() {
     }
   }
 
-  const handleUpdateSettings = async (settings: { allow_anonymous_add?: boolean; is_private?: boolean }) => {
-    setRoom((prev) => prev ? { ...prev, ...settings } : prev)
+  const handleUpdateSettings = async (settings: {
+    allow_anonymous_add?: boolean
+    is_private?: boolean
+    password?: string
+  }) => {
+    if (settings.password === undefined) {
+      setRoom((prev) => prev ? { ...prev, ...settings } : prev)
+    }
     try {
-      await fetch(`/api/rooms/${roomId}`, {
+      const res = await fetch(`/api/rooms/${roomId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(settings),
       })
+      if (res.ok) {
+        const data = await res.json() as RoomState
+        setRoom((prev) => prev ? { ...prev, ...data } : data)
+        if ('password' in settings) {
+          // Owner keeps access; drop any stale token when the password is removed.
+          if (!settings.password) clearRoomAccess(roomId!)
+          setSettingsPassword('')
+        }
+      }
     } catch { /* ignore */ }
   }
 
@@ -167,6 +244,32 @@ export default function Room() {
   }
 
   if (loading) return <div className="loading">Loading...</div>
+
+  if (locked) return (
+    <div className="loading">
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxWidth: 360 }}>
+        <h2>🔒 {room?.name || 'Room'}</h2>
+        <p style={{ fontSize: 14, textAlign: 'center' }}>This room is password protected.</p>
+        <input
+          type="password"
+          autoFocus
+          placeholder="Room password"
+          value={passwordInput}
+          onChange={(e) => setPasswordInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+          style={{ width: '100%' }}
+        />
+        {error && <div className="error-msg">{error}</div>}
+        <button className="btn" onClick={handleUnlock} disabled={unlocking || !passwordInput} style={{ width: '100%' }}>
+          {unlocking ? 'Checking...' : 'Enter room'}
+        </button>
+        <button className="btn btn-secondary" onClick={() => navigate('/')}>
+          Back to Home
+        </button>
+      </div>
+    </div>
+  )
+
   if (error) return (
     <div className="loading">
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
@@ -186,7 +289,10 @@ export default function Room() {
             ←
           </button>
           <div className="room-title-group">
-            <h1 className="room-title">{room?.name || 'Room'}</h1>
+            <h1 className="room-title">
+              {room?.has_password && <span title="Password protected">🔒 </span>}
+              {room?.name || 'Room'}
+            </h1>
             <div className="room-meta">
               <span className="room-status">
                 <span className="status-dot"></span>
@@ -241,6 +347,36 @@ export default function Room() {
                 <span className="toggle-slider"></span>
                 <span className="toggle-label">Private room (hidden from public list)</span>
               </label>
+
+              <div className="settings-password">
+                <div className="toggle-label" style={{ marginBottom: 8 }}>
+                  {room?.has_password ? 'Password protected' : 'No password'}
+                </div>
+                <input
+                  type="password"
+                  placeholder={room?.has_password ? 'New password' : 'Set a password'}
+                  value={settingsPassword}
+                  onChange={(e) => setSettingsPassword(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button
+                    className="btn btn-sm"
+                    disabled={!settingsPassword.trim()}
+                    onClick={() => handleUpdateSettings({ password: settingsPassword.trim() })}
+                  >
+                    {room?.has_password ? 'Change password' : 'Set password'}
+                  </button>
+                  {room?.has_password && (
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => handleUpdateSettings({ password: '' })}
+                    >
+                      Remove password
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -70,6 +70,7 @@ async def load_room(room_id: str) -> Optional[Room]:
             queue=tracks,
             allow_anonymous_add=rm.allow_anonymous_add,
             is_private=rm.is_private,
+            password_hash=rm.password_hash,
             messages=messages,
             votes=votes,
         )
@@ -95,12 +96,14 @@ async def save_room(room: Room) -> None:
                 owner_id=room.owner_id,
                 allow_anonymous_add=room.allow_anonymous_add,
                 is_private=room.is_private,
+                password_hash=room.password_hash,
             )
             session.add(rm)
         else:
             rm.name = room.name
             rm.allow_anonymous_add = room.allow_anonymous_add
             rm.is_private = room.is_private
+            rm.password_hash = room.password_hash
         await session.commit()
 
 
@@ -178,6 +181,7 @@ async def list_public_rooms() -> list[dict]:
                     "user_count": len(set(r.users.values())),
                     "track_count": len(r.queue),
                     "is_playing": r.is_playing,
+                    "has_password": bool(r.password_hash),
                 })
             else:
                 track_count_result = await session.execute(
@@ -190,5 +194,6 @@ async def list_public_rooms() -> list[dict]:
                     "user_count": 0,
                     "track_count": track_count,
                     "is_playing": False,
+                    "has_password": bool(rm.password_hash),
                 })
         return rooms_list

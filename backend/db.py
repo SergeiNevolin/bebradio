@@ -7,6 +7,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -36,6 +37,7 @@ class RoomModel(Base):
     owner_id = Column(String(8), nullable=False)
     allow_anonymous_add = Column(Boolean, default=True)
     is_private = Column(Boolean, default=False)
+    password_hash = Column(String(255), nullable=True)
     created_at = Column(Float, server_default=func.extract("epoch", func.now()))
 
     tracks = relationship("TrackModel", back_populates="room", cascade="all, delete-orphan")
@@ -96,6 +98,23 @@ async def init_db(database_url: str | None = None):
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _run_migrations(conn)
+
+
+# Columns added after the initial schema. ``create_all`` never alters existing
+# tables, so on an already-provisioned database (production Postgres) we add the
+# missing columns by hand. Postgres supports ``ADD COLUMN IF NOT EXISTS``; on
+# SQLite the column is always present because tests start from a fresh database.
+_MIGRATIONS = [
+    "ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
+]
+
+
+async def _run_migrations(conn):
+    if conn.dialect.name != "postgresql":
+        return
+    for statement in _MIGRATIONS:
+        await conn.execute(text(statement))
 
 
 async def close_db():

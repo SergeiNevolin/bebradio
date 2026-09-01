@@ -40,10 +40,12 @@ class TokenResponse(BaseModel):
 
 class CreateRoomRequest(BaseModel):
     name: str = "My Room"
+    password: Optional[str] = None
 
 
 class JoinRequest(BaseModel):
     username: str = "Anonymous"
+    password: Optional[str] = None
 
 
 class AddTrackRequest(BaseModel):
@@ -65,3 +67,6 @@ class PlaybackRequest(BaseModel):
 class RoomSettingsRequest(BaseModel):
     allow_anonymous_add: Optional[bool] = None
     is_private: Optional[bool] = None
+    # ``None`` (field unset) means "leave unchanged"; an empty string means
+    # "remove the password"; a non-empty string sets a new password.
+    password: Optional[str] = None

@@ -68,6 +68,7 @@ class Room:
     users: dict = field(default_factory=dict)
     allow_anonymous_add: bool = True
     is_private: bool = False
+    password_hash: Optional[str] = None
     messages: list[ChatMessage] = field(default_factory=list)
     votes: list[TrackVote] = field(default_factory=list)
     skip_votes: set[str] = field(default_factory=set)
@@ -110,6 +111,7 @@ class Room:
             "user_count": len(set(self.users.values())),
             "allow_anonymous_add": self.allow_anonymous_add,
             "is_private": self.is_private,
+            "has_password": bool(self.password_hash),
             "track_votes": track_votes,
             "skip_voters": list(self.skip_votes),
             "messages": [m.to_dict() for m in self.messages[-MAX_CHAT_MESSAGES:]],
