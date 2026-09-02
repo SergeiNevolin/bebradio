@@ -326,13 +326,15 @@ def test_track_defaults():
 
 
 def test_track_to_dict():
-    t = models.Track(id="abc123", title="Song", artist="Artist", url="http://x", duration=200, added_by="Bob")
+    t = models.Track(id="abc123", title="Song", artist="Artist", url="http://x", duration=200,
+                     added_by="Bob", source_url="https://youtu.be/abc123")
     d = t.to_dict()
     assert d["id"] == "abc123"
     assert d["title"] == "Song"
     assert d["artist"] == "Artist"
     assert d["duration"] == 200
     assert d["added_by"] == "Bob"
+    assert d["source_url"] == "https://youtu.be/abc123"
 
 
 def test_room_defaults():
