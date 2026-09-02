@@ -222,6 +222,24 @@ describe('Player vote scale', () => {
     expect(container.querySelector('.vote-bar-like')).not.toBeInTheDocument()
     expect(container.querySelector('.vote-bar-dislike')).not.toBeInTheDocument()
   })
+
+  it('stops audio when unmounted (leaving the room)', () => {
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause')
+    const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load')
+    const { container, unmount } = render(
+      <Player track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+    )
+    const audio = container.querySelector('audio') as HTMLAudioElement
+    expect(audio.getAttribute('src')).toBe(mockTrack.url)
+
+    pauseSpy.mockClear()
+    loadSpy.mockClear()
+    unmount()
+
+    expect(pauseSpy).toHaveBeenCalled()
+    expect(loadSpy).toHaveBeenCalled()
+    expect(audio.getAttribute('src')).toBeNull()
+  })
 })
 
 function countSyncCalls(fn: ReturnType<typeof vi.fn>) {
