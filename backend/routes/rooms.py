@@ -33,7 +33,7 @@ from store import (
     save_room,
     save_tracks,
 )
-from youtube import fetch_track
+from youtube import fetch_subtitles, fetch_track
 
 router = APIRouter(prefix="/api")
 
@@ -204,6 +204,37 @@ async def add_to_queue(
     await save_tracks(room)
     await manager.broadcast(room.id, room.to_dict())
     return track.to_dict()
+
+
+@router.get("/rooms/{room_id}/lyrics")
+async def get_lyrics(
+    room_id: str,
+    lang: str | None = None,
+    access: str | None = None,
+    user=Depends(get_current_user),
+):
+    room = await get_or_load_room(room_id)
+    if room is None:
+        return JSONResponse(status_code=404, content={"error": "Room not found"})
+
+    if not has_room_access(room, user, access):
+        return JSONResponse(
+            status_code=403,
+            content={"error": "This room is password protected", "needs_password": True},
+        )
+
+    track = room.current_track()
+    if track is None or not track.source_url:
+        return {"available": False, "track_id": track.id if track else None, "cues": []}
+
+    subs = await asyncio.to_thread(fetch_subtitles, track.source_url, lang or "")
+    return {
+        "available": bool(subs["cues"]),
+        "track_id": track.id,
+        "lang": subs["lang"],
+        "auto": subs["auto"],
+        "cues": subs["cues"],
+    }
 
 
 @router.post("/rooms/{room_id}/playback")
