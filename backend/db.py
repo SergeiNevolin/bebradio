@@ -40,6 +40,7 @@ class RoomModel(Base):
     allow_anonymous_add = Column(Boolean, default=True)
     is_private = Column(Boolean, default=False)
     password_hash = Column(String(255), nullable=True)
+    auto_radio = Column(Boolean, default=False)
     created_at = Column(Float, server_default=func.extract("epoch", func.now()))
 
     tracks = relationship("TrackModel", back_populates="room", cascade="all, delete-orphan")
@@ -59,6 +60,8 @@ class TrackModel(Base):
     duration = Column(Integer, default=0)
     added_by = Column(String(30), default="Anonymous")
     position_index = Column(Integer, nullable=False, default=0)
+    source_url = Column(Text, default="")
+    stream_expires_at = Column(Float, default=0.0)
     added_at = Column(Float, server_default=func.extract("epoch", func.now()))
 
     room = relationship("RoomModel", back_populates="tracks")
@@ -111,6 +114,9 @@ _MIGRATIONS = [
     "ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''",
+    "ALTER TABLE rooms ADD COLUMN IF NOT EXISTS auto_radio BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS source_url TEXT DEFAULT ''",
+    "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS stream_expires_at DOUBLE PRECISION DEFAULT 0",
 ]
 
 

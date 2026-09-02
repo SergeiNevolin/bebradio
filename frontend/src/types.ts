@@ -20,8 +20,10 @@ export interface RoomState {
   position: number
   current_track: Track | null
   user_count: number
+  listeners?: { id: string; name: string }[]
   allow_anonymous_add: boolean
   is_private: boolean
+  auto_radio?: boolean
   has_password: boolean
   track_votes: { likes: number; dislikes: number }
   skip_voters: string[]

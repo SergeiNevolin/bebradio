@@ -1437,3 +1437,129 @@ input:focus {
 .navbar-user:hover {
   color: var(--primary);
 }
+
+/* --- Listeners (presence) --- */
+.listeners {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.listeners-count {
+  white-space: nowrap;
+}
+
+.listener-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.listener-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listener-chip-more {
+  color: var(--text-muted);
+}
+
+.radio-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* --- Emoji reactions --- */
+.player-wrap {
+  position: relative;
+}
+
+.reactions-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.floating-reaction {
+  position: absolute;
+  bottom: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  animation: reaction-float 3.6s ease-out forwards;
+}
+
+.floating-reaction-emoji {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.floating-reaction-user {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes reaction-float {
+  0% { opacity: 0; transform: translateY(10px) scale(0.6); }
+  15% { opacity: 1; transform: translateY(0) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-130px) scale(1); }
+}
+
+.reaction-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.reaction-btn {
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.1s, background 0.15s;
+}
+
+.reaction-btn:hover {
+  background: var(--surface-hover);
+  transform: translateY(-2px);
+}
+
+.reaction-btn:active {
+  transform: scale(0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-reaction { animation-duration: 2s; }
+  .reaction-btn:hover { transform: none; }
+}

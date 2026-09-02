@@ -1,13 +1,17 @@
+import asyncio
 import json
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from auth import verify_room_token
-from config import MAX_CHAT_MESSAGES
+from config import MAX_CHAT_MESSAGES, REACTION_EMOJIS
 from connections import manager
 from models import ChatMessage, TrackVote
 from playback import go_next, go_prev, jump_to, seek_to
+from radio import needs_refill, refill_and_broadcast
 from store import get_or_load_room, rooms, save_message, save_tracks, save_votes
+from streams import ensure_fresh
 
 router = APIRouter()
 
@@ -46,13 +50,33 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, access: str | N
             if user_id and websocket not in room.users:
                 room.users[websocket] = user_id
 
+            if action == "hello":
+                room.presence[websocket] = {
+                    "id": user_id or f"anon:{id(websocket)}",
+                    "name": (msg.get("username") or "Anonymous").strip()[:30] or "Anonymous",
+                }
+                await manager.broadcast(room_id, room.to_dict())
+                continue
+            if action == "reaction":
+                emoji = msg.get("emoji", "")
+                if emoji in REACTION_EMOJIS:
+                    await manager.broadcast(room_id, {
+                        "type": "reaction",
+                        "id": str(uuid.uuid4())[:8],
+                        "emoji": emoji,
+                        "username": (msg.get("username") or "Anonymous").strip()[:30] or "Anonymous",
+                    })
+                continue
+
             queue_changed = False
+            track_changed = False
             if action == "next":
                 queue_changed = go_next(room)
+                track_changed = queue_changed
             elif action == "prev":
-                go_prev(room)
+                track_changed = go_prev(room)
             elif action == "jump":
-                jump_to(room, msg.get("index", 0))
+                track_changed = jump_to(room, msg.get("index", 0))
             elif action == "seek":
                 seek_to(room, msg.get("position", 0))
             elif action == "sync":
@@ -62,20 +86,32 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, access: str | N
                 continue
             elif action == "vote":
                 queue_changed = await _handle_vote(room, msg)
+                track_changed = queue_changed
             elif action == "skip_vote":
                 queue_changed = await _handle_skip_vote(room, room_id, msg)
+                track_changed = queue_changed
             elif action == "clear_skip_votes":
                 room.skip_votes.clear()
+
+            if track_changed and await ensure_fresh(room, room.current_track()):
+                queue_changed = True
 
             if queue_changed:
                 await save_tracks(room)
 
             await manager.broadcast(room_id, room.to_dict())
 
+            if needs_refill(room):
+                asyncio.create_task(refill_and_broadcast(room))
+
     except WebSocketDisconnect:
         if room_id in rooms:
             rooms[room_id].users.pop(websocket, None)
-        manager.disconnect(room_id, websocket)
+            rooms[room_id].presence.pop(websocket, None)
+            manager.disconnect(room_id, websocket)
+            await manager.broadcast(room_id, rooms[room_id].to_dict())
+        else:
+            manager.disconnect(room_id, websocket)
 
 
 async def _handle_chat(room, room_id: str, msg: dict):

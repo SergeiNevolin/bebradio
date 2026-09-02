@@ -16,6 +16,8 @@ from auth import (
 from connections import manager
 from models import Room, Track
 from playback import go_next, go_prev, jump_to, seek_to
+from radio import needs_refill, refill_and_broadcast
+from streams import ensure_fresh
 from schemas import (
     AddTrackRequest,
     CreateRoomRequest,
@@ -107,10 +109,14 @@ async def update_room_settings(
         room.allow_anonymous_add = req.allow_anonymous_add
     if req.is_private is not None:
         room.is_private = req.is_private
+    if req.auto_radio is not None:
+        room.auto_radio = req.auto_radio
     if "password" in req.model_fields_set:
         room.password_hash = hash_password(req.password) if req.password else None
     await save_room(room)
     await manager.broadcast(room.id, room.to_dict())
+    if needs_refill(room):
+        asyncio.create_task(refill_and_broadcast(room))
     return room.to_dict()
 
 
@@ -183,8 +189,12 @@ async def add_to_queue(
         thumbnail=result["thumbnail"],
         duration=result["duration"],
         added_by=added_by,
+        source_url=result.get("source_url", req.url),
+        stream_expires_at=result.get("expires_at", 0.0),
     )
     room.queue.append(track)
+    if track.source_url:
+        room.radio_seed_url = track.source_url
 
     if len(room.queue) == 1:
         room.is_playing = True
@@ -214,17 +224,24 @@ async def update_playback(
         )
 
     queue_changed = False
+    track_changed = False
     if req.action == "next":
         queue_changed = go_next(room)
+        track_changed = queue_changed
     elif req.action == "prev":
-        go_prev(room)
+        track_changed = go_prev(room)
     elif req.action == "jump" and req.index is not None:
-        jump_to(room, req.index)
+        track_changed = jump_to(room, req.index)
     elif req.action == "seek" and req.position is not None:
         seek_to(room, req.position)
+
+    if track_changed and await ensure_fresh(room, room.current_track()):
+        queue_changed = True
 
     if queue_changed:
         await save_tracks(room)
 
     await manager.broadcast(room.id, room.to_dict())
+    if needs_refill(room):
+        asyncio.create_task(refill_and_broadcast(room))
     return room.to_dict()
