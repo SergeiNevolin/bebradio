@@ -1,4 +1,4 @@
-import { render, screen, act, fireEvent } from '@testing-library/react'
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import Player from '../components/Player'
 import type { Track } from '../types'
@@ -221,6 +221,25 @@ describe('Player vote scale', () => {
     )
     expect(container.querySelector('.vote-bar-like')).not.toBeInTheDocument()
     expect(container.querySelector('.vote-bar-dislike')).not.toBeInTheDocument()
+  })
+
+  it('does not show the tap-to-play prompt when autoplay is allowed', () => {
+    render(<Player track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    expect(screen.queryByRole('button', { name: /enable sound/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a tap-to-play prompt when the browser blocks autoplay, and clears it on tap', async () => {
+    const play = HTMLMediaElement.prototype.play as ReturnType<typeof vi.fn>
+    play.mockRejectedValueOnce(new Error('NotAllowedError'))
+
+    render(<Player track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+
+    const btn = await screen.findByRole('button', { name: /enable sound/i })
+    fireEvent.click(btn)
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /enable sound/i })).not.toBeInTheDocument()
+    )
   })
 
   it('stops audio when unmounted (leaving the room)', () => {

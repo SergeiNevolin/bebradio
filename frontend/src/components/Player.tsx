@@ -31,6 +31,9 @@ export default function Player({ track, isPlaying, position, onPlayback, likes, 
     return saved !== null ? Number(saved) : 0.7
   })
   const [muted, setMuted] = useState(false)
+  // True when the browser refused to start audio without a user gesture
+  // (mobile autoplay policy). Cleared once playback actually starts.
+  const [needsGesture, setNeedsGesture] = useState(false)
   const trackIdRef = useRef<string | null>(null)
   const posInterval = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -106,11 +109,33 @@ export default function Player({ track, isPlaying, position, onPlayback, likes, 
     if (trackIdRef.current !== track.id) return
 
     if (isPlaying) {
-      audio.play().catch(() => {})
+      audio.play()
+        .then(() => setNeedsGesture(false))
+        .catch(() => {
+          // Mobile browsers block audio that starts without a user gesture;
+          // surface a tap target instead of failing silently.
+          setNeedsGesture(true)
+        })
     } else {
       audio.pause()
+      setNeedsGesture(false)
     }
   }, [isPlaying, track?.id])
+
+  // Once autoplay was blocked, resume on the very first user interaction
+  // anywhere on the page (a tap, a key) — that gesture unlocks playback.
+  useEffect(() => {
+    if (!needsGesture || !isPlaying) return
+    const resume = () => {
+      audioRef.current?.play().then(() => setNeedsGesture(false)).catch(() => {})
+    }
+    window.addEventListener('pointerdown', resume)
+    window.addEventListener('keydown', resume)
+    return () => {
+      window.removeEventListener('pointerdown', resume)
+      window.removeEventListener('keydown', resume)
+    }
+  }, [needsGesture, isPlaying])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -168,6 +193,18 @@ export default function Player({ track, isPlaying, position, onPlayback, likes, 
   return (
     <div className="player">
       <audio ref={audioRef} preload="auto" />
+
+      {needsGesture && track && (
+        <button
+          type="button"
+          className="player-unlock"
+          onClick={() => {
+            audioRef.current?.play().then(() => setNeedsGesture(false)).catch(() => {})
+          }}
+        >
+          ▶ Tap to enable sound
+        </button>
+      )}
 
       {!track ? (
         <div className="player-empty">
