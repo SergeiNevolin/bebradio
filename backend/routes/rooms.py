@@ -16,7 +16,7 @@ from auth import (
 from connections import manager
 from models import Room, Track
 from playback import go_next, go_prev, jump_to, seek_to
-from radio import needs_refill, refill_and_broadcast
+from radio import maybe_refill
 from streams import ensure_fresh
 from schemas import (
     AddTrackRequest,
@@ -115,8 +115,7 @@ async def update_room_settings(
         room.password_hash = hash_password(req.password) if req.password else None
     await save_room(room)
     await manager.broadcast(room.id, room.to_dict())
-    if needs_refill(room):
-        asyncio.create_task(refill_and_broadcast(room))
+    maybe_refill(room)
     return room.to_dict()
 
 
@@ -182,16 +181,9 @@ async def add_to_queue(
         return JSONResponse(status_code=400, content={"error": "Could not fetch video info"})
 
     added_by = user.username if user else req.added_by or "Anonymous"
-    track = Track(
-        title=result["title"],
-        artist=result["artist"],
-        url=result["stream_url"],
-        thumbnail=result["thumbnail"],
-        duration=result["duration"],
-        added_by=added_by,
-        source_url=result.get("source_url", req.url),
-        stream_expires_at=result.get("expires_at", 0.0),
-    )
+    track = Track.from_youtube(result, added_by=added_by)
+    if not track.source_url:
+        track.source_url = req.url
     room.queue.append(track)
     if track.source_url:
         room.radio_seed_url = track.source_url
@@ -273,6 +265,5 @@ async def update_playback(
         await save_tracks(room)
 
     await manager.broadcast(room.id, room.to_dict())
-    if needs_refill(room):
-        asyncio.create_task(refill_and_broadcast(room))
+    maybe_refill(room)
     return room.to_dict()

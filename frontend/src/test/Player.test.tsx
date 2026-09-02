@@ -48,10 +48,10 @@ describe('Player', () => {
     expect(document.querySelector('audio')).toBeInTheDocument()
   })
 
-  it('renders progress bar', () => {
+  it('renders the seek bar', () => {
     const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
-    expect(container.querySelector('.progress-bar')).toBeInTheDocument()
-    expect(container.querySelector('.progress-fill')).toBeInTheDocument()
+    expect(screen.getByRole('slider', { name: 'Seek' })).toBeInTheDocument()
+    expect(container.querySelector('.seek-fill')).toBeInTheDocument()
   })
 
   it('renders volume control', () => {
@@ -128,15 +128,13 @@ describe('Player vote buttons', () => {
   })
 
   it('highlights like button when userVote=1', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} />)
-    const likeBtn = container.querySelector('.vote-like-group .vote-btn')
-    expect(likeBtn).toHaveClass('vote-btn-active')
+    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} />)
+    expect(screen.getByText(/👍/)).toHaveClass('vote-btn-active')
   })
 
   it('highlights dislike button when userVote=-1', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} />)
-    const dislikeBtn = container.querySelectorAll('.vote-like-group .vote-btn')[1]
-    expect(dislikeBtn).toHaveClass('vote-btn-active-down')
+    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} />)
+    expect(screen.getByText(/👎/)).toHaveClass('vote-btn-active-down')
   })
 
   it('sends vote even when others already voted', () => {
@@ -198,15 +196,15 @@ describe('Player vote scale', () => {
     expect(dislike.style.width).toBe('50%')
   })
 
-  it('scale is between like and dislike buttons', () => {
+  it('scale sits between the like and dislike buttons', () => {
     const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
-    const likeGroup = container.querySelector('.vote-like-group')
-    const scale = container.querySelector('.vote-scale')
-    const skipBtn = container.querySelector('.vote-skip')
     const buttons = container.querySelector('.vote-buttons')
     const children = Array.from(buttons!.children)
-    expect(children.indexOf(likeGroup!)).toBeLessThan(children.indexOf(scale!))
-    expect(children.indexOf(scale!)).toBeLessThan(children.indexOf(skipBtn!))
+    const likeBtn = screen.getByText(/👍/)
+    const dislikeBtn = screen.getByText(/👎/)
+    const scale = container.querySelector('.vote-scale')
+    expect(children.indexOf(likeBtn)).toBeLessThan(children.indexOf(scale!))
+    expect(children.indexOf(scale!)).toBeLessThan(children.indexOf(dislikeBtn))
   })
 
   it('resets to empty when track changes and new track has no votes', () => {
@@ -390,5 +388,25 @@ describe('Player karaoke toggle', () => {
     expect(btn).toHaveAttribute('aria-pressed', 'true')
     expect(await screen.findByText(/no lyrics for this track/i)).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith('/api/rooms/ROOM1/lyrics')
+  })
+})
+
+describe('Player seeking', () => {
+  it('broadcasts a seek when the user jumps with the arrow keys', () => {
+    const onPlayback = vi.fn()
+    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
+    fireEvent.keyDown(document.body, { code: 'ArrowRight' })
+    expect(onPlayback).toHaveBeenCalledWith('seek', { position: 10 })
+  })
+
+  it('renders a Skip chip in the control row that votes to skip', () => {
+    const onSkipVote = vi.fn()
+    render(
+      <Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onSkipVote={onSkipVote} skipVoters={['x']} />
+    )
+    const skip = screen.getByRole('button', { name: /skip \(1\)/i })
+    expect(skip).toHaveClass('player-chip')
+    fireEvent.click(skip)
+    expect(onSkipVote).toHaveBeenCalled()
   })
 })
