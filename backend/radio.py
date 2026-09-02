@@ -7,6 +7,7 @@ fresh tracks tagged as added by 📻 Radio.
 
 import asyncio
 import time
+from typing import Awaitable, Callable, Optional
 
 from config import RADIO_BATCH, RADIO_REFILL_AT
 from connections import manager
@@ -59,11 +60,16 @@ async def _collect_tracks(room: Room, seed: str, limit: int) -> list[Track]:
     return picked
 
 
-async def refill(room: Room) -> bool:
+async def refill(
+    room: Room,
+    on_start: Optional[Callable[[], Awaitable[None]]] = None,
+) -> bool:
     """Append related tracks to the queue. Returns ``True`` if any were added.
 
     Guarded by ``room.radio_filling`` so overlapping callers don't stack
-    refills on top of each other.
+    refills on top of each other. ``on_start`` is awaited once the search is
+    under way (``room.radio_filling`` set), so callers can surface a
+    "searching" indicator before the network work begins.
     """
     if not needs_refill(room):
         return False
@@ -71,6 +77,8 @@ async def refill(room: Room) -> bool:
     seed = _seed_url(room)
     room.radio_filling = True
     try:
+        if on_start is not None:
+            await on_start()
         new_tracks = await _collect_tracks(room, seed, RADIO_BATCH)
         if not new_tracks:
             return False
@@ -86,11 +94,22 @@ async def refill(room: Room) -> bool:
 
 
 async def refill_and_broadcast(room: Room) -> None:
-    """Fire-and-forget refill that persists and pushes the new queue."""
+    """Fire-and-forget refill that shows a "searching" state, then the result."""
     from store import save_tracks  # local import avoids an import cycle
 
-    if await refill(room):
+    announced = False
+
+    async def announce_searching() -> None:
+        nonlocal announced
+        announced = True
+        await manager.broadcast(room.id, room.to_dict())
+
+    added = await refill(room, on_start=announce_searching)
+    if added:
         await save_tracks(room)
+    if added or announced:
+        # Push the final state so the "searching" indicator clears, even when
+        # the search turned up nothing.
         await manager.broadcast(room.id, room.to_dict())
 
 

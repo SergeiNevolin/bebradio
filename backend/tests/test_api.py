@@ -1076,6 +1076,91 @@ async def test_maybe_refill_spawns_task_only_when_needed(monkeypatch):
     assert len(spawned) == 1
 
 
+def test_room_to_dict_exposes_radio_searching():
+    r = models.Room()
+    assert r.to_dict()["radio_searching"] is False
+    r.radio_filling = True
+    assert r.to_dict()["radio_searching"] is True
+
+
+@pytest.mark.asyncio
+async def test_refill_and_broadcast_announces_search_then_result(monkeypatch):
+    import radio
+
+    seen = []
+
+    async def fake_broadcast(room_id, payload):
+        seen.append(payload["radio_searching"])
+
+    async def fake_save_tracks(room):
+        return None
+
+    monkeypatch.setattr(radio.manager, "broadcast", fake_broadcast)
+    monkeypatch.setattr(store, "save_tracks", fake_save_tracks)
+    monkeypatch.setattr(
+        radio, "fetch_related",
+        lambda seed, limit: ["https://www.youtube.com/watch?v=rel0000000a"],
+    )
+    monkeypatch.setattr(
+        radio, "fetch_track",
+        lambda url: {"title": "T", "artist": "A", "stream_url": "http://s",
+                     "thumbnail": "", "duration": 100, "source_url": url,
+                     "expires_at": 9_999_999_999.0},
+    )
+
+    r = models.Room(auto_radio=True)
+    r.radio_seed_url = "https://www.youtube.com/watch?v=seed000000a"
+    await radio.refill_and_broadcast(r)
+
+    # First broadcast announces the search, last one clears it.
+    assert seen[0] is True
+    assert seen[-1] is False
+    assert len(r.queue) == 1
+
+
+# --- streams.ensure_fresh_ahead (prefetch) ---
+
+
+@pytest.mark.asyncio
+async def test_ensure_fresh_ahead_refreshes_current_and_next(monkeypatch):
+    import streams
+    monkeypatch.setattr(
+        streams, "resolve_stream",
+        lambda src: {"stream_url": f"fresh:{src}", "expires_at": 9_999_999_999.0},
+    )
+    r = models.Room()
+    r.queue = [
+        models.Track(id="a", url="old", source_url="https://youtu.be/aaa", stream_expires_at=1.0),
+        models.Track(id="b", url="old", source_url="https://youtu.be/bbb", stream_expires_at=1.0),
+        models.Track(id="c", url="old", source_url="https://youtu.be/ccc", stream_expires_at=1.0),
+    ]
+    r.current_index = 0
+
+    changed = await streams.ensure_fresh_ahead(r)
+    assert changed is True
+    assert r.queue[0].url == "fresh:https://youtu.be/aaa"
+    assert r.queue[1].url == "fresh:https://youtu.be/bbb"
+    # The track after next is left alone.
+    assert r.queue[2].url == "old"
+
+
+@pytest.mark.asyncio
+async def test_ensure_fresh_ahead_without_next_track(monkeypatch):
+    import time as _t
+    import streams
+    calls = []
+    monkeypatch.setattr(
+        streams, "resolve_stream",
+        lambda src: calls.append(src) or {"stream_url": "fresh", "expires_at": 9_999_999_999.0},
+    )
+    r = models.Room()
+    r.queue = [models.Track(id="a", url="old", source_url="https://youtu.be/aaa", stream_expires_at=1.0)]
+    r.current_index = 0
+
+    assert await streams.ensure_fresh_ahead(r) is True
+    assert calls == ["https://youtu.be/aaa"]
+
+
 # --- Karaoke / subtitles ---
 
 

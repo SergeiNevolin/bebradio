@@ -24,6 +24,8 @@ export interface RoomState {
   allow_anonymous_add: boolean
   is_private: boolean
   auto_radio?: boolean
+  // True while auto-radio is fetching related tracks in the background.
+  radio_searching?: boolean
   has_password: boolean
   track_votes: { likes: number; dislikes: number }
   skip_voters: string[]
@@ -37,6 +39,7 @@ export interface RoomState {
 
 export interface PlayerProps {
   track: Track | null
+  nextTrack?: Track | null
   isPlaying: boolean
   position: number
   onPlayback: (action: string, extra?: Record<string, unknown>) => void

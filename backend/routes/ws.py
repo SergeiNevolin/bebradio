@@ -10,7 +10,7 @@ from models import ChatMessage, TrackVote
 from playback import go_next, go_prev, jump_to, seek_to
 from radio import maybe_refill
 from store import get_or_load_room, rooms, save_message, save_tracks, save_votes
-from streams import ensure_fresh
+from streams import ensure_fresh_ahead
 
 router = APIRouter()
 
@@ -92,7 +92,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, access: str | N
             elif action == "clear_skip_votes":
                 room.skip_votes.clear()
 
-            if track_changed and await ensure_fresh(room, room.current_track()):
+            if track_changed and await ensure_fresh_ahead(room):
                 queue_changed = True
 
             if queue_changed:

@@ -362,7 +362,14 @@ export default function Room() {
               {room?.auto_radio && (
                 <>
                   <span className="room-divider">·</span>
-                  <span className="radio-badge" title="Auto-radio keeps the queue full">📻 Radio</span>
+                  {room?.radio_searching ? (
+                    <span className="radio-badge is-searching" title="Auto-radio is finding related tracks">
+                      <span className="radio-spinner" aria-hidden="true" />
+                      Finding tracks…
+                    </span>
+                  ) : (
+                    <span className="radio-badge" title="Auto-radio keeps the queue full">📻 Radio</span>
+                  )}
                 </>
               )}
               <span className="room-divider">·</span>
@@ -500,6 +507,7 @@ export default function Room() {
             <Player
               roomId={roomId}
               track={room?.current_track ?? null}
+              nextTrack={room?.queue?.[(room?.current_index ?? 0) + 1] ?? null}
               isPlaying={room?.is_playing ?? false}
               position={room?.position ?? 0}
               onPlayback={handlePlayback}
@@ -515,6 +523,7 @@ export default function Room() {
           <Queue
             queue={room?.queue ?? []}
             currentIndex={room?.current_index ?? 0}
+            searching={room?.radio_searching ?? false}
           />
         </div>
         <div className="room-chat">

@@ -21,22 +21,21 @@ interface VolumeControls {
 }
 
 /**
- * Playback volume with mute, persisted to localStorage and applied to the
- * given media element.
+ * Playback volume + mute state, persisted to localStorage. Applying the value
+ * to the actual media element(s) is the player's job — with crossfade there
+ * is more than one element and the ramp needs to own their `.volume`.
  */
-export function useVolume(audioRef: React.RefObject<HTMLAudioElement>): VolumeControls {
+export function useVolume(): VolumeControls {
   const [volume, setVolumeState] = useState(readStored)
   const [muted, setMuted] = useState(false)
 
   useEffect(() => {
-    const audio = audioRef.current
-    if (audio) audio.volume = muted ? 0 : volume
     try {
       localStorage.setItem(STORAGE_KEY, String(volume))
     } catch {
       /* ignore */
     }
-  }, [volume, muted, audioRef])
+  }, [volume])
 
   const setVolume = useCallback((v: number) => {
     const clamped = Math.min(1, Math.max(0, v))
