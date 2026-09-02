@@ -1833,3 +1833,92 @@ input:focus {
 .player-unlock:hover {
   background: color-mix(in srgb, var(--surface-hover) 82%, transparent);
 }
+
+/* --- Karaoke / lyrics --- */
+.karaoke-wrap {
+  margin-bottom: 16px;
+}
+
+.karaoke-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.karaoke-toggle:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}
+
+.karaoke-toggle.is-on {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.karaoke {
+  margin-top: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--surface) 60%, var(--bg));
+}
+
+.karaoke-msg {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.karaoke-note {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.karaoke-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+.karaoke-line {
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.4;
+  opacity: 0.7;
+  cursor: pointer;
+  transition: color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.karaoke-line:hover {
+  color: var(--text);
+}
+
+.karaoke-line.is-past {
+  opacity: 0.4;
+}
+
+.karaoke-line.is-active {
+  color: var(--primary);
+  opacity: 1;
+  font-weight: 700;
+  font-size: 17px;
+  transform: scale(1.02);
+}

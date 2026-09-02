@@ -47,6 +47,7 @@ export interface PlayerProps {
   onSkipVote: () => void
   skipVoters: string[]
   currentUserId: string
+  roomId?: string
 }
 
 export interface QueueProps {

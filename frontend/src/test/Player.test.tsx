@@ -242,6 +242,23 @@ describe('Player vote scale', () => {
     )
   })
 
+  it('tears down audio when the queue empties (last track skipped)', () => {
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause')
+    const { container, rerender } = render(
+      <Player track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+    )
+    const audio = container.querySelector('audio') as HTMLAudioElement
+    expect(audio.getAttribute('src')).toBe(mockTrack.url)
+
+    pauseSpy.mockClear()
+    rerender(
+      <Player track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+    )
+
+    expect(pauseSpy).toHaveBeenCalled()
+    expect(audio.getAttribute('src')).toBeNull()
+  })
+
   it('stops audio when unmounted (leaving the room)', () => {
     const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause')
     const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load')
@@ -343,5 +360,35 @@ describe('Player sync', () => {
     })
 
     expect(countSyncCalls(onPlayback)).toBe(countAfterPlay)
+  })
+})
+
+describe('Player karaoke toggle', () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ available: false, cues: [] }) }),
+    )
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('hides the karaoke button when no roomId is given', () => {
+    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    expect(screen.queryByRole('button', { name: /karaoke/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the karaoke button and opens the panel on click', async () => {
+    render(
+      <Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} roomId="ROOM1" />
+    )
+    const btn = screen.getByRole('button', { name: /karaoke/i })
+    expect(btn).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(btn)
+    expect(btn).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText(/no lyrics for this track/i)).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith('/api/rooms/ROOM1/lyrics')
   })
 })

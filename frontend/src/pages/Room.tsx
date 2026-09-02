@@ -498,6 +498,7 @@ export default function Room() {
           <div className="player-wrap">
             <ReactionsOverlay items={reactions} />
             <Player
+              roomId={roomId}
               track={room?.current_track ?? null}
               isPlaying={room?.is_playing ?? false}
               position={room?.position ?? 0}

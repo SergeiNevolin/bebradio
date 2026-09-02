@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import type { Track } from '../types'
+import Karaoke from './Karaoke'
 
 function formatTime(s: number): string {
   if (!s || isNaN(s)) return '0:00'
@@ -20,9 +21,10 @@ interface PlayerProps {
   onSkipVote: () => void
   skipVoters: string[]
   currentUserId: string
+  roomId?: string
 }
 
-export default function Player({ track, isPlaying, position, onPlayback, likes, dislikes, userVote, onVote, onSkipVote, skipVoters, currentUserId }: PlayerProps) {
+export default function Player({ track, isPlaying, position, onPlayback, likes, dislikes, userVote, onVote, onSkipVote, skipVoters, currentUserId, roomId }: PlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [localPos, setLocalPos] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -31,6 +33,7 @@ export default function Player({ track, isPlaying, position, onPlayback, likes, 
     return saved !== null ? Number(saved) : 0.7
   })
   const [muted, setMuted] = useState(false)
+  const [showKaraoke, setShowKaraoke] = useState(false)
   // True when the browser refused to start audio without a user gesture
   // (mobile autoplay policy). Cleared once playback actually starts.
   const [needsGesture, setNeedsGesture] = useState(false)
@@ -92,7 +95,23 @@ export default function Player({ track, isPlaying, position, onPlayback, likes, 
 
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio || !track?.url) return
+    if (!audio) return
+
+    if (!track?.url) {
+      // The queue just emptied (e.g. the last track was skipped). Nothing bails
+      // us out of playback below, so tear the media down here or the buffered
+      // stream keeps playing with no track on screen.
+      if (trackIdRef.current !== null) {
+        trackIdRef.current = null
+        audio.pause()
+        audio.removeAttribute('src')
+        audio.load()
+        setLocalPos(0)
+        setDuration(0)
+        setNeedsGesture(false)
+      }
+      return
+    }
 
     if (track.id !== trackIdRef.current) {
       trackIdRef.current = track.id
@@ -262,6 +281,34 @@ export default function Player({ track, isPlaying, position, onPlayback, likes, 
               style={{ width: `${duration ? Math.min((localPos / duration) * 100, 100) : 0}%` }}
             />
           </div>
+
+          {roomId && (
+            <div className="karaoke-wrap">
+              <button
+                type="button"
+                className={`karaoke-toggle${showKaraoke ? ' is-on' : ''}`}
+                aria-pressed={showKaraoke}
+                onClick={() => setShowKaraoke((v) => !v)}
+              >
+                🎤 Karaoke
+              </button>
+              {showKaraoke && (
+                <Karaoke
+                  roomId={roomId}
+                  trackId={track.id}
+                  currentTime={localPos}
+                  onSeek={(s) => {
+                    const audio = audioRef.current
+                    if (audio) {
+                      audio.currentTime = s
+                      setLocalPos(s)
+                    }
+                    onPlayback('seek', { position: s })
+                  }}
+                />
+              )}
+            </div>
+          )}
 
           <div className="vote-buttons">
             <div className="vote-like-group">
