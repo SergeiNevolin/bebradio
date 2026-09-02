@@ -43,6 +43,19 @@ export default function Player({ track, isPlaying, position, onPlayback, likes, 
     return () => audio.removeEventListener('ended', onEnded)
   }, [onPlayback])
 
+  // Stop playback when the player is removed from the screen (e.g. navigating
+  // out of the room). A detached <audio> element can otherwise keep playing
+  // until the browser garbage-collects it.
+  useEffect(() => {
+    const audio = audioRef.current
+    return () => {
+      if (!audio) return
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
+    }
+  }, [])
+
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
