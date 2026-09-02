@@ -64,26 +64,26 @@ jobs:
     runs-on: finland-runner
     needs: [backend-tests, frontend-tests]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
+  
     steps:
       - uses: actions/checkout@v4
-
+  
       - name: Pull latest changes
         run: git pull origin main
-
+  
       - name: Create .env file
         run: |
           echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
           echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
-
-      - name: Stop existing containers
-        run: docker compose -f docker-compose.prod.yml down
-
-      - name: Build
+  
+      - name: Stop and remove old containers
+        run: docker compose -f docker-compose.prod.yml down --remove-orphans
+  
+      - name: Build fresh images
         run: docker compose -f docker-compose.prod.yml build --no-cache
-
-      - name: Run containers
-        run: docker compose -f docker-compose.prod.yml up -d
-
+  
+      - name: Run new containers
+        run: docker compose -f docker-compose.prod.yml up -d --force-recreate
+  
       - name: Clean up unused images
         run: docker image prune -f
