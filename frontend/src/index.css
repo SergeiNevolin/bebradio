@@ -1809,3 +1809,27 @@ input:focus {
     right: -8px;
   }
 }
+
+/* --- Autoplay unlock (mobile) --- */
+.player-unlock {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  backdrop-filter: blur(3px);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.player-unlock:hover {
+  background: color-mix(in srgb, var(--surface-hover) 82%, transparent);
+}
