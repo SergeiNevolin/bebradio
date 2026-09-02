@@ -16,6 +16,11 @@ class Track:
     duration: int = 0
     added_by: str = "Anonymous"
     added_at: float = field(default_factory=time.time)
+    # Original YouTube watch URL, kept so the playable ``url`` (a googlevideo
+    # link that expires after a few hours) can be re-resolved on demand.
+    source_url: str = ""
+    # Epoch second at which ``url`` stops working; 0 means "unknown".
+    stream_expires_at: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -72,6 +77,19 @@ class Room:
     messages: list[ChatMessage] = field(default_factory=list)
     votes: list[TrackVote] = field(default_factory=list)
     skip_votes: set[str] = field(default_factory=set)
+    auto_radio: bool = False
+
+    # --- runtime-only state (never persisted) ---
+    # WebSocket -> {"id", "name"} for everyone currently connected.
+    presence: dict = field(default_factory=dict)
+    # Epoch of the last successful ``go_next``; guards against double-skips.
+    last_advance_at: float = 0.0
+    # ``source_url`` of the most recently played track, used to seed auto-radio.
+    radio_seed_url: str = ""
+    # Video ids already queued by auto-radio this session, to avoid repeats.
+    radio_seen: set[str] = field(default_factory=set)
+    # True while a background auto-radio refill is in flight.
+    radio_filling: bool = False
 
     def current_track(self) -> Optional[Track]:
         if self.queue and 0 <= self.current_index < len(self.queue):
@@ -89,6 +107,17 @@ class Room:
         dislikes = sum(1 for v in self.votes if v.track_id == track_id and v.vote == -1)
         return {"likes": likes, "dislikes": dislikes}
 
+    def listeners(self) -> list[dict]:
+        """Distinct people currently connected, newest identity wins.
+
+        Logged-in users are de-duplicated by their user id; each anonymous
+        connection counts once.
+        """
+        seen: dict[str, str] = {}
+        for info in self.presence.values():
+            seen[info["id"]] = info["name"]
+        return [{"id": uid, "name": name} for uid, name in seen.items()]
+
     def to_dict(self) -> dict:
         track = self.current_track()
         track_votes = self.get_track_votes(track.id) if track else {"likes": 0, "dislikes": 0}
@@ -99,6 +128,7 @@ class Room:
             entry["likes"] = tv["likes"]
             entry["dislikes"] = tv["dislikes"]
             queue_with_votes.append(entry)
+        listeners = self.listeners()
         return {
             "id": self.id,
             "name": self.name,
@@ -108,9 +138,11 @@ class Room:
             "is_playing": self.is_playing,
             "position": self.get_current_position(),
             "current_track": track.to_dict() if track else None,
-            "user_count": len(set(self.users.values())),
+            "user_count": len(listeners) or len(set(self.users.values())),
+            "listeners": listeners,
             "allow_anonymous_add": self.allow_anonymous_add,
             "is_private": self.is_private,
+            "auto_radio": self.auto_radio,
             "has_password": bool(self.password_hash),
             "track_votes": track_votes,
             "skip_voters": list(self.skip_votes),

@@ -6,6 +6,8 @@ import Player from '../components/Player'
 import Queue from '../components/Queue'
 import AddTrack from '../components/AddTrack'
 import Chat, { type ChatMessage } from '../components/Chat'
+import Listeners from '../components/Listeners'
+import { ReactionBar, ReactionsOverlay, type FloatingReaction } from '../components/Reactions'
 
 import type { RoomState } from '../types'
 
@@ -26,7 +28,13 @@ export default function Room() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [copied, setCopied] = useState(false)
   const [userVote, setUserVote] = useState<1 | -1 | 0>(0)
+  const [reactions, setReactions] = useState<FloatingReaction[]>([])
   const prevTrackId = useRef<string | null>(null)
+
+  const identity = useCallback(() => ({
+    user_id: user?.id || '',
+    username: user?.username || 'Anonymous',
+  }), [user?.id, user?.username])
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -45,6 +53,10 @@ export default function Room() {
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ action: 'hello', ...identity() }))
+    }
+
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
@@ -58,6 +70,19 @@ export default function Room() {
           ws.close()
           clearRoomAccess(roomId!)
           navigate('/', { replace: true })
+          return
+        }
+        if (data.type === 'reaction') {
+          const item: FloatingReaction = {
+            key: `${data.id}-${Math.random().toString(36).slice(2)}`,
+            emoji: data.emoji,
+            username: data.username,
+            left: 8 + Math.random() * 78,
+          }
+          setReactions((prev) => [...prev, item])
+          setTimeout(() => {
+            setReactions((prev) => prev.filter((r) => r.key !== item.key))
+          }, 3800)
           return
         }
         if (data.type === 'chat') {
@@ -79,7 +104,7 @@ export default function Room() {
     ws.onerror = () => {
       ws.close()
     }
-  }, [roomId, navigate])
+  }, [roomId, navigate, identity])
 
   const fetchRoom = useCallback(async (): Promise<RoomState | null> => {
     try {
@@ -196,6 +221,7 @@ export default function Room() {
   const handleUpdateSettings = async (settings: {
     allow_anonymous_add?: boolean
     is_private?: boolean
+    auto_radio?: boolean
     password?: string
   }) => {
     if (settings.password === undefined) {
@@ -274,6 +300,10 @@ export default function Room() {
     })
   }
 
+  const handleReact = (emoji: string) => {
+    sendWs({ action: 'reaction', emoji, ...identity() })
+  }
+
   if (loading) return <div className="loading">Loading...</div>
 
   if (locked) return (
@@ -325,10 +355,16 @@ export default function Room() {
               {room?.name || 'Room'}
             </h1>
             <div className="room-meta">
-              <span className="room-status">
-                <span className="status-dot"></span>
-                {room?.user_count || 0} listening
-              </span>
+              <Listeners
+                listeners={room?.listeners ?? []}
+                count={room?.user_count || 0}
+              />
+              {room?.auto_radio && (
+                <>
+                  <span className="room-divider">·</span>
+                  <span className="radio-badge" title="Auto-radio keeps the queue full">📻 Radio</span>
+                </>
+              )}
               <span className="room-divider">·</span>
               <button
                 className="room-code-btn"
@@ -377,6 +413,15 @@ export default function Room() {
                 />
                 <span className="toggle-slider"></span>
                 <span className="toggle-label">Private room (hidden from public list)</span>
+              </label>
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={room?.auto_radio ?? false}
+                  onChange={(e) => handleUpdateSettings({ auto_radio: e.target.checked })}
+                />
+                <span className="toggle-slider"></span>
+                <span className="toggle-label">Auto-radio (keep playing related tracks when the queue runs out)</span>
               </label>
 
               <div
@@ -450,19 +495,23 @@ export default function Room() {
       <div className="room-content">
         <div className="room-main">
           {canAddTrack && <AddTrack onAdd={handleAddTrack} />}
-          <Player
-            track={room?.current_track ?? null}
-            isPlaying={room?.is_playing ?? false}
-            position={room?.position ?? 0}
-            onPlayback={handlePlayback}
-            likes={room?.current_track ? (room.track_votes?.likes ?? 0) : 0}
-            dislikes={room?.current_track ? (room.track_votes?.dislikes ?? 0) : 0}
-            userVote={userVote}
-            onVote={handleVote}
-            onSkipVote={handleSkipVote}
-            skipVoters={room?.skip_voters ?? []}
-            currentUserId={user?.id || ''}
-          />
+          <div className="player-wrap">
+            <ReactionsOverlay items={reactions} />
+            <Player
+              track={room?.current_track ?? null}
+              isPlaying={room?.is_playing ?? false}
+              position={room?.position ?? 0}
+              onPlayback={handlePlayback}
+              likes={room?.current_track ? (room.track_votes?.likes ?? 0) : 0}
+              dislikes={room?.current_track ? (room.track_votes?.dislikes ?? 0) : 0}
+              userVote={userVote}
+              onVote={handleVote}
+              onSkipVote={handleSkipVote}
+              skipVoters={room?.skip_voters ?? []}
+              currentUserId={user?.id || ''}
+            />
+            <ReactionBar onReact={handleReact} />
+          </div>
           <Queue
             queue={room?.queue ?? []}
             currentIndex={room?.current_index ?? 0}
