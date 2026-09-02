@@ -6,6 +6,8 @@ export interface Track {
   thumbnail: string
   duration: number
   added_by: string
+  /** Original YouTube watch URL (for the blurred video backdrop). */
+  source_url?: string
   likes?: number
   dislikes?: number
 }
