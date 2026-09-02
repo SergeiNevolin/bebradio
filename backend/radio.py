@@ -1,3 +1,10 @@
+"""Auto-radio: keep a room's queue topped up with related tracks.
+
+When ``room.auto_radio`` is on and the queue nears empty, we pull the "Mix"
+(radio) playlist of the last-played track from YouTube and append a handful of
+fresh tracks tagged as added by 📻 Radio.
+"""
+
 import asyncio
 import time
 
@@ -6,8 +13,11 @@ from connections import manager
 from models import Room, Track
 from youtube import fetch_related, fetch_track, video_id
 
+RADIO_TAG = "📻 Radio"
+
 
 def _seed_url(room: Room) -> str:
+    """The YouTube URL whose Mix we grow the queue from."""
     if room.radio_seed_url:
         return room.radio_seed_url
     if room.queue:
@@ -16,6 +26,7 @@ def _seed_url(room: Room) -> str:
 
 
 def needs_refill(room: Room) -> bool:
+    """Whether the room is due for an auto-radio top-up right now."""
     return (
         room.auto_radio
         and not room.radio_filling
@@ -24,11 +35,35 @@ def needs_refill(room: Room) -> bool:
     )
 
 
-async def refill(room: Room) -> bool:
-    """Append related tracks from the seed track's YouTube Mix.
+async def _collect_tracks(room: Room, seed: str, limit: int) -> list[Track]:
+    """Resolve up to ``limit`` unseen tracks from ``seed``'s YouTube Mix.
 
-    Returns ``True`` when at least one track was added. Guarded by
-    ``room.radio_filling`` so concurrent callers don't stack refills.
+    Records every video id it considers in ``room.radio_seen`` so a later
+    refill does not offer the same track again.
+    """
+    room.radio_seen.add(video_id(seed))
+    candidates = await asyncio.to_thread(fetch_related, seed, limit * 4)
+
+    picked: list[Track] = []
+    for url in candidates:
+        if len(picked) >= limit:
+            break
+        vid = video_id(url)
+        if not vid or vid in room.radio_seen:
+            continue
+        info = await asyncio.to_thread(fetch_track, url)
+        if not info:
+            continue
+        room.radio_seen.add(vid)
+        picked.append(Track.from_youtube(info, added_by=RADIO_TAG))
+    return picked
+
+
+async def refill(room: Room) -> bool:
+    """Append related tracks to the queue. Returns ``True`` if any were added.
+
+    Guarded by ``room.radio_filling`` so overlapping callers don't stack
+    refills on top of each other.
     """
     if not needs_refill(room):
         return False
@@ -36,37 +71,16 @@ async def refill(room: Room) -> bool:
     seed = _seed_url(room)
     room.radio_filling = True
     try:
-        room.radio_seen.add(video_id(seed))
-        candidates = await asyncio.to_thread(fetch_related, seed, RADIO_BATCH * 4)
+        new_tracks = await _collect_tracks(room, seed, RADIO_BATCH)
+        if not new_tracks:
+            return False
 
-        added = 0
-        for url in candidates:
-            if added >= RADIO_BATCH:
-                break
-            vid = video_id(url)
-            if not vid or vid in room.radio_seen:
-                continue
-            info = await asyncio.to_thread(fetch_track, url)
-            if not info:
-                continue
-            room.radio_seen.add(vid)
-            room.queue.append(Track(
-                title=info["title"],
-                artist=info["artist"],
-                url=info["stream_url"],
-                thumbnail=info["thumbnail"],
-                duration=info["duration"],
-                added_by="📻 Radio",
-                source_url=info["source_url"],
-                stream_expires_at=info["expires_at"],
-            ))
-            added += 1
-
-        if added and not room.is_playing and room.queue:
+        room.queue.extend(new_tracks)
+        if not room.is_playing:
             room.is_playing = True
             room.position = 0.0
             room.last_sync_at = time.time()
-        return added > 0
+        return True
     finally:
         room.radio_filling = False
 
@@ -78,3 +92,13 @@ async def refill_and_broadcast(room: Room) -> None:
     if await refill(room):
         await save_tracks(room)
         await manager.broadcast(room.id, room.to_dict())
+
+
+def maybe_refill(room: Room) -> None:
+    """Kick off a background refill if the room needs one.
+
+    Cheap and safe to call after any queue/playback change; does nothing
+    unless :func:`needs_refill` says so.
+    """
+    if needs_refill(room):
+        asyncio.create_task(refill_and_broadcast(room))

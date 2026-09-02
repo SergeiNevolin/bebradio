@@ -3,7 +3,7 @@ import asyncio
 from config import AUTO_ADVANCE_GRACE, AUTO_ADVANCE_INTERVAL
 from connections import manager
 from playback import go_next
-from radio import needs_refill, refill_and_broadcast
+from radio import maybe_refill
 from store import rooms, save_tracks
 from streams import ensure_fresh
 
@@ -33,10 +33,9 @@ async def _tick() -> None:
             if room.get_current_position() >= track.duration + AUTO_ADVANCE_GRACE:
                 changed = go_next(room)
 
-        if needs_refill(room):
-            # Network-bound; run it detached so one slow refill can't stall
-            # auto-advance for every other room.
-            asyncio.create_task(refill_and_broadcast(room))
+        # Network-bound; runs detached so one slow refill can't stall
+        # auto-advance for every other room.
+        maybe_refill(room)
 
         if changed:
             # New track is about to start for everyone; make sure its URL is live.

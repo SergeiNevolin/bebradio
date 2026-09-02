@@ -1,4 +1,3 @@
-import asyncio
 import json
 import uuid
 
@@ -9,7 +8,7 @@ from config import MAX_CHAT_MESSAGES, REACTION_EMOJIS
 from connections import manager
 from models import ChatMessage, TrackVote
 from playback import go_next, go_prev, jump_to, seek_to
-from radio import needs_refill, refill_and_broadcast
+from radio import maybe_refill
 from store import get_or_load_room, rooms, save_message, save_tracks, save_votes
 from streams import ensure_fresh
 
@@ -101,8 +100,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, access: str | N
 
             await manager.broadcast(room_id, room.to_dict())
 
-            if needs_refill(room):
-                asyncio.create_task(refill_and_broadcast(room))
+            maybe_refill(room)
 
     except WebSocketDisconnect:
         if room_id in rooms:
