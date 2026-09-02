@@ -510,7 +510,6 @@ export default function Room() {
               skipVoters={room?.skip_voters ?? []}
               currentUserId={user?.id || ''}
             />
-            <ReactionBar onReact={handleReact} />
           </div>
           <Queue
             queue={room?.queue ?? []}
@@ -523,6 +522,7 @@ export default function Room() {
             onSend={handleSendChat}
             currentUserId={user?.id || ''}
           />
+          <ReactionBar onReact={handleReact} />
         </div>
       </div>
     </div>

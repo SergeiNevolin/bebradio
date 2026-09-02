@@ -417,6 +417,7 @@ input:focus {
 .room-chat {
   display: flex;
   flex-direction: column;
+  gap: 12px;
   height: 100%;
   min-width: 0;
   min-height: 0;
@@ -772,7 +773,8 @@ input:focus {
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .chat-header {
@@ -1089,12 +1091,8 @@ input:focus {
 }
 
 .queue-item.active {
-  background: rgba(22, 163, 74, 0.08);
-  border: 1px solid rgba(22, 163, 74, 0.2);
-}
-
-[data-theme='dark'] .queue-item.active {
-  background: rgba(34, 197, 94, 0.1);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 .queue-item-num {
@@ -1275,13 +1273,9 @@ input:focus {
   font-size: 10px;
   font-weight: 700;
   color: var(--primary);
-  background: rgba(22, 163, 74, 0.1);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
   padding: 2px 6px;
   border-radius: 4px;
-}
-
-[data-theme='dark'] .room-list-item-playing {
-  background: rgba(34, 197, 94, 0.15);
 }
 
 .room-list-item-stats {
@@ -1536,7 +1530,11 @@ input:focus {
   gap: 6px;
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 12px;
+  flex-shrink: 0;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 .reaction-btn {
@@ -1562,4 +1560,252 @@ input:focus {
 @media (prefers-reduced-motion: reduce) {
   .floating-reaction { animation-duration: 2s; }
   .reaction-btn:hover { transform: none; }
+}
+
+/* --- Accent colour picker --- */
+.accent-picker {
+  position: relative;
+  display: flex;
+}
+
+.accent-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--primary);
+  padding: 0;
+  transition: filter 0.15s;
+}
+
+.accent-swatch:hover {
+  filter: brightness(1.1);
+}
+
+.accent-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  z-index: 300;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme='dark'] .accent-pop {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.accent-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.accent-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.accent-dot:hover {
+  transform: scale(1.12);
+}
+
+.accent-dot.is-active {
+  border-color: var(--text);
+}
+
+.accent-custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.accent-custom input[type='color'] {
+  width: 44px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+/* --- Phones --- */
+@media (max-width: 640px) {
+  body {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  #root,
+  .app-root {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .app {
+    padding: 0 14px;
+  }
+
+  .navbar-inner {
+    padding: 12px 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .navbar-right {
+    gap: 8px;
+  }
+
+  /* Home */
+  .home {
+    margin-top: 32px;
+  }
+
+  .home-title {
+    font-size: 34px;
+  }
+
+  .home-actions {
+    flex-direction: column;
+    max-width: 100%;
+  }
+
+  .room-list-section,
+  .room-list-item {
+    max-width: 100%;
+  }
+
+  /* Room shell: let the page scroll instead of locking to the viewport */
+  .room-page {
+    overflow: visible;
+    padding-bottom: 24px;
+  }
+
+  .room-header {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 0;
+    margin-bottom: 16px;
+  }
+
+  .room-title {
+    font-size: 20px;
+  }
+
+  .room-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow: visible;
+  }
+
+  .room-main {
+    gap: 16px;
+    overflow: visible;
+  }
+
+  .room-chat {
+    height: auto;
+    overflow: visible;
+  }
+
+  .chat {
+    height: 60vh;
+    min-height: 340px;
+    flex: none;
+  }
+
+  .queue {
+    max-height: 55vh;
+  }
+
+  /* Player */
+  .player {
+    padding: 16px;
+  }
+
+  .player-track {
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .player-thumb {
+    width: 76px;
+    height: 76px;
+  }
+
+  .player-info .title {
+    font-size: 16px;
+    white-space: normal;
+  }
+
+  .player-info .artist {
+    font-size: 13px;
+  }
+
+  .volume-control {
+    position: static;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+  }
+
+  .volume-control .volume-slider {
+    width: 100px;
+    opacity: 1;
+  }
+
+  .vote-buttons {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .vote-scale {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .vote-skip {
+    margin-left: 0;
+  }
+
+  /* Add track */
+  .add-track-form {
+    flex-direction: column;
+  }
+
+  .add-track-form .btn {
+    width: 100%;
+  }
+
+  /* Modal */
+  .modal {
+    min-width: 0;
+    width: calc(100vw - 28px);
+  }
+
+  .modal-header {
+    padding: 16px 18px;
+  }
+
+  .modal-body {
+    padding: 18px;
+  }
+
+  /* Accent popover: keep it on-screen near the right edge */
+  .accent-pop {
+    right: -8px;
+  }
 }

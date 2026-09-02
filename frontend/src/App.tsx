@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import { applyAccent, getStoredAccent } from './lib/theme'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 import Home from './pages/Home'
@@ -18,6 +19,7 @@ export default function App() {
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       document.documentElement.setAttribute('data-theme', 'dark')
     }
+    applyAccent(getStoredAccent())
   }, [])
 
   return (
