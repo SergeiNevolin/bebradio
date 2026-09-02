@@ -1033,6 +1033,49 @@ def test_room_settings_schema_accepts_auto_radio():
     assert RoomSettingsRequest().auto_radio is None
 
 
+# --- Track.from_youtube / radio.maybe_refill ---
+
+
+def test_track_from_youtube_maps_info_dict():
+    info = {
+        "title": "Song", "artist": "Band", "stream_url": "http://s",
+        "thumbnail": "http://t", "duration": 123,
+        "source_url": "https://youtu.be/abc", "expires_at": 42.0,
+    }
+    t = models.Track.from_youtube(info, added_by="Alice")
+    assert (t.title, t.artist, t.url, t.thumbnail, t.duration) == (
+        "Song", "Band", "http://s", "http://t", 123,
+    )
+    assert t.added_by == "Alice"
+    assert t.source_url == "https://youtu.be/abc"
+    assert t.stream_expires_at == 42.0
+
+
+def test_track_from_youtube_tolerates_missing_optional_fields():
+    t = models.Track.from_youtube({"stream_url": "http://s"}, added_by="📻 Radio")
+    assert t.url == "http://s"
+    assert t.title == "Unknown"
+    assert t.source_url == ""
+    assert t.stream_expires_at == 0.0
+
+
+@pytest.mark.asyncio
+async def test_maybe_refill_spawns_task_only_when_needed(monkeypatch):
+    import radio
+    spawned = []
+    monkeypatch.setattr(radio, "refill_and_broadcast", lambda room: None)
+    monkeypatch.setattr(radio.asyncio, "create_task", lambda coro: spawned.append(coro))
+
+    idle = models.Room(auto_radio=False)
+    radio.maybe_refill(idle)
+    assert spawned == []
+
+    due = models.Room(auto_radio=True)
+    due.radio_seed_url = "https://youtu.be/abc"
+    radio.maybe_refill(due)
+    assert len(spawned) == 1
+
+
 # --- Karaoke / subtitles ---
 
 

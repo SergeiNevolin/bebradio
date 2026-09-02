@@ -1,13 +1,10 @@
-import { useRef, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Track } from '../types'
 import Karaoke from './Karaoke'
-
-function formatTime(s: number): string {
-  if (!s || isNaN(s)) return '0:00'
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${m}:${sec.toString().padStart(2, '0')}`
-}
+import SeekBar from './player/SeekBar'
+import VolumeControl from './player/VolumeControl'
+import { useAudioSync } from '../hooks/useAudioSync'
+import { useVolume } from '../hooks/useVolume'
 
 interface PlayerProps {
   track: Track | null
@@ -24,245 +21,96 @@ interface PlayerProps {
   roomId?: string
 }
 
-export default function Player({ track, isPlaying, position, onPlayback, likes, dislikes, userVote, onVote, onSkipVote, skipVoters, currentUserId, roomId }: PlayerProps) {
-  const audioRef = useRef<HTMLAudioElement>(null)
-  const [localPos, setLocalPos] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [volume, setVolume] = useState<number>(() => {
-    const saved = localStorage.getItem('player_volume')
-    return saved !== null ? Number(saved) : 0.7
-  })
-  const [muted, setMuted] = useState(false)
+export default function Player({
+  track,
+  isPlaying,
+  position,
+  onPlayback,
+  likes,
+  dislikes,
+  userVote,
+  onVote,
+  onSkipVote,
+  skipVoters,
+  currentUserId,
+  roomId,
+}: PlayerProps) {
   const [showKaraoke, setShowKaraoke] = useState(false)
-  // True when the browser refused to start audio without a user gesture
-  // (mobile autoplay policy). Cleared once playback actually starts.
-  const [needsGesture, setNeedsGesture] = useState(false)
-  const trackIdRef = useRef<string | null>(null)
-  const posInterval = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
+  const onEnded = useCallback(() => onPlayback('next'), [onPlayback])
+  const onSync = useCallback(
+    (p: number) => onPlayback('sync', { position: p }),
+    [onPlayback],
+  )
 
-    const onEnded = () => onPlayback('next')
-    audio.addEventListener('ended', onEnded)
-    return () => audio.removeEventListener('ended', onEnded)
-  }, [onPlayback])
+  const { audioRef, position: localPos, duration, needsGesture, unlock, seek } = useAudioSync({
+    trackId: track?.id,
+    src: track?.url,
+    isPlaying,
+    serverPosition: position,
+    onEnded,
+    onSync,
+  })
+  const { volume, muted, setVolume, toggleMute } = useVolume(audioRef)
 
-  // Stop playback when the player is removed from the screen (e.g. navigating
-  // out of the room). A detached <audio> element can otherwise keep playing
-  // until the browser garbage-collects it.
-  useEffect(() => {
-    const audio = audioRef.current
-    return () => {
-      if (!audio) return
-      audio.pause()
-      audio.removeAttribute('src')
-      audio.load()
-    }
-  }, [])
+  const seekTo = useCallback(
+    (seconds: number) => {
+      seek(seconds)
+      onPlayback('seek', { position: seconds })
+    },
+    [seek, onPlayback],
+  )
 
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-
-    const onMeta = () => setDuration(audio.duration)
-    audio.addEventListener('loadedmetadata', onMeta)
-    return () => audio.removeEventListener('loadedmetadata', onMeta)
-  }, [])
-
-  useEffect(() => {
-    if (posInterval.current) clearInterval(posInterval.current)
-    posInterval.current = setInterval(() => {
-      const audio = audioRef.current
-      if (audio && !audio.paused) {
-        setLocalPos(audio.currentTime)
-      }
-    }, 250)
-    return () => { if (posInterval.current) clearInterval(posInterval.current) }
-  }, [])
-
-  useEffect(() => {
-    if (!isPlaying) return
-    const syncInterval = setInterval(() => {
-      const audio = audioRef.current
-      if (audio && !audio.paused) {
-        onPlayback('sync', { position: audio.currentTime })
-      }
-    }, 5000)
-    return () => clearInterval(syncInterval)
-  }, [isPlaying, onPlayback])
-
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-
-    if (!track?.url) {
-      // The queue just emptied (e.g. the last track was skipped). Nothing bails
-      // us out of playback below, so tear the media down here or the buffered
-      // stream keeps playing with no track on screen.
-      if (trackIdRef.current !== null) {
-        trackIdRef.current = null
-        audio.pause()
-        audio.removeAttribute('src')
-        audio.load()
-        setLocalPos(0)
-        setDuration(0)
-        setNeedsGesture(false)
-      }
-      return
-    }
-
-    if (track.id !== trackIdRef.current) {
-      trackIdRef.current = track.id
-      audio.src = track.url
-      setLocalPos(0)
-      setDuration(0)
-      audio.load()
-    }
-  }, [track?.id, track?.url])
-
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !track?.url) return
-    if (trackIdRef.current !== track.id) return
-
-    if (isPlaying) {
-      audio.play()
-        .then(() => setNeedsGesture(false))
-        .catch(() => {
-          // Mobile browsers block audio that starts without a user gesture;
-          // surface a tap target instead of failing silently.
-          setNeedsGesture(true)
-        })
-    } else {
-      audio.pause()
-      setNeedsGesture(false)
-    }
-  }, [isPlaying, track?.id])
-
-  // Once autoplay was blocked, resume on the very first user interaction
-  // anywhere on the page (a tap, a key) — that gesture unlocks playback.
-  useEffect(() => {
-    if (!needsGesture || !isPlaying) return
-    const resume = () => {
-      audioRef.current?.play().then(() => setNeedsGesture(false)).catch(() => {})
-    }
-    window.addEventListener('pointerdown', resume)
-    window.addEventListener('keydown', resume)
-    return () => {
-      window.removeEventListener('pointerdown', resume)
-      window.removeEventListener('keydown', resume)
-    }
-  }, [needsGesture, isPlaying])
-
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !track?.url) return
-    if (position === undefined) return
-
-    if (Math.abs(audio.currentTime - position) > 1.5) {
-      audio.currentTime = position
-      setLocalPos(position)
-    }
-  }, [position, track?.url])
-
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-    audio.volume = muted ? 0 : volume
-    localStorage.setItem('player_volume', String(volume))
-  }, [volume, muted])
-
+  // Keyboard shortcuts: space resyncs / starts, up/down adjust volume.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (!track) return
 
       if (e.code === 'Space') {
         e.preventDefault()
-        if (track) {
-          onPlayback(isPlaying ? 'sync' : 'next', isPlaying ? { position: audioRef.current?.currentTime || 0 } : {})
-        }
+        onPlayback(
+          isPlaying ? 'sync' : 'next',
+          isPlaying ? { position: localPos } : {},
+        )
       } else if (e.code === 'ArrowRight') {
         e.preventDefault()
-        if (track && audioRef.current) {
-          audioRef.current.currentTime = Math.min(audioRef.current.currentTime + 10, duration)
-        }
+        seekTo(Math.min(localPos + 10, duration || localPos + 10))
       } else if (e.code === 'ArrowLeft') {
         e.preventDefault()
-        if (track && audioRef.current) {
-          audioRef.current.currentTime = Math.max(audioRef.current.currentTime - 10, 0)
-        }
+        seekTo(Math.max(localPos - 10, 0))
       } else if (e.code === 'ArrowUp') {
         e.preventDefault()
-        setVolume((v) => Math.min(v + 0.1, 1))
+        setVolume(volume + 0.1)
       } else if (e.code === 'ArrowDown') {
         e.preventDefault()
-        setVolume((v) => Math.max(v - 0.1, 0))
+        setVolume(volume - 0.1)
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [track, isPlaying, duration, onPlayback])
+  }, [track, isPlaying, localPos, duration, volume, onPlayback, seekTo, setVolume])
 
-  const hasVoted = track ? (skipVoters.includes(currentUserId)) : false
+  const hasVoted = !!track && skipVoters.includes(currentUserId)
   const skipCount = skipVoters.length
+  const voteTotal = likes + dislikes
 
   return (
     <div className="player">
       <audio ref={audioRef} preload="auto" />
 
       {needsGesture && track && (
-        <button
-          type="button"
-          className="player-unlock"
-          onClick={() => {
-            audioRef.current?.play().then(() => setNeedsGesture(false)).catch(() => {})
-          }}
-        >
+        <button type="button" className="player-unlock" onClick={unlock}>
           ▶ Tap to enable sound
         </button>
       )}
 
       {!track ? (
-        <div className="player-empty">
-          Add a track to start listening together
-        </div>
+        <div className="player-empty">Add a track to start listening together</div>
       ) : (
         <>
-          <div className="volume-control">
-            <button
-              className="volume-btn"
-              onClick={() => setMuted((m) => !m)}
-              title={muted ? 'Unmute' : 'Mute'}
-            >
-              {muted || volume === 0 ? (
-                <svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
-              ) : volume < 0.5 ? (
-                <svg viewBox="0 0 24 24"><path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/></svg>
-              ) : (
-                <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-              )}
-            </button>
-            <input
-              type="range"
-              className="volume-slider"
-              min="0"
-              max="1"
-              step="0.01"
-              value={muted ? 0 : volume}
-              onChange={(e) => {
-                setVolume(Number(e.target.value))
-                if (muted) setMuted(false)
-              }}
-            />
-          </div>
-
-          <div className="player-track">
-            {track.thumbnail && (
-              <img className="player-thumb" src={track.thumbnail} alt="" />
-            )}
+          <div className="player-head">
+            {track.thumbnail && <img className="player-thumb" src={track.thumbnail} alt="" />}
             <div className="player-info">
               <div className="title">{track.title}</div>
               <div className="artist">{track.artist}</div>
@@ -270,82 +118,67 @@ export default function Player({ track, isPlaying, position, onPlayback, likes, 
             </div>
           </div>
 
-          <div className="time-display">
-            <span>{formatTime(Math.min(localPos, duration))}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
+          <SeekBar position={localPos} duration={duration} onSeek={seekTo} />
 
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${duration ? Math.min((localPos / duration) * 100, 100) : 0}%` }}
+          <div className="player-controls">
+            <VolumeControl
+              volume={volume}
+              muted={muted}
+              onVolume={setVolume}
+              onToggleMute={toggleMute}
             />
-          </div>
-
-          {roomId && (
-            <div className="karaoke-wrap">
+            <div className="player-controls-gap" />
+            {roomId && (
               <button
                 type="button"
-                className={`karaoke-toggle${showKaraoke ? ' is-on' : ''}`}
+                className={`player-chip${showKaraoke ? ' is-on' : ''}`}
                 aria-pressed={showKaraoke}
                 onClick={() => setShowKaraoke((v) => !v)}
               >
                 🎤 Karaoke
               </button>
-              {showKaraoke && (
-                <Karaoke
-                  roomId={roomId}
-                  trackId={track.id}
-                  currentTime={localPos}
-                  onSeek={(s) => {
-                    const audio = audioRef.current
-                    if (audio) {
-                      audio.currentTime = s
-                      setLocalPos(s)
-                    }
-                    onPlayback('seek', { position: s })
-                  }}
-                />
-              )}
-            </div>
+            )}
+            <button
+              type="button"
+              className={`player-chip${hasVoted ? ' is-on' : ''}`}
+              onClick={onSkipVote}
+              title="Vote to skip"
+            >
+              ⏭ Skip{skipCount > 0 ? ` (${skipCount})` : ''}
+            </button>
+          </div>
+
+          {roomId && showKaraoke && (
+            <Karaoke roomId={roomId} trackId={track.id} currentTime={localPos} onSeek={seekTo} />
           )}
 
           <div className="vote-buttons">
-            <div className="vote-like-group">
-              <button
-                className={`vote-btn ${userVote === 1 ? 'vote-btn-active' : ''}`}
-                onClick={() => onVote(track.id, userVote === 1 ? 0 : 1)}
-              >
-                👍 {likes}
-              </button>
-              <button
-                className={`vote-btn ${userVote === -1 ? 'vote-btn-active-down' : ''}`}
-                onClick={() => onVote(track.id, userVote === -1 ? 0 : -1)}
-              >
-                👎 {dislikes}
-              </button>
-            </div>
+            <button
+              type="button"
+              className={`vote-btn ${userVote === 1 ? 'vote-btn-active' : ''}`}
+              onClick={() => onVote(track.id, userVote === 1 ? 0 : 1)}
+            >
+              👍 {likes}
+            </button>
             <div className="vote-scale">
               <div className="vote-bar">
                 {likes > 0 && (
-                  <div
-                    className="vote-bar-like"
-                    style={{ width: `${(likes / (likes + dislikes)) * 100}%` }}
-                  />
+                  <div className="vote-bar-like" style={{ width: `${(likes / voteTotal) * 100}%` }} />
                 )}
                 {dislikes > 0 && (
                   <div
                     className="vote-bar-dislike"
-                    style={{ width: `${(dislikes / (likes + dislikes)) * 100}%` }}
+                    style={{ width: `${(dislikes / voteTotal) * 100}%` }}
                   />
                 )}
               </div>
             </div>
             <button
-              className={`vote-btn vote-skip ${hasVoted ? 'vote-skip-active' : ''}`}
-              onClick={onSkipVote}
+              type="button"
+              className={`vote-btn ${userVote === -1 ? 'vote-btn-active-down' : ''}`}
+              onClick={() => onVote(track.id, userVote === -1 ? 0 : -1)}
             >
-              ⏭ Skip {skipCount > 0 && `(${skipCount})`}
+              👎 {dislikes}
             </button>
           </div>
         </>

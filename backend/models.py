@@ -22,6 +22,20 @@ class Track:
     # Epoch second at which ``url`` stops working; 0 means "unknown".
     stream_expires_at: float = 0.0
 
+    @classmethod
+    def from_youtube(cls, info: dict, added_by: str) -> "Track":
+        """Build a queue track from a ``youtube.fetch_track`` result dict."""
+        return cls(
+            title=info.get("title", "Unknown"),
+            artist=info.get("artist", "Unknown"),
+            url=info["stream_url"],
+            thumbnail=info.get("thumbnail", ""),
+            duration=info.get("duration", 0),
+            added_by=added_by,
+            source_url=info.get("source_url", ""),
+            stream_expires_at=info.get("expires_at", 0.0),
+        )
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
