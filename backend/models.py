@@ -157,6 +157,7 @@ class Room:
             "allow_anonymous_add": self.allow_anonymous_add,
             "is_private": self.is_private,
             "auto_radio": self.auto_radio,
+            "radio_searching": self.radio_filling,
             "has_password": bool(self.password_hash),
             "track_votes": track_votes,
             "skip_voters": list(self.skip_votes),

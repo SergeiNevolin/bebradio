@@ -3,11 +3,15 @@ import type { Track } from '../types'
 import Karaoke from './Karaoke'
 import SeekBar from './player/SeekBar'
 import VolumeControl from './player/VolumeControl'
-import { useAudioSync } from '../hooks/useAudioSync'
+import { useGaplessPlayer } from '../hooks/useGaplessPlayer'
 import { useVolume } from '../hooks/useVolume'
+
+/** Seconds of overlap between tracks. 0 would disable crossfading. */
+const CROSSFADE_SECONDS = 3
 
 interface PlayerProps {
   track: Track | null
+  nextTrack?: Track | null
   isPlaying: boolean
   position: number
   onPlayback: (action: string, extra?: Record<string, unknown>) => void
@@ -23,6 +27,7 @@ interface PlayerProps {
 
 export default function Player({
   track,
+  nextTrack,
   isPlaying,
   position,
   onPlayback,
@@ -43,15 +48,29 @@ export default function Player({
     [onPlayback],
   )
 
-  const { audioRef, position: localPos, duration, needsGesture, unlock, seek } = useAudioSync({
+  const { volume, muted, setVolume, toggleMute } = useVolume()
+
+  const {
+    deckRefs,
+    position: localPos,
+    duration,
+    needsGesture,
+    crossfading,
+    unlock,
+    seek,
+  } = useGaplessPlayer({
     trackId: track?.id,
     src: track?.url,
+    nextTrackId: nextTrack?.id,
+    nextSrc: nextTrack?.url,
     isPlaying,
     serverPosition: position,
+    volume,
+    muted,
+    crossfadeSeconds: CROSSFADE_SECONDS,
     onEnded,
     onSync,
   })
-  const { volume, muted, setVolume, toggleMute } = useVolume(audioRef)
 
   const seekTo = useCallback(
     (seconds: number) => {
@@ -96,8 +115,9 @@ export default function Player({
   const voteTotal = likes + dislikes
 
   return (
-    <div className="player">
-      <audio ref={audioRef} preload="auto" />
+    <div className={`player${crossfading ? ' is-crossfading' : ''}`}>
+      <audio ref={deckRefs[0]} preload="auto" />
+      <audio ref={deckRefs[1]} preload="auto" />
 
       {needsGesture && track && (
         <button type="button" className="player-unlock" onClick={unlock}>

@@ -46,4 +46,20 @@ describe('Queue', () => {
     expect(screen.getByText('Artist A')).toBeInTheDocument()
     expect(screen.getByText('Artist B')).toBeInTheDocument()
   })
+
+  it('shows a radio search message instead of the empty hint while searching', () => {
+    render(<Queue queue={[]} currentIndex={0} searching />)
+    expect(screen.getByText(/radio is finding tracks/i)).toBeInTheDocument()
+    expect(screen.queryByText('No tracks yet. Add a YouTube link above.')).not.toBeInTheDocument()
+  })
+
+  it('shows a footer search hint below a non-empty queue while searching', () => {
+    render(<Queue queue={tracks} currentIndex={0} searching />)
+    expect(screen.getByText(/radio is finding more tracks/i)).toBeInTheDocument()
+  })
+
+  it('shows no search hint when not searching', () => {
+    render(<Queue queue={tracks} currentIndex={0} />)
+    expect(screen.queryByText(/radio is finding/i)).not.toBeInTheDocument()
+  })
 })

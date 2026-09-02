@@ -410,3 +410,107 @@ describe('Player seeking', () => {
     expect(onSkipVote).toHaveBeenCalled()
   })
 })
+
+const nextTrack: Track = {
+  id: 'next99',
+  title: 'Next Song',
+  artist: 'Next Artist',
+  url: 'https://example.com/next.mp3',
+  thumbnail: '',
+  duration: 180,
+  added_by: 'Bob',
+}
+
+describe('Player gapless playback', () => {
+  it('renders two audio decks', () => {
+    const { container } = render(
+      <Player track={mockTrack} isPlaying position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+    )
+    expect(container.querySelectorAll('audio')).toHaveLength(2)
+  })
+
+  it('prefetches the next track into the idle deck', () => {
+    const { container } = render(
+      <Player
+        track={mockTrack}
+        nextTrack={nextTrack}
+        isPlaying
+        position={0}
+        onPlayback={vi.fn()}
+        {...defaultPlayerProps}
+      />
+    )
+    const decks = container.querySelectorAll('audio')
+    expect(decks[0].getAttribute('src')).toBe(mockTrack.url)
+    expect(decks[1].getAttribute('src')).toBe(nextTrack.url)
+  })
+
+  it('leaves the idle deck empty when there is no next track', () => {
+    const { container } = render(
+      <Player track={mockTrack} isPlaying position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+    )
+    expect(container.querySelectorAll('audio')[1].getAttribute('src')).toBeNull()
+  })
+
+  it('crossfades near the end: advances the room and enters the crossfade state', () => {
+    vi.useFakeTimers()
+    try {
+      const onPlayback = vi.fn()
+      const { container } = render(
+        <Player
+          track={mockTrack}
+          nextTrack={nextTrack}
+          isPlaying
+          position={0}
+          onPlayback={onPlayback}
+          {...defaultPlayerProps}
+        />
+      )
+      const [deckA, deckB] = container.querySelectorAll('audio')
+      Object.defineProperty(deckA, 'duration', { value: 30, configurable: true })
+      deckA.currentTime = 28 // 2s left, inside the 3s crossfade window
+      Object.defineProperty(deckB, 'readyState', { value: 4, configurable: true })
+
+      act(() => {
+        vi.advanceTimersByTime(300)
+      })
+
+      expect(onPlayback).toHaveBeenCalledWith('next')
+      expect(container.querySelector('.player')).toHaveClass('is-crossfading')
+    } finally {
+      vi.useRealTimers()
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('does not crossfade a track that is barely longer than the overlap', () => {
+    vi.useFakeTimers()
+    try {
+      const onPlayback = vi.fn()
+      const { container } = render(
+        <Player
+          track={mockTrack}
+          nextTrack={nextTrack}
+          isPlaying
+          position={0}
+          onPlayback={onPlayback}
+          {...defaultPlayerProps}
+        />
+      )
+      const [deckA, deckB] = container.querySelectorAll('audio')
+      Object.defineProperty(deckA, 'duration', { value: 4, configurable: true })
+      Object.defineProperty(deckA, 'paused', { value: false, configurable: true })
+      deckA.currentTime = 3
+      Object.defineProperty(deckB, 'readyState', { value: 4, configurable: true })
+
+      act(() => {
+        vi.advanceTimersByTime(300)
+      })
+
+      expect(onPlayback).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+      vi.restoreAllMocks()
+    }
+  })
+})

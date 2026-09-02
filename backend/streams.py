@@ -26,3 +26,23 @@ async def ensure_fresh(room: Room, track: Optional[Track]) -> bool:
     track.url = data["stream_url"]
     track.stream_expires_at = data["expires_at"]
     return True
+
+
+async def ensure_fresh_ahead(room: Room) -> bool:
+    """Keep the current *and* next track's stream URLs live.
+
+    Re-resolving the next track before playback reaches it means the switch
+    at ``go_next`` has no wait on the network. Returns ``True`` if any URL
+    was replaced, so the caller knows to persist the queue.
+    """
+    changed = False
+    current = room.current_track()
+    if await ensure_fresh(room, current):
+        changed = True
+
+    nxt = room.current_index + 1
+    if 0 <= nxt < len(room.queue):
+        if await ensure_fresh(room, room.queue[nxt]):
+            changed = True
+
+    return changed

@@ -17,7 +17,7 @@ from connections import manager
 from models import Room, Track
 from playback import go_next, go_prev, jump_to, seek_to
 from radio import maybe_refill
-from streams import ensure_fresh
+from streams import ensure_fresh_ahead
 from schemas import (
     AddTrackRequest,
     CreateRoomRequest,
@@ -258,7 +258,7 @@ async def update_playback(
     elif req.action == "seek" and req.position is not None:
         seek_to(room, req.position)
 
-    if track_changed and await ensure_fresh(room, room.current_track()):
+    if track_changed and await ensure_fresh_ahead(room):
         queue_changed = True
 
     if queue_changed:
