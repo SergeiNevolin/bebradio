@@ -45,9 +45,6 @@ class Track:
             "thumbnail": self.thumbnail,
             "duration": self.duration,
             "added_by": self.added_by,
-            # Original YouTube watch URL, used by the client for the blurred
-            # video backdrop.
-            "source_url": self.source_url,
         }
 
 
