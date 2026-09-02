@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import ThemeToggle from './ThemeToggle'
+import AccentPicker from './AccentPicker'
 
 export default function Navbar() {
   const { user, logout } = useAuth()
@@ -21,6 +22,7 @@ export default function Navbar() {
               <Link to="/register" className="btn btn-sm">Register</Link>
             </>
           )}
+          <AccentPicker />
           <ThemeToggle />
         </div>
       </div>
