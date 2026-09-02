@@ -12,7 +12,7 @@ export default function Navbar() {
         <div className="navbar-right">
           {user ? (
             <>
-              <span className="navbar-user">{user.username}</span>
+              <Link to={`/user/${user.id}`} className="navbar-user">{user.username}</Link>
               <button className="btn btn-secondary btn-sm" onClick={logout}>Logout</button>
             </>
           ) : (

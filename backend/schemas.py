@@ -70,3 +70,8 @@ class RoomSettingsRequest(BaseModel):
     # ``None`` (field unset) means "leave unchanged"; an empty string means
     # "remove the password"; a non-empty string sets a new password.
     password: Optional[str] = None
+
+
+class UpdateProfileRequest(BaseModel):
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None

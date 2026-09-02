@@ -18,6 +18,17 @@ from schemas import LoginRequest, RegisterRequest
 router = APIRouter(prefix="/api/auth")
 
 
+def _user_dict(user: UserModel) -> dict:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "bio": user.bio or "",
+        "avatar_url": user.avatar_url or "",
+        "created_at": user.created_at,
+    }
+
+
 @router.post("/register")
 async def register(req: RegisterRequest):
     existing = await find_user_by_email(req.email)
@@ -43,7 +54,7 @@ async def register(req: RegisterRequest):
         await session.commit()
 
     token = create_token(user_id)
-    return {"token": token, "user": {"id": user_id, "email": req.email, "username": req.username}}
+    return {"token": token, "user": _user_dict(user)}
 
 
 @router.post("/login")
@@ -58,11 +69,11 @@ async def login(req: LoginRequest):
             status_code=401, content={"error": "Invalid email or password"}
         )
     token = create_token(user.id)
-    return {"token": token, "user": {"id": user.id, "email": user.email, "username": user.username}}
+    return {"token": token, "user": _user_dict(user)}
 
 
 @router.get("/me")
 async def me(user=Depends(get_current_user)):
     if user is None:
         return JSONResponse(status_code=401, content={"error": "Not authenticated"})
-    return {"user": {"id": user.id, "email": user.email, "username": user.username}}
+    return {"user": _user_dict(user)}

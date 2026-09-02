@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 
 export interface ChatMessage {
   id: string
@@ -44,7 +45,13 @@ export default function Chat({ messages, onSend, currentUserId }: ChatProps) {
             key={msg.id}
             className={`chat-message ${msg.user_id === currentUserId ? 'chat-message-own' : ''}`}
           >
-            <span className="chat-username">{msg.username}</span>
+            {msg.user_id ? (
+              <Link to={`/user/${msg.user_id}`} className="chat-username profile-link">
+                {msg.username}
+              </Link>
+            ) : (
+              <span className="chat-username">{msg.username}</span>
+            )}
             <span className="chat-text">{msg.text}</span>
           </div>
         ))}

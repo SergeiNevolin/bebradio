@@ -8,6 +8,7 @@ import Home from './pages/Home'
 import Room from './pages/Room'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import Profile from './pages/Profile'
 
 export default function App() {
   useEffect(() => {
@@ -30,6 +31,7 @@ export default function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
               <Route path="/room/:roomId" element={<Room />} />
+              <Route path="/user/:userId" element={<Profile />} />
             </Routes>
           </div>
         </div>

@@ -26,6 +26,8 @@ class UserModel(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     username = Column(String(30), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
+    bio = Column(Text, default="")
+    avatar_url = Column(Text, default="")
     created_at = Column(Float, server_default=func.extract("epoch", func.now()))
 
 
@@ -107,6 +109,8 @@ async def init_db(database_url: str | None = None):
 # SQLite the column is always present because tests start from a fresh database.
 _MIGRATIONS = [
     "ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''",
 ]
 
 
