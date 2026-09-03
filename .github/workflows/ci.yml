@@ -61,7 +61,7 @@ jobs:
 
   deploy:
     name: Deploy to Production
-    runs-on: finland-runner
+    runs-on: prod-runner
     needs: [backend-tests, frontend-tests]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
   
