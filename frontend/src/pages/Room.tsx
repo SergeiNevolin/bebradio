@@ -7,9 +7,8 @@ import Queue from '../components/Queue'
 import AddTrack from '../components/AddTrack'
 import Chat, { type ChatMessage } from '../components/Chat'
 import Listeners from '../components/Listeners'
-import VideoBackdrop from '../components/VideoBackdrop'
+import AudioWaveBackdrop from '../components/AudioWaveBackdrop'
 import { ReactionBar, ReactionsOverlay, type FloatingReaction } from '../components/Reactions'
-import { youtubeId } from '../lib/youtube'
 
 import type { RoomState } from '../types'
 
@@ -346,10 +345,10 @@ export default function Room() {
 
   return (
     <div className="room-page">
-      <VideoBackdrop
-        videoId={youtubeId(room?.current_track?.source_url)}
+      <AudioWaveBackdrop
+        active={Boolean(room?.current_track)}
         isPlaying={room?.is_playing ?? false}
-        position={room?.position ?? 0}
+        seed={room?.current_track?.id ?? ''}
       />
       <header className="room-header">
         <div className="room-header-left">
