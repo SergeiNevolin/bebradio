@@ -5,18 +5,11 @@ node_modules/
 dist/
 build/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-.eggs/
-*.egg
-
-# Virtual environments
-venv/
-.venv/
-env/
+# Go
+backend/bin/
+backend/out/
+*.test
+*.out
 
 # IDE
 .vscode/
@@ -28,11 +21,6 @@ env/
 Thumbs.db
 Desktop.ini
 .DS_Store
-
-# Testing / Coverage
-.pytest_cache/
-.coverage
-htmlcov/
 
 # Environment
 .env

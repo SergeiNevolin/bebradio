@@ -1,6 +1,15 @@
-__pycache__
-.pytest_cache
+# Everything the build does not need. Keeping the context small speeds up
+# `docker build` and keeps local state out of the image.
 .git
-.vscode
-tests
-*.pyc
+.gitignore
+*.md
+Dockerfile
+.dockerignore
+
+# Test-only code: the image runs the server, never the suite.
+**/*_test.go
+internal/youtube/youtubetest/
+
+# Local build output.
+/bin/
+/out/

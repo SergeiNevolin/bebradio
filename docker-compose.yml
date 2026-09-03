@@ -21,12 +21,12 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/bebradio
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/bebradio?sslmode=disable
       - SECRET_KEY=dev-secret-key
       - CORS_ORIGINS=http://localhost:3000
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=text
     depends_on:
       postgres:
         condition: service_healthy
