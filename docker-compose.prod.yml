@@ -24,6 +24,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - YTDLP_EXTRA_ARGS=${YTDLP_EXTRA_ARGS:-}
     depends_on:
       postgres:
         condition: service_healthy

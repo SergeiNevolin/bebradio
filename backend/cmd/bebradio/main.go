@@ -122,6 +122,7 @@ func run() error {
 	yt := youtube.New(youtube.Options{
 		BinaryPath:       cfg.YTDLPPath,
 		JSRuntime:        cfg.YTDLPJSRuntime,
+		ExtraArgs:        cfg.YTDLPExtraArgs,
 		Timeout:          cfg.YTDLPTimeout,
 		Concurrency:      cfg.YTDLPConcurrency,
 		SubtitleCacheMax: cfg.SubtitleCacheMax,

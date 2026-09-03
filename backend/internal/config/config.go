@@ -84,6 +84,13 @@ type Config struct {
 	YTDLPConcurrency int
 	YTDLPTimeout     time.Duration
 	SubtitleCacheMax int
+	// YTDLPExtraArgs is passed to every yt-dlp invocation. YouTube blocks
+	// datacentre addresses harder than home ones, and the remedy changes as
+	// often as their player does, so it has to be settable without a rebuild:
+	// typically "--cookies /data/cookies.txt" or
+	// "--extractor-args youtube:player_client=tv_simply". Split on whitespace,
+	// so an argument cannot itself contain a space.
+	YTDLPExtraArgs []string
 
 	// Warnings holds non-fatal configuration problems worth logging at startup.
 	Warnings []string
@@ -136,6 +143,7 @@ func Load() (Config, error) {
 		YTDLPConcurrency: integer("YTDLP_CONCURRENCY", 4, fail),
 		YTDLPTimeout:     duration("YTDLP_TIMEOUT", 60*time.Second, fail),
 		SubtitleCacheMax: integer("SUBTITLE_CACHE_MAX", 256, fail),
+		YTDLPExtraArgs:   strings.Fields(os.Getenv("YTDLP_EXTRA_ARGS")),
 	}
 
 	cfg.CORSOrigins = splitCSV(env("CORS_ORIGINS", "http://localhost:3000"))

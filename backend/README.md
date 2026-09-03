@@ -7,7 +7,8 @@ Go-сервис синхронного прослушивания: HTTP API, Web
 ## Запуск
 
 ```bash
-# нужен PostgreSQL и yt-dlp в PATH (плюс Node.js — он требуется самому yt-dlp)
+# нужен PostgreSQL и yt-dlp в PATH, плюс JS-рантайм для плеера YouTube:
+# Deno (по умолчанию у yt-dlp) или Node.js 20+ с YTDLP_JS_RUNTIME=node
 export DATABASE_URL='postgres://postgres:postgres@localhost:5432/bebradio?sslmode=disable'
 export SECRET_KEY='...'
 go run ./cmd/bebradio
@@ -87,7 +88,8 @@ yt-dlp занимает десятки секунд, и удержание бл�
 | `AUTO_ADVANCE_GRACE` | `2.5s` | Насколько позиция должна перевалить за длительность трека |
 | `ADVANCE_DEDUP_WINDOW` | `1s` | Окно, в котором повторное переключение игнорируется |
 | `RADIO_REFILL_AT` / `RADIO_BATCH` | `1` / `3` | Когда авто-радио добирает треки и сколько |
-| `YTDLP_PATH` / `YTDLP_JS_RUNTIME` | `yt-dlp` / `node` | Путь к yt-dlp и JS-рантайм для плеера YouTube |
+| `YTDLP_PATH` / `YTDLP_JS_RUNTIME` | `yt-dlp` / `node` | Путь к yt-dlp и JS-рантайм для плеера YouTube. В образе стоит Deno, и там значение переопределено на `deno` |
+| `YTDLP_EXTRA_ARGS` | пусто | Дополнительные аргументы каждого вызова yt-dlp. Нужны, когда YouTube блокирует адрес сервера: `--cookies /data/cookies.txt`, `--extractor-args youtube:player_client=tv_simply`, `--proxy ...`. Разделяются пробелами |
 | `YTDLP_CONCURRENCY` | `4` | Сколько процессов yt-dlp может работать одновременно |
 | `DB_MAX_CONNS` / `DB_MIN_CONNS` | `20` / `2` | Пул соединений |
 

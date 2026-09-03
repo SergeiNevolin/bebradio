@@ -2,6 +2,8 @@ package youtube
 
 import (
 	"encoding/json"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -208,4 +210,40 @@ func cueTexts(cues []Cue) []string {
 		out[i] = c.Text
 	}
 	return out
+}
+
+// Extra arguments are how a deployment works around YouTube blocking it, so
+// they have to reach yt-dlp on every call without displacing the caller's own
+// arguments.
+func TestArgvKeepsCallerArgumentsLast(t *testing.T) {
+	y := New(Options{JSRuntime: "node", ExtraArgs: []string{"--cookies", "/data/cookies.txt"}})
+
+	got := y.argv([]string{"--dump-json", "https://youtu.be/x"})
+	want := []string{"--js-runtimes", "node", "--cookies", "/data/cookies.txt", "--dump-json", "https://youtu.be/x"}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("argv() = %v, want %v", got, want)
+	}
+}
+
+func TestYtdlpErrorKeepsTheFailureNotTheWarnings(t *testing.T) {
+	stderr := "WARNING: [youtube] Unable to download webpage: HTTP Error 429\n" +
+		"WARNING: [youtube] No supported JavaScript runtime could be found\n" +
+		"ERROR: [youtube] abc: Sign in to confirm you are not a bot\n"
+
+	got := ytdlpError(stderr)
+	if !strings.Contains(got, "Sign in to confirm") {
+		t.Errorf("ytdlpError() = %q, want the ERROR line", got)
+	}
+	if strings.Contains(got, "WARNING") {
+		t.Errorf("ytdlpError() = %q, want the warnings dropped", got)
+	}
+}
+
+// Without an ERROR line there is nothing to pick out, so the whole thing has to
+// come through.
+func TestYtdlpErrorFallsBackToTheWholeOutput(t *testing.T) {
+	if got := ytdlpError("something unexpected"); got != "something unexpected" {
+		t.Errorf("ytdlpError() = %q, want the raw output", got)
+	}
 }

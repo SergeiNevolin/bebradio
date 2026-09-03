@@ -46,18 +46,52 @@ RUN set -eux; \
     /usr/local/bin/yt-dlp --version
 
 
+# --- Fetch Deno ---------------------------------------------------------------
+# YouTube's player is JavaScript, and yt-dlp cannot derive a stream URL without a
+# runtime to execute it. Deno is the runtime yt-dlp enables by default, and it
+# ships as one self-contained binary -- unlike Node, whose Debian package is too
+# old for yt-dlp to accept.
+FROM debian:bookworm-slim AS deno
+
+ARG TARGETARCH
+ARG DENO_VERSION=latest
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) asset=deno-x86_64-unknown-linux-gnu.zip ;; \
+      arm64) asset=deno-aarch64-unknown-linux-gnu.zip ;; \
+      *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    if [ "${DENO_VERSION}" = "latest" ]; then \
+      url="https://github.com/denoland/deno/releases/latest/download/${asset}"; \
+    else \
+      url="https://github.com/denoland/deno/releases/download/${DENO_VERSION}/${asset}"; \
+    fi; \
+    curl -fsSL "${url}" -o /tmp/deno.zip; \
+    unzip -q /tmp/deno.zip -d /usr/local/bin; \
+    chmod +x /usr/local/bin/deno; \
+    /usr/local/bin/deno --version
+
+
 # --- Runtime ------------------------------------------------------------------
 FROM debian:bookworm-slim
 
-# Node is not optional: YouTube's player requires a JavaScript runtime before
-# yt-dlp can derive a stream URL at all.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates nodejs \
+ && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --create-home --uid 10001 bebradio
 
+COPY --from=deno /usr/local/bin/deno /usr/local/bin/deno
 COPY --from=ytdlp /usr/local/bin/yt-dlp /usr/local/bin/yt-dlp
 COPY --from=build /out/bebradio /usr/local/bin/bebradio
+
+# yt-dlp only looks for Deno when told to; without a runtime it cannot extract a
+# stream URL at all.
+ENV YTDLP_JS_RUNTIME=deno
 
 USER bebradio
 WORKDIR /home/bebradio
