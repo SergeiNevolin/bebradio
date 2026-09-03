@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -17,10 +18,12 @@ services:
 
   backend:
     build: ./backend
+    restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/bebradio
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/bebradio?sslmode=disable
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,10 +32,12 @@ services:
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     ports:
       - "${APP_PORT:-80}:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - app-net
 
