@@ -1,3 +1,4 @@
+import asyncio
 import json
 from fastapi import WebSocket
 
@@ -20,20 +21,22 @@ class ConnectionManager:
                 del self._connections[room_id]
 
     async def broadcast(self, room_id: str, state: dict) -> None:
-        """Send state to all connected clients in a room."""
+        """Send state to all connected clients in a room concurrently."""
         conns = self._connections.get(room_id)
         if not conns:
             return
 
         data = json.dumps(state)
-        dead: set[WebSocket] = set()
 
-        for ws in list(conns):
+        async def _send(ws: WebSocket) -> WebSocket | None:
             try:
                 await ws.send_text(data)
+                return None
             except Exception:
-                dead.add(ws)
+                return ws
 
+        results = await asyncio.gather(*[_send(ws) for ws in list(conns)])
+        dead = {ws for ws in results if ws is not None}
         if dead:
             conns -= dead
 

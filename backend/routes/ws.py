@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 
@@ -92,8 +93,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, access: str | N
             elif action == "clear_skip_votes":
                 room.skip_votes.clear()
 
-            if track_changed and await ensure_local_ahead(room):
-                queue_changed = True
+            if track_changed:
+                # Fire-and-forget: download ahead without blocking the WS handler.
+                asyncio.ensure_future(_download_ahead(room, room_id))
 
             if queue_changed:
                 await save_tracks(room)
@@ -174,3 +176,14 @@ async def _handle_skip_vote(room, room_id: str, msg: dict) -> bool:
         room.skip_votes.clear()
         return changed
     return False
+
+
+async def _download_ahead(room, room_id: str) -> None:
+    """Download next tracks in background, then persist and broadcast."""
+    try:
+        changed = await ensure_local_ahead(room)
+        if changed:
+            await save_tracks(room)
+            await manager.broadcast(room_id, room.to_dict())
+    except Exception:
+        pass

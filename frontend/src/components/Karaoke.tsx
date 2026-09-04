@@ -14,11 +14,9 @@ interface KaraokeProps {
   trackId: string
   /** Live playback position in seconds, used to highlight the current line. */
   currentTime: number
-  /** Jump playback to a line's timestamp when it is clicked. */
-  onSeek?: (seconds: number) => void
 }
 
-export default function Karaoke({ roomId, trackId, currentTime, onSeek }: KaraokeProps) {
+export default function Karaoke({ roomId, trackId, currentTime }: KaraokeProps) {
   const [status, setStatus] = useState<Status>('loading')
   const [cues, setCues] = useState<Cue[]>([])
   const [auto, setAuto] = useState(false)
@@ -90,7 +88,6 @@ export default function Karaoke({ roomId, trackId, currentTime, onSeek }: Karaok
               (i === activeIndex ? ' is-active' : '') +
               (i < activeIndex ? ' is-past' : '')
             }
-            onClick={onSeek ? () => onSeek(c.start) : undefined}
           >
             {c.text}
           </li>
