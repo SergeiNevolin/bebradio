@@ -18,11 +18,14 @@ interface ChatProps {
 export default function Chat({ messages, onSend, currentUserId }: ChatProps) {
   const [text, setText] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
+  const prevLen = useRef(messages.length)
 
   useEffect(() => {
-    if (bottomRef.current?.scrollIntoView) {
+    // Only auto-scroll when a *new* message arrives, not on initial load.
+    if (messages.length > prevLen.current && bottomRef.current?.scrollIntoView) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' })
     }
+    prevLen.current = messages.length
   }, [messages.length])
 
   const handleSubmit = (e: React.FormEvent) => {
