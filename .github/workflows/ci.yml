@@ -76,6 +76,16 @@ jobs:
           echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
           echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
           echo "VK_TOKEN=${{ secrets.VK_TOKEN }}" >> .env
+
+      - name: Write TLS certificates
+        env:
+          SSL_KEY: ${{ secrets.SSL_KEY }}
+          SSL_CERTIFICATE: ${{ secrets.SSL_CERTIFICATE }}
+        run: |
+          umask 077
+          mkdir -p frontend/ssl
+          printf '%s\n' "$SSL_KEY" > frontend/ssl/server.key
+          printf '%s\n' "$SSL_CERTIFICATE" > frontend/ssl/server.crt
   
       - name: Stop existing containers
         run: docker compose -f docker-compose.prod.yml down
