@@ -1,48 +1,61 @@
+"""Ensure tracks have local audio files available for streaming.
+
+Replaces the old stream-URL refresh logic: instead of keeping googlevideo
+URLs alive, we download tracks to the local media directory before playback.
+"""
+
 import asyncio
-import time
+import logging
 from typing import Optional
 
-from config import STREAM_REFRESH_MARGIN
+import media
 from models import Room, Track
-from youtube import resolve_stream
+
+log = logging.getLogger(__name__)
 
 
-async def ensure_fresh(room: Room, track: Optional[Track]) -> bool:
-    """Re-resolve ``track``'s stream URL if it is at or near expiry.
+async def ensure_local(room: Room, track: Optional[Track]) -> bool:
+    """Download ``track``'s audio to disk if not already present.
 
-    Returns ``True`` when the track's ``url`` was replaced, so the caller
-    knows to persist the queue. A track with no known ``source_url`` (e.g. one
-    added before this feature existed) is left untouched.
+    Returns ``True`` when a file was downloaded (so the caller knows to
+    persist the queue). A track with no ``source_url`` is left untouched.
     """
     if track is None or not track.source_url:
         return False
-    if track.stream_expires_at - time.time() > STREAM_REFRESH_MARGIN:
+    if track.local_path and media.is_downloaded(track.id):
+        # Ensure url is set even if track was loaded from old DB row
+        if not track.url:
+            track.url = f"/api/media/{track.id}"
+            return True
         return False
 
-    data = await asyncio.to_thread(resolve_stream, track.source_url)
-    if not data:
+    success = await asyncio.to_thread(media.download_track, track.source_url, track.id)
+    if not success:
         return False
 
-    track.url = data["stream_url"]
-    track.stream_expires_at = data["expires_at"]
-    return True
+    filename = media.get_local_filename(track.id)
+    if filename:
+        track.local_path = filename
+        track.url = f"/api/media/{track.id}"
+        return True
+    return False
 
 
-async def ensure_fresh_ahead(room: Room) -> bool:
-    """Keep the current *and* next track's stream URLs live.
+async def ensure_local_ahead(room: Room) -> bool:
+    """Ensure the current *and* next track's audio files exist on disk.
 
-    Re-resolving the next track before playback reaches it means the switch
-    at ``go_next`` has no wait on the network. Returns ``True`` if any URL
-    was replaced, so the caller knows to persist the queue.
+    Downloading the next track before playback reaches it means the switch
+    at ``go_next`` has no wait on the network. Returns ``True`` if any file
+    was downloaded, so the caller knows to persist the queue.
     """
     changed = False
     current = room.current_track()
-    if await ensure_fresh(room, current):
+    if await ensure_local(room, current):
         changed = True
 
     nxt = room.current_index + 1
     if 0 <= nxt < len(room.queue):
-        if await ensure_fresh(room, room.queue[nxt]):
+        if await ensure_local(room, room.queue[nxt]):
             changed = True
 
     return changed

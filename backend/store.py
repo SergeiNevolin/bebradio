@@ -36,7 +36,7 @@ async def load_room(room_id: str) -> Optional[Room]:
                 duration=t.duration,
                 added_by=t.added_by,
                 source_url=t.source_url or "",
-                stream_expires_at=t.stream_expires_at or 0.0,
+                local_path=t.local_path or "",
             )
             for t in result.scalars().all()
         ]
@@ -86,13 +86,10 @@ async def get_or_load_room(room_id: str) -> Optional[Room]:
     room = await load_room(room_id)
     if room:
         rooms[room_id] = room
-        # A room pulled from the DB may have been idle for hours; its current
-        # track's stream URL is probably stale. Refresh it before anyone tries
-        # to play it. Imported here to avoid an import cycle at module load.
-        from streams import ensure_fresh
-
-        if await ensure_fresh(room, room.current_track()):
-            await save_tracks(room)
+        # Restore track URLs from local_path for any tracks that have files.
+        for track in room.queue:
+            if track.local_path and not track.url:
+                track.url = f"/api/media/{track.id}"
     return room
 
 
@@ -136,7 +133,7 @@ async def save_tracks(room: Room) -> None:
                 added_by=t.added_by,
                 position_index=i,
                 source_url=t.source_url,
-                stream_expires_at=t.stream_expires_at,
+                local_path=t.local_path,
             ))
         await session.commit()
 

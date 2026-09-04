@@ -29,6 +29,9 @@ services:
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
       - BGUTIL_BASE_URL=http://bgutil-provider:4416
+      - MEDIA_DIR=/app/media/tracks
+    volumes:
+      - mediadata:/app/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,3 +60,4 @@ networks:
 
 volumes:
   pgdata:
+  mediadata:

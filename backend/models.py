@@ -16,11 +16,12 @@ class Track:
     duration: int = 0
     added_by: str = "Anonymous"
     added_at: float = field(default_factory=time.time)
-    # Original YouTube watch URL, kept so the playable ``url`` (a googlevideo
-    # link that expires after a few hours) can be re-resolved on demand.
+    # Original YouTube watch URL, kept so the local file can be re-downloaded
+    # if it gets cleaned up, and for auto-radio seeding.
     source_url: str = ""
-    # Epoch second at which ``url`` stops working; 0 means "unknown".
-    stream_expires_at: float = 0.0
+    # Relative path to the downloaded audio file on disk (e.g. "abc123.m4a").
+    # Empty string means the file has not been downloaded yet.
+    local_path: str = ""
 
     @classmethod
     def from_youtube(cls, info: dict, added_by: str) -> "Track":
@@ -28,12 +29,10 @@ class Track:
         return cls(
             title=info.get("title", "Unknown"),
             artist=info.get("artist", "Unknown"),
-            url=info["stream_url"],
             thumbnail=info.get("thumbnail", ""),
             duration=info.get("duration", 0),
             added_by=added_by,
             source_url=info.get("source_url", ""),
-            stream_expires_at=info.get("expires_at", 0.0),
         )
 
     def to_dict(self) -> dict:

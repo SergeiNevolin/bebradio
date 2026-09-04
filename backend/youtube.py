@@ -82,28 +82,8 @@ def _run_ytdlp(args: list[str], timeout: int = 60) -> Optional[subprocess.Comple
     return None
 
 
-def _resolve_stream_url(url: str) -> Optional[str]:
-    result = _run_ytdlp(
-        [*YT_DLP_COMMON, "-f", "bestaudio[ext=m4a]/bestaudio", "-g", "--no-playlist", url],
-    )
-    if not result:
-        return None
-    return result.stdout.strip().split("\n")[0] or None
-
-
-def resolve_stream(source_url: str) -> Optional[dict]:
-    """Re-resolve just the playable stream URL for an already-known video."""
-    try:
-        stream_url = _resolve_stream_url(source_url)
-        if not stream_url:
-            return None
-        return {"stream_url": stream_url, "expires_at": parse_stream_expiry(stream_url)}
-    except Exception:
-        return None
-
-
 def fetch_track(url: str) -> Optional[dict]:
-    """Fetch video info and a fresh stream URL from YouTube."""
+    """Fetch video metadata from YouTube (no stream URL — files are downloaded locally)."""
     try:
         info_result = _run_ytdlp(
             [*YT_DLP_COMMON, "--dump-json", "--no-download", "--no-playlist", url],
@@ -113,19 +93,12 @@ def fetch_track(url: str) -> Optional[dict]:
             return None
         data = json.loads(info_result.stdout)
 
-        stream_url = _resolve_stream_url(url)
-        if not stream_url:
-            log.warning("fetch_track: failed to resolve stream URL for %s", url)
-            return None
-
         return {
             "title": data.get("title", "Unknown"),
             "artist": data.get("uploader", data.get("channel", "Unknown")),
             "thumbnail": data.get("thumbnail", ""),
             "duration": data.get("duration", 0),
-            "stream_url": stream_url,
             "source_url": data.get("webpage_url") or url,
-            "expires_at": parse_stream_expiry(stream_url),
         }
     except Exception:
         log.exception("fetch_track: unexpected error for %s", url)

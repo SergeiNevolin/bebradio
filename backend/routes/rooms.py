@@ -14,13 +14,14 @@ from auth import (
     verify_password,
     verify_room_token,
 )
-from config import RATE_LIMIT_QUEUE, RATE_LIMIT_WINDOW
+from config import MAX_DURATION, RATE_LIMIT_QUEUE, RATE_LIMIT_WINDOW
 from connections import manager
+from media import get_local_filename
 from models import Room, Track
 from playback import go_next, go_prev, jump_to, seek_to
 from radio import maybe_refill
 from ratelimit import rate_limit
-from streams import ensure_fresh_ahead
+from streams import ensure_local_ahead
 from schemas import (
     AddTrackRequest,
     CreateRoomRequest,
@@ -191,6 +192,13 @@ async def add_to_queue(
         log.warning("add_to_queue: failed to fetch video info for url=%s room=%s user=%s", req.url, room_id, user.username if user else "anonymous")
         return JSONResponse(status_code=400, content={"error": "Could not fetch video info"})
 
+    duration = result.get("duration", 0) or 0
+    if duration > MAX_DURATION:
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"Video too long ({duration}s). Maximum is {MAX_DURATION}s."},
+        )
+
     added_by = user.username if user else req.added_by or "Anonymous"
     track = Track.from_youtube(result, added_by=added_by)
     if not track.source_url:
@@ -203,6 +211,12 @@ async def add_to_queue(
         room.is_playing = True
         room.position = 0
         room.last_sync_at = time.time()
+
+    # If this is the first track, download it immediately so playback can start.
+    if len(room.queue) == 1:
+        from streams import ensure_local
+        if await ensure_local(room, track):
+            pass  # url and local_path set
 
     await save_tracks(room)
     await manager.broadcast(room.id, room.to_dict())
@@ -269,7 +283,7 @@ async def update_playback(
     elif req.action == "seek" and req.position is not None:
         seek_to(room, req.position)
 
-    if track_changed and await ensure_fresh_ahead(room):
+    if track_changed and await ensure_local_ahead(room):
         queue_changed = True
 
     if queue_changed:

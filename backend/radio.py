@@ -9,7 +9,7 @@ import asyncio
 import time
 from typing import Awaitable, Callable, Optional
 
-from config import RADIO_BATCH, RADIO_REFILL_AT
+from config import MAX_DURATION, RADIO_BATCH, RADIO_REFILL_AT
 from connections import manager
 from models import Room, Track
 from youtube import fetch_related, fetch_track, video_id
@@ -54,6 +54,9 @@ async def _collect_tracks(room: Room, seed: str, limit: int) -> list[Track]:
             continue
         info = await asyncio.to_thread(fetch_track, url)
         if not info:
+            continue
+        duration = info.get("duration", 0) or 0
+        if duration > MAX_DURATION:
             continue
         room.radio_seen.add(vid)
         picked.append(Track.from_youtube(info, added_by=RADIO_TAG))
