@@ -86,11 +86,13 @@ jobs:
           printf '%s\n' "$SSL_KEY" > frontend/ssl/server.key
           printf '%s\n' "$SSL_CERTIFICATE" > frontend/ssl/server.crt
   
-      - name: Stop existing containers
-        run: docker compose -f docker-compose.prod.yml down
-
-      - name: Build and start containers
-        run: docker compose -f docker-compose.prod.yml up -d --build
+      - name: Build new images
+        run: docker compose -f docker-compose.prod.yml build
+      
+      - name: Start new containers
+        run: docker compose -f docker-compose.prod.yml up -d
   
       - name: Clean up unused images
-        run: docker image prune -f
+        run: |
+          docker image prune -f
+          docker builder prune -af --filter "until=168h"
