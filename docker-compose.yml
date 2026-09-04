@@ -31,6 +31,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - mediadata:/app/media
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/bebradio
       - SECRET_KEY=dev-secret-key
@@ -66,3 +67,4 @@ networks:
 
 volumes:
   pgdata:
+  mediadata:

@@ -5,7 +5,7 @@ from connections import manager
 from playback import go_next
 from radio import maybe_refill
 from store import rooms, save_tracks
-from streams import ensure_fresh_ahead
+from streams import ensure_local_ahead
 
 
 async def run_auto_advance() -> None:
@@ -37,9 +37,9 @@ async def _tick() -> None:
         # auto-advance for every other room.
         maybe_refill(room)
 
-        # Keep the current and next track's stream URLs live so the hand-off
-        # (and any client-side prefetch/crossfade) never waits on the network.
-        refreshed = await ensure_fresh_ahead(room)
+        # Ensure the current and next track's audio files are on disk so the
+        # hand-off (and any client-side prefetch/crossfade) never waits.
+        refreshed = await ensure_local_ahead(room)
 
         if advanced or refreshed:
             await save_tracks(room)

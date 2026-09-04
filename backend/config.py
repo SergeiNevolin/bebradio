@@ -11,11 +11,19 @@ JWT_EXPIRE_HOURS = 72
 
 MAX_CHAT_MESSAGES = 100
 
-# --- Stream URL refresh ---
-# ``yt-dlp -g`` hands back a googlevideo URL that stops working after a few
-# hours. Re-resolve it once it is within this many seconds of its stated
-# expiry so a track that has been sitting in the queue still plays.
-STREAM_REFRESH_MARGIN = 600
+# --- Local media storage ---
+# Directory where downloaded audio files are kept.
+MEDIA_DIR = os.getenv("MEDIA_DIR", os.path.join(os.path.dirname(__file__), "media", "tracks"))
+# Time-to-live for media files not referenced by any room queue (seconds).
+MEDIA_TTL = int(os.getenv("MEDIA_TTL", str(4 * 3600)))  # 4 hours
+# Maximum concurrent yt-dlp downloads.
+MAX_DOWNLOADS = int(os.getenv("MAX_DOWNLOADS", "3"))
+# Maximum total on-disk size for media files (bytes). Oldest unreferenced
+# files are evicted when this limit is exceeded.  Default 10 GB.
+MEDIA_MAX_SIZE = int(os.getenv("MEDIA_MAX_SIZE", str(10 * 1024 * 1024 * 1024)))
+# Maximum track duration in seconds.  Videos longer than this are rejected
+# when a user tries to add them to a queue.  Default 3600 s (1 hour).
+MAX_DURATION = int(os.getenv("MAX_DURATION", "3600"))
 
 # --- Server-side auto-advance ---
 # Track advancement is normally driven by whichever client reaches the end of
