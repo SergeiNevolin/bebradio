@@ -15,15 +15,25 @@ services:
     networks:
       - app-net
 
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    init: true
+    restart: unless-stopped
+    networks:
+      - app-net
+
   backend:
     build: ./backend
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/bebradio
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - BGUTIL_BASE_URL=http://bgutil-provider:4416
     depends_on:
       postgres:
         condition: service_healthy
+      bgutil-provider:
+        condition: service_started
     networks:
       - app-net
 

@@ -1,12 +1,23 @@
 import json
+import logging
 import re
 import subprocess
 import time
 import urllib.request
 from typing import Optional
 
+from config import BGUTIL_BASE_URL
 
-YT_DLP_COMMON = ["yt-dlp", "--js-runtimes", "node"]
+log = logging.getLogger(__name__)
+
+YT_DLP_COMMON = [
+    "yt-dlp",
+    "--js-runtimes", "node",
+    "--extractor-args", f"youtubepot-bgutilhttp:base_url={BGUTIL_BASE_URL}",
+]
+
+_YT_DLP_MAX_RETRIES = 2
+_YT_DLP_RETRY_DELAY = 2.0
 
 # Fallback validity when a resolved stream URL carries no ``expire`` param.
 _DEFAULT_STREAM_TTL = 5 * 3600
@@ -29,14 +40,41 @@ def parse_stream_expiry(stream_url: str) -> float:
     return time.time() + _DEFAULT_STREAM_TTL
 
 
+def _run_ytdlp(args: list[str], timeout: int = 60) -> Optional[subprocess.CompletedProcess]:
+    """Run yt-dlp with automatic retry on transient failures."""
+    for attempt in range(_YT_DLP_MAX_RETRIES):
+        try:
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if result.returncode == 0:
+                return result
+            if attempt < _YT_DLP_MAX_RETRIES - 1:
+                log.warning(
+                    "yt-dlp exited with code %d (attempt %d/%d), retrying...",
+                    result.returncode, attempt + 1, _YT_DLP_MAX_RETRIES,
+                )
+                time.sleep(_YT_DLP_RETRY_DELAY * (attempt + 1))
+        except subprocess.TimeoutExpired:
+            if attempt < _YT_DLP_MAX_RETRIES - 1:
+                log.warning(
+                    "yt-dlp timed out (attempt %d/%d), retrying...",
+                    attempt + 1, _YT_DLP_MAX_RETRIES,
+                )
+                time.sleep(_YT_DLP_RETRY_DELAY * (attempt + 1))
+        except Exception:
+            return None
+    return None
+
+
 def _resolve_stream_url(url: str) -> Optional[str]:
-    result = subprocess.run(
+    result = _run_ytdlp(
         [*YT_DLP_COMMON, "-f", "bestaudio[ext=m4a]/bestaudio", "-g", "--no-playlist", url],
-        capture_output=True,
-        text=True,
-        timeout=60,
     )
-    if result.returncode != 0:
+    if not result:
         return None
     return result.stdout.strip().split("\n")[0] or None
 
@@ -55,13 +93,10 @@ def resolve_stream(source_url: str) -> Optional[dict]:
 def fetch_track(url: str) -> Optional[dict]:
     """Fetch video info and a fresh stream URL from YouTube."""
     try:
-        info_result = subprocess.run(
+        info_result = _run_ytdlp(
             [*YT_DLP_COMMON, "--dump-json", "--no-download", "--no-playlist", url],
-            capture_output=True,
-            text=True,
-            timeout=60,
         )
-        if info_result.returncode != 0:
+        if not info_result:
             return None
         data = json.loads(info_result.stdout)
 
@@ -89,18 +124,16 @@ def fetch_related(source_url: str, limit: int) -> list[str]:
         return []
     mix_url = f"https://www.youtube.com/watch?v={vid}&list=RD{vid}"
     try:
-        result = subprocess.run(
+        result = _run_ytdlp(
             [
                 *YT_DLP_COMMON,
                 mix_url,
                 "--flat-playlist", "--dump-json", "--no-warnings",
                 "-I", f"1:{limit}",
             ],
-            capture_output=True,
-            text=True,
             timeout=45,
         )
-        if result.returncode != 0:
+        if not result:
             return []
 
         urls = []
@@ -246,14 +279,11 @@ def fetch_subtitles(source_url: str, lang: str = "") -> dict:
     try:
         # ``--dump-json`` already lists every caption track (manual and
         # auto-generated) with a downloadable URL; no need to write files.
-        info = subprocess.run(
+        info = _run_ytdlp(
             [*YT_DLP_COMMON, "--dump-json", "--no-download", "--no-playlist",
              f"https://www.youtube.com/watch?v={vid}"],
-            capture_output=True,
-            text=True,
-            timeout=60,
         )
-        if info.returncode == 0:
+        if info:
             data = json.loads(info.stdout)
             manual = data.get("subtitles") or {}
             auto = data.get("automatic_captions") or {}
@@ -290,17 +320,15 @@ def fetch_subtitles(source_url: str, lang: str = "") -> dict:
 def search_youtube(query: str, limit: int = 5) -> list[dict]:
     """Search YouTube and return a list of results."""
     try:
-        result = subprocess.run(
+        result = _run_ytdlp(
             [
                 *YT_DLP_COMMON,
                 f"ytsearch{limit}:{query}",
                 "--dump-json", "--no-download", "--flat-playlist",
             ],
-            capture_output=True,
-            text=True,
             timeout=30,
         )
-        if result.returncode != 0:
+        if not result:
             return []
 
         items = []
