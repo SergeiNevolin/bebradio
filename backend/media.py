@@ -108,14 +108,15 @@ def delete_track_file(track_id: str) -> bool:
     return False
 
 
-def _get_referenced_track_ids() -> set[str]:
-    """Collect all track IDs currently referenced by any room queue."""
+def _get_referenced_video_ids() -> set[str]:
+    """Collect all video IDs whose media files are still in a room queue."""
     from store import rooms
 
     ids: set[str] = set()
     for room in rooms.values():
         for track in room.queue:
-            ids.add(track.id)
+            if track.video_id:
+                ids.add(track.video_id)
     return ids
 
 
@@ -182,7 +183,7 @@ async def cleanup_expired_media() -> int:
     Returns the number of files deleted.
     """
     media = get_media_dir()
-    referenced = await asyncio.to_thread(_get_referenced_track_ids)
+    referenced = await asyncio.to_thread(_get_referenced_video_ids)
     deleted = 0
 
     for path in media.iterdir():

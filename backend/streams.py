@@ -14,6 +14,23 @@ from models import Room, Track
 log = logging.getLogger(__name__)
 
 
+def _media_key(track: Track) -> str:
+    """Return the key used for on-disk file naming.
+
+    Falls back to deriving the video_id from source_url for tracks loaded
+    from old DB rows that predate the video_id column.
+    """
+    if track.video_id:
+        return track.video_id
+    from youtube import video_id as extract_vid
+    vid = extract_vid(track.source_url)
+    if vid:
+        track.video_id = vid
+        return vid
+    # Last resort — shouldn't happen for real YouTube tracks
+    return track.id
+
+
 async def ensure_local(room: Room, track: Optional[Track]) -> bool:
     """Download ``track``'s audio to disk if not already present.
 
@@ -22,21 +39,21 @@ async def ensure_local(room: Room, track: Optional[Track]) -> bool:
     """
     if track is None or not track.source_url:
         return False
-    if track.local_path and media.is_downloaded(track.id):
-        # Ensure url is set even if track was loaded from old DB row
+    key = _media_key(track)
+    if track.local_path and media.is_downloaded(key):
         if not track.url:
-            track.url = f"/api/media/{track.id}"
+            track.url = f"/api/media/{key}"
             return True
         return False
 
-    success = await asyncio.to_thread(media.download_track, track.source_url, track.id)
+    success = await asyncio.to_thread(media.download_track, track.source_url, key)
     if not success:
         return False
 
-    filename = media.get_local_filename(track.id)
+    filename = media.get_local_filename(key)
     if filename:
         track.local_path = filename
-        track.url = f"/api/media/{track.id}"
+        track.url = f"/api/media/{key}"
         return True
     return False
 

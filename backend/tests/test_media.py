@@ -111,7 +111,7 @@ async def test_cleanup_expired_media_deletes_old_unreferenced(tmp_path):
     ref.touch()
     os.utime(ref, (time.time() - 86400 * 10,) * 2)
     r = models.Room()
-    r.queue = [models.Track(id="ref")]
+    r.queue = [models.Track(id="ref", video_id="ref")]
     store.rooms["TEST"] = r
     deleted = await media.cleanup_expired_media()
     assert deleted == 1
@@ -129,7 +129,7 @@ async def test_cleanup_expired_media_keeps_referenced_files(tmp_path):
     f.touch()
     os.utime(f, (time.time() - 86400 * 10,) * 2)
     r = models.Room()
-    r.queue = [models.Track(id="track1")]
+    r.queue = [models.Track(id="track1", video_id="track1")]
     store.rooms["T2"] = r
     deleted = await media.cleanup_expired_media()
     assert deleted == 0
@@ -171,7 +171,7 @@ async def test_cleanup_does_not_delete_referenced_when_over_limit(tmp_path, monk
     os.utime(unref, (time.time() - 3600,) * 2)
 
     r = models.Room()
-    r.queue = [models.Track(id="ref")]
+    r.queue = [models.Track(id="ref", video_id="ref")]
     store.rooms["SZ"] = r
 
     deleted = await media.cleanup_expired_media()
