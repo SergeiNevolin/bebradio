@@ -1,4 +1,6 @@
-node_modules
+ssl/
+node_modules/
+dist/node_modules
 dist
 .git
 .vscode
