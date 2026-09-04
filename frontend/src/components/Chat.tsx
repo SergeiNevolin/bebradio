@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import { Link } from 'react-router-dom'
 
 export interface ChatMessage {
@@ -15,7 +15,7 @@ interface ChatProps {
   currentUserId?: string
 }
 
-export default function Chat({ messages, onSend, currentUserId }: ChatProps) {
+function Chat({ messages, onSend, currentUserId }: ChatProps) {
   const [text, setText] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevLen = useRef(messages.length)
@@ -75,3 +75,5 @@ export default function Chat({ messages, onSend, currentUserId }: ChatProps) {
     </div>
   )
 }
+
+export default memo(Chat)

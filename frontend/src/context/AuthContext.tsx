@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 
 interface User {
   id: string
@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token, fetchUser])
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -68,9 +68,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return { success: false, error: 'Network error' }
     }
-  }
+  }, [])
 
-  const register = async (email: string, username: string, password: string) => {
+  const register = useCallback(async (email: string, username: string, password: string) => {
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -86,21 +86,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return { success: false, error: 'Network error' }
     }
-  }
+  }, [])
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token')
     setToken(null)
     setUser(null)
-  }
+  }, [])
 
-  const authHeaders = (): Record<string, string> => {
+  const authHeaders = useCallback((): Record<string, string> => {
     if (!token) return {}
     return { Authorization: `Bearer ${token}` }
-  }
+  }, [token])
+
+  const value = useMemo(
+    () => ({ user, token, loading, login, register, logout, authHeaders }),
+    [user, token, loading, login, register, logout, authHeaders],
+  )
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, authHeaders }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

@@ -37,4 +37,18 @@ describe('ReactionsOverlay', () => {
     const { container } = render(<ReactionsOverlay items={[item({ left: 63 })]} />)
     expect(container.querySelector('.floating-reaction')).toHaveStyle({ left: '63%' })
   })
+
+  it('renders no reactions when items is empty', () => {
+    const { container } = render(<ReactionsOverlay items={[]} />)
+    expect(container.querySelector('.reactions-overlay')).toBeInTheDocument()
+    expect(container.querySelectorAll('.floating-reaction')).toHaveLength(0)
+  })
+})
+
+describe('REACTIONS constant', () => {
+  it('contains expected emojis', () => {
+    expect(REACTIONS).toContain('🔥')
+    expect(REACTIONS).toContain('❤️')
+    expect(REACTIONS.length).toBeGreaterThan(0)
+  })
 })

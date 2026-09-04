@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { useToast } from '../context/ToastContext'
 
 interface SearchResult {
@@ -25,7 +25,7 @@ function isUrl(text: string): boolean {
   return /^https?:\/\//.test(text.trim())
 }
 
-export default function AddTrack({ onAdd }: AddTrackProps) {
+function AddTrack({ onAdd }: AddTrackProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -229,3 +229,5 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
     </div>
   )
 }
+
+export default memo(AddTrack)

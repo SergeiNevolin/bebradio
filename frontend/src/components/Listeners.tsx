@@ -1,3 +1,5 @@
+import { memo } from 'react'
+
 interface Listener {
   id: string
   name: string
@@ -9,7 +11,7 @@ interface ListenersProps {
   max?: number
 }
 
-export default function Listeners({ listeners, count, max = 4 }: ListenersProps) {
+function Listeners({ listeners, count, max = 4 }: ListenersProps) {
   const shown = listeners.slice(0, max)
   const extra = count - shown.length
 
@@ -31,3 +33,5 @@ export default function Listeners({ listeners, count, max = 4 }: ListenersProps)
     </span>
   )
 }
+
+export default memo(Listeners)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import type { Track } from '../types'
 import Karaoke from './Karaoke'
 import SeekBar from './player/SeekBar'
@@ -25,7 +25,7 @@ interface PlayerProps {
   roomId?: string
 }
 
-export default function Player({
+function Player({
   track,
   nextTrack,
   isPlaying,
@@ -192,3 +192,5 @@ export default function Player({
     </div>
   )
 }
+
+export default memo(Player)
