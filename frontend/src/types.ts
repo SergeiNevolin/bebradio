@@ -1,3 +1,6 @@
+/** Music platform a track was pulled from. */
+export type TrackSource = 'youtube' | 'vk'
+
 export interface Track {
   id: string
   title: string
@@ -6,6 +9,7 @@ export interface Track {
   thumbnail: string
   duration: number
   added_by: string
+  source?: TrackSource
   likes?: number
   dislikes?: number
 }
@@ -59,5 +63,5 @@ export interface QueueProps {
 }
 
 export interface AddTrackProps {
-  onAdd: (url: string) => Promise<{ success: boolean; error?: string }>
+  onAdd: (url: string, source: TrackSource) => Promise<{ success: boolean; error?: string }>
 }

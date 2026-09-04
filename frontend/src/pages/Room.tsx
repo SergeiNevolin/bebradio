@@ -10,7 +10,7 @@ import Listeners from '../components/Listeners'
 import AudioWaveBackdrop from '../components/AudioWaveBackdrop'
 import { ReactionBar, ReactionsOverlay, type FloatingReaction } from '../components/Reactions'
 
-import type { RoomState } from '../types'
+import type { RoomState, TrackSource } from '../types'
 
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>()
@@ -181,14 +181,17 @@ export default function Room() {
     }
   }
 
-  const handleAddTrack = async (url: string): Promise<{ success: boolean; error?: string }> => {
+  const handleAddTrack = async (
+    url: string,
+    source: TrackSource,
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
       const access = getRoomAccess(roomId!)
       const query = access ? `?access=${encodeURIComponent(access)}` : ''
       const res = await fetch(`/api/rooms/${roomId}/queue${query}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, source }),
       })
       if (!res.ok) {
         const data = await res.json() as { error?: string }

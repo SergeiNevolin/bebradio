@@ -3,7 +3,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
-from config import MAX_CHAT_MESSAGES
+from config import DEFAULT_SOURCE, MAX_CHAT_MESSAGES
 
 
 @dataclass
@@ -16,15 +16,17 @@ class Track:
     duration: int = 0
     added_by: str = "Anonymous"
     added_at: float = field(default_factory=time.time)
-    # Original YouTube watch URL, kept so the playable ``url`` (a googlevideo
-    # link that expires after a few hours) can be re-resolved on demand.
+    # Original page URL on the source platform, kept so the playable ``url``
+    # (a temporary CDN link) can be re-resolved on demand.
     source_url: str = ""
     # Epoch second at which ``url`` stops working; 0 means "unknown".
     stream_expires_at: float = 0.0
+    # Platform the track came from: "youtube" or "vk".
+    source: str = DEFAULT_SOURCE
 
     @classmethod
-    def from_youtube(cls, info: dict, added_by: str) -> "Track":
-        """Build a queue track from a ``youtube.fetch_track`` result dict."""
+    def from_info(cls, info: dict, added_by: str) -> "Track":
+        """Build a queue track from a ``providers.fetch_track`` result dict."""
         return cls(
             title=info.get("title", "Unknown"),
             artist=info.get("artist", "Unknown"),
@@ -34,6 +36,7 @@ class Track:
             added_by=added_by,
             source_url=info.get("source_url", ""),
             stream_expires_at=info.get("expires_at", 0.0),
+            source=info.get("source") or DEFAULT_SOURCE,
         )
 
     def to_dict(self) -> dict:
@@ -45,6 +48,7 @@ class Track:
             "thumbnail": self.thumbnail,
             "duration": self.duration,
             "added_by": self.added_by,
+            "source": self.source,
         }
 
 

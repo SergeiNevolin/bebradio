@@ -9,7 +9,7 @@ import asyncio
 import time
 from typing import Awaitable, Callable, Optional
 
-from config import RADIO_BATCH, RADIO_REFILL_AT
+from config import RADIO_BATCH, RADIO_REFILL_AT, SOURCE_YOUTUBE
 from connections import manager
 from models import Room, Track
 from youtube import fetch_related, fetch_track, video_id
@@ -18,11 +18,17 @@ RADIO_TAG = "📻 Radio"
 
 
 def _seed_url(room: Room) -> str:
-    """The YouTube URL whose Mix we grow the queue from."""
+    """The YouTube URL whose Mix we grow the queue from.
+
+    Only YouTube can seed auto-radio — no other platform we support exposes a
+    "related tracks" feed — so a queue whose recent tracks all came from
+    elsewhere simply has no seed and is left alone.
+    """
     if room.radio_seed_url:
         return room.radio_seed_url
-    if room.queue:
-        return room.queue[-1].source_url
+    for track in reversed(room.queue):
+        if track.source == SOURCE_YOUTUBE and track.source_url:
+            return track.source_url
     return ""
 
 
@@ -56,7 +62,8 @@ async def _collect_tracks(room: Room, seed: str, limit: int) -> list[Track]:
         if not info:
             continue
         room.radio_seen.add(vid)
-        picked.append(Track.from_youtube(info, added_by=RADIO_TAG))
+        info.setdefault("source", SOURCE_YOUTUBE)
+        picked.append(Track.from_info(info, added_by=RADIO_TAG))
     return picked
 
 

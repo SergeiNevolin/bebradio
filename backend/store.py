@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlalchemy import select, delete
 
+from config import DEFAULT_SOURCE
 from db import (
     ChatMessageModel,
     RoomModel,
@@ -37,6 +38,7 @@ async def load_room(room_id: str) -> Optional[Room]:
                 added_by=t.added_by,
                 source_url=t.source_url or "",
                 stream_expires_at=t.stream_expires_at or 0.0,
+                source=t.source or DEFAULT_SOURCE,
             )
             for t in result.scalars().all()
         ]
@@ -137,6 +139,7 @@ async def save_tracks(room: Room) -> None:
                 position_index=i,
                 source_url=t.source_url,
                 stream_expires_at=t.stream_expires_at,
+                source=t.source,
             ))
         await session.commit()
 

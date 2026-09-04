@@ -4,7 +4,7 @@ from typing import Optional
 
 from config import STREAM_REFRESH_MARGIN
 from models import Room, Track
-from youtube import resolve_stream
+from providers import resolve_stream
 
 
 async def ensure_fresh(room: Room, track: Optional[Track]) -> bool:
@@ -19,7 +19,7 @@ async def ensure_fresh(room: Room, track: Optional[Track]) -> bool:
     if track.stream_expires_at - time.time() > STREAM_REFRESH_MARGIN:
         return False
 
-    data = await asyncio.to_thread(resolve_stream, track.source_url)
+    data = await asyncio.to_thread(resolve_stream, track.source_url, track.source)
     if not data:
         return False
 

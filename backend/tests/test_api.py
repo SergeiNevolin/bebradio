@@ -868,7 +868,7 @@ async def test_ensure_fresh_reresolves_expired_stream(monkeypatch):
     import streams
     monkeypatch.setattr(
         streams, "resolve_stream",
-        lambda src: {"stream_url": "http://fresh", "expires_at": 9_999_999_999.0},
+        lambda src, source=None: {"stream_url": "http://fresh", "expires_at": 9_999_999_999.0},
     )
     r = models.Room()
     t = models.Track(id="a", url="http://stale", source_url="https://youtu.be/abc", stream_expires_at=1.0)
@@ -885,7 +885,7 @@ async def test_ensure_fresh_skips_still_valid_stream(monkeypatch):
     import streams
     called = False
 
-    def _boom(src):
+    def _boom(src, source=None):
         nonlocal called
         called = True
         return None
@@ -1033,16 +1033,16 @@ def test_room_settings_schema_accepts_auto_radio():
     assert RoomSettingsRequest().auto_radio is None
 
 
-# --- Track.from_youtube / radio.maybe_refill ---
+# --- Track.from_info / radio.maybe_refill ---
 
 
-def test_track_from_youtube_maps_info_dict():
+def test_track_from_info_maps_info_dict():
     info = {
         "title": "Song", "artist": "Band", "stream_url": "http://s",
         "thumbnail": "http://t", "duration": 123,
         "source_url": "https://youtu.be/abc", "expires_at": 42.0,
     }
-    t = models.Track.from_youtube(info, added_by="Alice")
+    t = models.Track.from_info(info, added_by="Alice")
     assert (t.title, t.artist, t.url, t.thumbnail, t.duration) == (
         "Song", "Band", "http://s", "http://t", 123,
     )
@@ -1051,8 +1051,8 @@ def test_track_from_youtube_maps_info_dict():
     assert t.stream_expires_at == 42.0
 
 
-def test_track_from_youtube_tolerates_missing_optional_fields():
-    t = models.Track.from_youtube({"stream_url": "http://s"}, added_by="📻 Radio")
+def test_track_from_info_tolerates_missing_optional_fields():
+    t = models.Track.from_info({"stream_url": "http://s"}, added_by="📻 Radio")
     assert t.url == "http://s"
     assert t.title == "Unknown"
     assert t.source_url == ""
@@ -1126,7 +1126,7 @@ async def test_ensure_fresh_ahead_refreshes_current_and_next(monkeypatch):
     import streams
     monkeypatch.setattr(
         streams, "resolve_stream",
-        lambda src: {"stream_url": f"fresh:{src}", "expires_at": 9_999_999_999.0},
+        lambda src, source=None: {"stream_url": f"fresh:{src}", "expires_at": 9_999_999_999.0},
     )
     r = models.Room()
     r.queue = [
@@ -1151,7 +1151,7 @@ async def test_ensure_fresh_ahead_without_next_track(monkeypatch):
     calls = []
     monkeypatch.setattr(
         streams, "resolve_stream",
-        lambda src: calls.append(src) or {"stream_url": "fresh", "expires_at": 9_999_999_999.0},
+        lambda src, source=None: calls.append(src) or {"stream_url": "fresh", "expires_at": 9_999_999_999.0},
     )
     r = models.Room()
     r.queue = [models.Track(id="a", url="old", source_url="https://youtu.be/aaa", stream_expires_at=1.0)]
@@ -1296,3 +1296,277 @@ async def test_get_lyrics_track_without_source_url(client):
     store.rooms[room_id].queue = [models.Track(id="x", source_url="")]
     res = await client.get(f"/api/rooms/{room_id}/lyrics")
     assert res.json() == {"available": False, "track_id": "x", "cues": []}
+
+
+# --- Providers / VK ---
+
+
+def test_vk_is_vk_url_recognises_track_references():
+    import vk
+    assert vk.is_vk_url("https://vk.com/audio-2001053608_78053608")
+    assert vk.is_vk_url("https://m.vk.com/audio123_456")
+    assert vk.is_vk_url("audio-1_2")
+    assert vk.is_vk_url("-1_2")
+    assert not vk.is_vk_url("https://youtu.be/abc")
+    assert not vk.is_vk_url("")
+
+
+def test_vk_audio_id_extracts_owner_track_and_access_key():
+    import vk
+    assert vk.audio_id("https://vk.com/audio-2001053608_78053608") == "-2001053608_78053608"
+    assert vk.audio_id("https://vk.com/audio123_456_deadbeef") == "123_456_deadbeef"
+    assert vk.audio_id("https://vk.com/audio123_456?from=feed") == "123_456"
+    assert vk.audio_id("https://youtu.be/abc") == ""
+
+
+def test_vk_track_url_includes_access_key_when_present():
+    import vk
+    assert vk.track_url({"owner_id": -1, "id": 2}) == "https://vk.com/audio-1_2"
+    assert vk.track_url({"owner_id": 1, "id": 2, "access_key": "abc"}) == "https://vk.com/audio1_2_abc"
+
+
+def test_vk_playable_url_rewrites_hls_playlists():
+    import vk
+    hls = "https://cs9.vkuseraudio.net/s/v1/ac/deadbeef/aabbcc/index.m3u8?extra=1"
+    assert vk.playable_url(hls) == "https://cs9.vkuseraudio.net/s/v1/ac/aabbcc.mp3?extra=1"
+    with_audios = "https://cs9.vkuseraudio.net/p1/deadbeef/audios/aabbcc/index.m3u8"
+    assert vk.playable_url(with_audios) == "https://cs9.vkuseraudio.net/p1/aabbcc.mp3"
+    # Anything that isn't a recognised playlist is handed through untouched.
+    plain = "https://cs9.vkuseraudio.net/p1/track.mp3?extra=1"
+    assert vk.playable_url(plain) == plain
+    assert vk.playable_url("") == ""
+
+
+def test_vk_calls_are_noops_without_a_token(monkeypatch):
+    import vk
+    monkeypatch.setattr(vk, "VK_TOKEN", "")
+    monkeypatch.setattr(
+        vk.urllib.request, "urlopen",
+        lambda *a, **k: pytest.fail("should not call the VK API without a token"),
+    )
+    assert vk.search_vk("anything") == []
+    assert vk.fetch_track("https://vk.com/audio1_2") is None
+    assert vk.resolve_stream("https://vk.com/audio1_2") is None
+
+
+def _fake_vk_api(payloads: dict):
+    """Stand in for ``vk._api``, answering from a ``{method: response}`` map."""
+    def _api(method, **params):
+        return payloads.get(method)
+    return _api
+
+
+def test_vk_search_shapes_api_items(monkeypatch):
+    import vk
+    monkeypatch.setattr(vk, "_api", _fake_vk_api({"audio.search": {"items": [
+        {
+            "id": 2, "owner_id": -1, "artist": "Band", "title": "Song", "duration": 200,
+            "url": "https://cs9.vkuseraudio.net/s/v1/ac/deadbeef/aabbcc/index.m3u8",
+            "album": {"thumb": {"photo_300": "https://img/300.jpg"}},
+        },
+        # No playable URL (a restricted track) — skipped.
+        {"id": 3, "owner_id": -1, "artist": "X", "title": "Y", "url": ""},
+    ]}}))
+
+    assert vk.search_vk("band", limit=5) == [{
+        "id": "-1_2",
+        "title": "Song",
+        "artist": "Band",
+        "thumbnail": "https://img/300.jpg",
+        "duration": 200,
+        "url": "https://vk.com/audio-1_2",
+        "source": "vk",
+    }]
+
+
+def test_vk_fetch_track_maps_get_by_id(monkeypatch):
+    import time as _t
+    import vk
+    monkeypatch.setattr(vk, "_api", _fake_vk_api({"audio.getById": [{
+        "id": 2, "owner_id": -1, "artist": "Band", "title": "Song", "duration": 200,
+        "url": "https://cs9.vkuseraudio.net/s/v1/ac/deadbeef/aabbcc/index.m3u8",
+        "album": {"thumb": {"photo_135": "https://img/135.jpg"}},
+    }]}))
+
+    info = vk.fetch_track("https://vk.com/audio-1_2")
+    assert info["title"] == "Song"
+    assert info["artist"] == "Band"
+    assert info["thumbnail"] == "https://img/135.jpg"
+    assert info["stream_url"] == "https://cs9.vkuseraudio.net/s/v1/ac/aabbcc.mp3"
+    assert info["source_url"] == "https://vk.com/audio-1_2"
+    assert info["expires_at"] > _t.time()
+
+
+def test_vk_fetch_track_none_on_empty_response(monkeypatch):
+    import vk
+    monkeypatch.setattr(vk, "_api", _fake_vk_api({"audio.getById": []}))
+    assert vk.fetch_track("https://vk.com/audio-1_2") is None
+
+
+def test_providers_detect_source_from_url():
+    import providers
+    assert providers.detect_source("https://vk.com/audio-1_2") == "vk"
+    assert providers.detect_source("https://youtu.be/abc") == "youtube"
+    assert providers.detect_source("https://example.com/x") is None
+
+
+def test_providers_normalize_falls_back_to_default():
+    import providers
+    assert providers.normalize("vk") == "vk"
+    assert providers.normalize("VK") == "vk"
+    assert providers.normalize("spotify") == "youtube"
+    assert providers.normalize(None) == "youtube"
+
+
+def test_providers_resolve_prefers_the_url_over_the_stated_source():
+    import providers
+    # A pasted link wins over whichever tab happened to be selected.
+    assert providers.resolve("https://vk.com/audio-1_2", "youtube") == "vk"
+    assert providers.resolve("https://youtu.be/abc", "vk") == "youtube"
+    # An unrecognised URL keeps the caller's choice.
+    assert providers.resolve("https://example.com/x", "vk") == "vk"
+    assert providers.resolve("https://example.com/x", None) == "youtube"
+
+
+def test_providers_search_dispatches_and_tags_results(monkeypatch):
+    import providers
+    monkeypatch.setattr(providers.vk, "search_vk", lambda q, limit: [{"id": "1", "source": "vk"}])
+    monkeypatch.setattr(providers.youtube, "search_youtube", lambda q, limit: [{"id": "y"}])
+
+    assert providers.search("q", 5, "vk") == [{"id": "1", "source": "vk"}]
+    assert providers.search("q", 5, "youtube") == [{"id": "y", "source": "youtube"}]
+
+
+def test_providers_fetch_track_dispatches_by_url(monkeypatch):
+    import providers
+    monkeypatch.setattr(providers.vk, "fetch_track", lambda url: {"stream_url": "vk"})
+    monkeypatch.setattr(providers.youtube, "fetch_track", lambda url: {"stream_url": "yt"})
+
+    assert providers.fetch_track("https://vk.com/audio-1_2")["source"] == "vk"
+    assert providers.fetch_track("https://youtu.be/abc")["source"] == "youtube"
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_uses_requested_source(client, monkeypatch):
+    import routes.search as search_module
+    seen = {}
+
+    def _search(query, limit, source):
+        seen.update(query=query, limit=limit, source=source)
+        return [{"id": "1", "source": source}]
+
+    monkeypatch.setattr(search_module.providers, "search", _search)
+
+    res = await client.post("/api/search", json={"query": "band", "limit": 3, "source": "vk"})
+    assert res.status_code == 200
+    assert res.json() == [{"id": "1", "source": "vk"}]
+    assert seen == {"query": "band", "limit": 3, "source": "vk"}
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_defaults_to_youtube(client, monkeypatch):
+    import routes.search as search_module
+    monkeypatch.setattr(search_module.providers, "search", lambda q, limit, source: [{"source": source}])
+    res = await client.post("/api/search", json={"query": "band"})
+    assert res.json() == [{"source": "youtube"}]
+
+
+@pytest.mark.asyncio
+async def test_search_sources_endpoint_lists_platforms(client):
+    res = await client.get("/api/search/sources")
+    assert res.json() == {"sources": ["youtube", "vk"], "default": "youtube"}
+
+
+@pytest.mark.asyncio
+async def test_add_vk_track_to_queue(client, monkeypatch):
+    import routes.rooms as rooms_module
+    monkeypatch.setattr(
+        rooms_module.providers, "fetch_track",
+        lambda url, source=None: {
+            "title": "Song", "artist": "Band", "stream_url": "https://cdn/track.mp3",
+            "thumbnail": "https://img/300.jpg", "duration": 200,
+            "source_url": "https://vk.com/audio-1_2", "expires_at": 9_999_999_999.0,
+            "source": "vk",
+        },
+    )
+    token = await _register(client)
+    create = await client.post("/api/rooms", json={"name": "R"}, headers=_auth_header(token))
+    room_id = create.json()["id"]
+
+    res = await client.post(
+        f"/api/rooms/{room_id}/queue",
+        json={"url": "https://vk.com/audio-1_2", "source": "vk"},
+        headers=_auth_header(token),
+    )
+    assert res.status_code == 200
+    assert res.json()["source"] == "vk"
+
+    room = store.rooms[room_id]
+    assert room.queue[0].source == "vk"
+    assert room.queue[0].source_url == "https://vk.com/audio-1_2"
+    # Auto-radio only seeds off YouTube, so a VK track must not become the seed.
+    assert room.radio_seed_url == ""
+
+
+@pytest.mark.asyncio
+async def test_track_source_survives_a_reload(client):
+    token = await _register(client)
+    create = await client.post("/api/rooms", json={"name": "R"}, headers=_auth_header(token))
+    room_id = create.json()["id"]
+
+    room = store.rooms[room_id]
+    room.queue = [models.Track(id="v1", source_url="https://vk.com/audio-1_2",
+                               source="vk", stream_expires_at=9_999_999_999.0)]
+    await store.save_tracks(room)
+    store.rooms.clear()
+
+    reloaded = await store.get_or_load_room(room_id)
+    assert reloaded.queue[0].source == "vk"
+
+
+def test_radio_seed_skips_non_youtube_tracks():
+    import radio
+    r = models.Room()
+    r.queue = [
+        models.Track(id="y", source_url="https://youtu.be/aaa", source="youtube"),
+        models.Track(id="v", source_url="https://vk.com/audio-1_2", source="vk"),
+    ]
+    # The VK track is newest, but only the YouTube one can seed a Mix.
+    assert radio._seed_url(r) == "https://youtu.be/aaa"
+
+    r.auto_radio = True
+    r.queue = [models.Track(id="v", source_url="https://vk.com/audio-1_2", source="vk")]
+    assert radio._seed_url(r) == ""
+    assert radio.needs_refill(r) is False
+
+
+@pytest.mark.asyncio
+async def test_ensure_fresh_uses_the_tracks_own_provider(monkeypatch):
+    import streams
+    seen = []
+    monkeypatch.setattr(
+        streams, "resolve_stream",
+        lambda src, source=None: seen.append(source) or {
+            "stream_url": "http://fresh", "expires_at": 9_999_999_999.0},
+    )
+    t = models.Track(id="v", url="stale", source_url="https://vk.com/audio-1_2",
+                     source="vk", stream_expires_at=1.0)
+    assert await streams.ensure_fresh(models.Room(), t) is True
+    assert seen == ["vk"]
+
+
+@pytest.mark.asyncio
+async def test_get_lyrics_unavailable_for_vk_tracks(client, monkeypatch):
+    import routes.rooms as rooms_module
+    monkeypatch.setattr(
+        rooms_module, "fetch_subtitles",
+        lambda *a, **k: pytest.fail("VK tracks have no YouTube captions"),
+    )
+    token = await _register(client)
+    create = await client.post("/api/rooms", json={"name": "K"}, headers=_auth_header(token))
+    room_id = create.json()["id"]
+    store.rooms[room_id].queue = [
+        models.Track(id="v", source_url="https://vk.com/audio-1_2", source="vk")
+    ]
+    res = await client.get(f"/api/rooms/{room_id}/lyrics")
+    assert res.json() == {"available": False, "track_id": "v", "cues": []}

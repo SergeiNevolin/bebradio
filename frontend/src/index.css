@@ -941,10 +941,52 @@ input:focus {
   margin-bottom: 8px;
 }
 
+.add-track-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .add-track h3 {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
+}
+
+/* Segmented control choosing which platform the search box queries. */
+.source-picker {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  gap: 2px;
+}
+
+.source-option {
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  line-height: 1.2;
+}
+
+.source-option:hover:not(:disabled):not(.active) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.source-option.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.source-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .add-track-form {

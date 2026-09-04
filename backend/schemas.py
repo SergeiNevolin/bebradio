@@ -51,11 +51,15 @@ class JoinRequest(BaseModel):
 class AddTrackRequest(BaseModel):
     url: str
     added_by: str = "Anonymous"
+    # Which platform the URL came from ("youtube" / "vk"). Ignored when the URL
+    # itself identifies a platform; unknown values fall back to YouTube.
+    source: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
     query: str
     limit: int = 5
+    source: Optional[str] = None
 
 
 class PlaybackRequest(BaseModel):
