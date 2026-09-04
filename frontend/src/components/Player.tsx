@@ -57,7 +57,6 @@ function Player({
     needsGesture,
     crossfading,
     unlock,
-    seek,
   } = useGaplessPlayer({
     trackId: track?.id,
     src: track?.url,
