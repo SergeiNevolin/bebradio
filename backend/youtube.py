@@ -57,7 +57,16 @@ def _run_ytdlp(args: list[str], timeout: int = 60) -> Optional[subprocess.Comple
                     "yt-dlp exited with code %d (attempt %d/%d), retrying...",
                     result.returncode, attempt + 1, _YT_DLP_MAX_RETRIES,
                 )
+                if result.stderr:
+                    log.warning("yt-dlp stderr: %s", result.stderr.strip()[:500])
                 time.sleep(_YT_DLP_RETRY_DELAY * (attempt + 1))
+            else:
+                log.error(
+                    "yt-dlp failed after %d attempts, exit code %d, args: %s",
+                    _YT_DLP_MAX_RETRIES, result.returncode, args[1:4],
+                )
+                if result.stderr:
+                    log.error("yt-dlp stderr: %s", result.stderr.strip()[:1000])
         except subprocess.TimeoutExpired:
             if attempt < _YT_DLP_MAX_RETRIES - 1:
                 log.warning(
@@ -65,7 +74,10 @@ def _run_ytdlp(args: list[str], timeout: int = 60) -> Optional[subprocess.Comple
                     attempt + 1, _YT_DLP_MAX_RETRIES,
                 )
                 time.sleep(_YT_DLP_RETRY_DELAY * (attempt + 1))
+            else:
+                log.error("yt-dlp timed out after %d attempts, args: %s", _YT_DLP_MAX_RETRIES, args[1:4])
         except Exception:
+            log.exception("yt-dlp raised unexpected exception")
             return None
     return None
 
@@ -97,11 +109,13 @@ def fetch_track(url: str) -> Optional[dict]:
             [*YT_DLP_COMMON, "--dump-json", "--no-download", "--no-playlist", url],
         )
         if not info_result:
+            log.warning("fetch_track: yt-dlp failed to get info for %s", url)
             return None
         data = json.loads(info_result.stdout)
 
         stream_url = _resolve_stream_url(url)
         if not stream_url:
+            log.warning("fetch_track: failed to resolve stream URL for %s", url)
             return None
 
         return {
@@ -114,6 +128,7 @@ def fetch_track(url: str) -> Optional[dict]:
             "expires_at": parse_stream_expiry(stream_url),
         }
     except Exception:
+        log.exception("fetch_track: unexpected error for %s", url)
         return None
 
 

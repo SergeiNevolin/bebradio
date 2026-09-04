@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import uuid
 
@@ -36,6 +37,8 @@ from store import (
     save_tracks,
 )
 from youtube import fetch_subtitles, fetch_track
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
@@ -185,6 +188,7 @@ async def add_to_queue(
 
     result = await asyncio.to_thread(fetch_track, req.url)
     if not result:
+        log.warning("add_to_queue: failed to fetch video info for url=%s room=%s user=%s", req.url, room_id, user.username if user else "anonymous")
         return JSONResponse(status_code=400, content={"error": "Could not fetch video info"})
 
     added_by = user.username if user else req.added_by or "Anonymous"
