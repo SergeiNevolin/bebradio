@@ -38,3 +38,13 @@ REACTION_EMOJIS = ["❤️", "🔥", "😂", "👍", "🎉", "😮", "🙌", "�
 # pull this many related tracks from the last track's YouTube Mix.
 RADIO_REFILL_AT = 1
 RADIO_BATCH = 3
+
+# --- PO Token provider ---
+# bgutil-ytdlp-pot-provider HTTP server URL.
+BGUTIL_BASE_URL = os.getenv("BGUTIL_BASE_URL", "http://127.0.0.1:4416")
+
+# --- Rate limiting ---
+# Per-IP limits for expensive yt-dlp endpoints.
+RATE_LIMIT_SEARCH = int(os.getenv("RATE_LIMIT_SEARCH", "15"))   # requests per window
+RATE_LIMIT_QUEUE = int(os.getenv("RATE_LIMIT_QUEUE", "10"))    # requests per window
+RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))  # window in seconds

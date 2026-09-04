@@ -13,10 +13,12 @@ from auth import (
     verify_password,
     verify_room_token,
 )
+from config import RATE_LIMIT_QUEUE, RATE_LIMIT_WINDOW
 from connections import manager
 from models import Room, Track
 from playback import go_next, go_prev, jump_to, seek_to
 from radio import maybe_refill
+from ratelimit import rate_limit
 from streams import ensure_fresh_ahead
 from schemas import (
     AddTrackRequest,
@@ -36,6 +38,8 @@ from store import (
 from youtube import fetch_subtitles, fetch_track
 
 router = APIRouter(prefix="/api")
+
+_queue_limit = rate_limit(RATE_LIMIT_QUEUE, RATE_LIMIT_WINDOW)
 
 
 def has_room_access(room: Room, user, access: str | None) -> bool:
@@ -159,7 +163,10 @@ async def add_to_queue(
     req: AddTrackRequest,
     access: str | None = None,
     user=Depends(get_current_user),
+    _limit=Depends(_queue_limit),
 ):
+    if _limit is not None:
+        return _limit
     room = await get_or_load_room(room_id)
     if room is None:
         return JSONResponse(status_code=404, content={"error": "Room not found"})
