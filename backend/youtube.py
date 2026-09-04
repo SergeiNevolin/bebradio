@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 
 YT_DLP_COMMON = [
     "yt-dlp",
+    "--remote-components", "ejs:github",
     "--extractor-args", f"youtubepot-bgutilhttp:base_url={BGUTIL_BASE_URL}",
 ]
 
