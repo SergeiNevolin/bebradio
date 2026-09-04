@@ -119,3 +119,56 @@ async def test_refill_and_broadcast_announces_search_then_result(monkeypatch):
     assert seen[0] is True
     assert seen[-1] is False
     assert len(r.queue) == 1
+
+
+@pytest.mark.asyncio
+async def test_refill_exception_resets_radio_filling(monkeypatch):
+    """When _collect_tracks raises, radio_filling is reset via finally block."""
+    import radio
+
+    def boom(*a, **k):
+        raise RuntimeError("network error")
+
+    monkeypatch.setattr(radio, "fetch_related", boom)
+    r = models.Room(auto_radio=True)
+    r.radio_seed_url = "https://www.youtube.com/watch?v=seed000000a"
+    assert r.radio_filling is False
+    with pytest.raises(RuntimeError):
+        await radio.refill(r)
+    assert r.radio_filling is False
+
+
+@pytest.mark.asyncio
+async def test_refill_skips_too_long_tracks(monkeypatch):
+    import radio
+    monkeypatch.setattr(
+        radio, "fetch_related",
+        lambda seed, limit: [
+            "https://www.youtube.com/watch?v=shortvideoa",
+            "https://www.youtube.com/watch?v=longvideobbb",
+        ],
+    )
+    calls = {"n": 0}
+
+    def fake_fetch(url):
+        calls["n"] += 1
+        if "longvideo" in url:
+            return {"title": "Long", "duration": 7200, "source_url": url}
+        return {"title": "Short", "duration": 120, "source_url": url}
+
+    monkeypatch.setattr(radio, "fetch_track", fake_fetch)
+    r = models.Room(auto_radio=True)
+    r.radio_seed_url = "https://www.youtube.com/watch?v=seed000000a"
+    added = await radio.refill(r)
+    assert added is True
+    assert len(r.queue) == 1
+    assert r.queue[0].title == "Short"
+
+
+@pytest.mark.asyncio
+async def test_refill_noop_when_no_seed():
+    import radio
+    r = models.Room(auto_radio=True)
+    r.radio_seed_url = ""
+    assert await radio.refill(r) is False
+    assert r.radio_filling is False

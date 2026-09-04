@@ -38,17 +38,20 @@ def go_next(room: Room) -> bool:
 
 def go_prev(room: Room) -> bool:
     """Go to previous track. Returns True if position changed."""
-    if room.current_index > 0:
-        room.current_index -= 1
-        room.position = 0
-        room.is_playing = True
-        room.last_sync_at = time.time()
-        return True
-    return False
+    if not room.queue or room.current_index <= 0:
+        return False
+    room.current_index -= 1
+    room.position = 0
+    room.is_playing = True
+    room.last_sync_at = time.time()
+    return True
 
 
-def jump_to(room: Room, index: int) -> bool:
+def jump_to(room: Room, index) -> bool:
     """Jump to a specific track by index. Returns True if successful."""
+    if not isinstance(index, (int, float)) or index != int(index):
+        return False
+    index = int(index)
     if 0 <= index < len(room.queue):
         room.current_index = index
         room.position = 0
@@ -60,5 +63,5 @@ def jump_to(room: Room, index: int) -> bool:
 
 def seek_to(room: Room, position: float) -> None:
     """Seek to a specific position in the current track."""
-    room.position = position
+    room.position = max(0.0, position)
     room.last_sync_at = time.time()

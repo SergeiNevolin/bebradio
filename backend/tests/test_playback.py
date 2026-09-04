@@ -170,3 +170,96 @@ def test_go_next_records_radio_seed():
     ]
     go_next(r)
     assert r.radio_seed_url == "https://youtu.be/aaa"
+
+
+# --- Edge cases ---
+
+
+def test_go_prev_empty_queue():
+    from playback import go_prev
+    r = models.Room()
+    assert go_prev(r) is False
+
+
+def test_go_prev_at_index_zero():
+    from playback import go_prev
+    r = models.Room()
+    r.queue = [models.Track(id="a"), models.Track(id="b")]
+    r.current_index = 0
+    assert go_prev(r) is False
+    assert r.current_index == 0
+
+
+def test_go_prev_does_not_set_playing_on_empty():
+    from playback import go_prev
+    r = models.Room()
+    r.current_index = 5
+    r.is_playing = False
+    assert go_prev(r) is False
+    assert r.is_playing is False
+
+
+def test_jump_to_float_index_rejected():
+    from playback import jump_to
+    r = models.Room()
+    r.queue = [models.Track(id="a"), models.Track(id="b")]
+    assert jump_to(r, 1.5) is False
+    assert r.current_index == 0
+
+
+def test_jump_to_negative_index_rejected():
+    from playback import jump_to
+    r = models.Room()
+    r.queue = [models.Track(id="a")]
+    assert jump_to(r, -1) is False
+    assert r.current_index == 0
+
+
+def test_jump_to_out_of_range_rejected():
+    from playback import jump_to
+    r = models.Room()
+    r.queue = [models.Track(id="a")]
+    assert jump_to(r, 5) is False
+    assert r.current_index == 0
+
+
+def test_jump_to_string_index_rejected():
+    from playback import jump_to
+    r = models.Room()
+    r.queue = [models.Track(id="a")]
+    assert jump_to(r, "0") is False
+
+
+def test_seek_to_negative_clamped_to_zero():
+    from playback import seek_to
+    r = models.Room()
+    seek_to(r, -50)
+    assert r.position == 0.0
+
+
+def test_seek_to_zero():
+    from playback import seek_to
+    r = models.Room()
+    r.position = 100.0
+    seek_to(r, 0)
+    assert r.position == 0.0
+
+
+def test_go_next_clears_queue_sets_not_playing():
+    from playback import go_next
+    r = models.Room()
+    r.queue = [models.Track(id="a")]
+    r.is_playing = True
+    assert go_next(r) is True
+    assert r.is_playing is False
+    assert r.queue == []
+
+
+def test_go_next_on_single_track():
+    from playback import go_next
+    r = models.Room()
+    r.queue = [models.Track(id="a", source_url="https://youtu.be/seed")]
+    r.current_index = 0
+    assert go_next(r) is True
+    assert r.queue == []
+    assert r.radio_seed_url == "https://youtu.be/seed"
