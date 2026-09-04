@@ -179,3 +179,60 @@ async def test_cleanup_does_not_delete_referenced_when_over_limit(tmp_path, monk
     assert ref.exists()  # referenced file kept
     assert not unref.exists()  # unreferenced deleted
     store.rooms.pop("SZ", None)
+
+
+def test_get_media_dir_size(tmp_path):
+    import media
+    media._media_dir = tmp_path
+    (tmp_path / "a.m4a").write_bytes(b"x" * 100)
+    (tmp_path / "b.mp3").write_bytes(b"y" * 200)
+    (tmp_path / "sub").mkdir()
+    assert media._get_media_dir_size() == 300
+
+
+def test_get_media_dir_size_empty(tmp_path):
+    import media
+    media._media_dir = tmp_path
+    assert media._get_media_dir_size() == 0
+
+
+def test_enforce_size_limit_nothing_to_delete(tmp_path, monkeypatch):
+    import media
+    media._media_dir = tmp_path
+    monkeypatch.setattr(media, "MEDIA_MAX_SIZE", 10000)
+    (tmp_path / "a.m4a").write_bytes(b"x" * 100)
+    deleted = media._enforce_size_limit(set())
+    assert deleted == 0
+    assert (tmp_path / "a.m4a").exists()
+
+
+def test_enforce_size_limit_skips_referenced(tmp_path, monkeypatch):
+    import media
+    media._media_dir = tmp_path
+    monkeypatch.setattr(media, "MEDIA_MAX_SIZE", 50)
+    (tmp_path / "ref.m4a").write_bytes(b"r" * 100)
+    (tmp_path / "unref.m4a").write_bytes(b"u" * 100)
+    deleted = media._enforce_size_limit({"ref"})
+    assert deleted == 1
+    assert (tmp_path / "ref.m4a").exists()
+    assert not (tmp_path / "unref.m4a").exists()
+
+
+def test_delete_track_file_nonexistent(tmp_path):
+    import media
+    media._media_dir = tmp_path
+    assert media.delete_track_file("nope") is False
+
+
+def test_is_downloaded_with_extension(tmp_path):
+    import media
+    media._media_dir = tmp_path
+    (tmp_path / "abc.mp3").touch()
+    assert media.is_downloaded("abc") is True
+
+
+def test_get_local_filename_with_extension(tmp_path):
+    import media
+    media._media_dir = tmp_path
+    (tmp_path / "xyz.webm").touch()
+    assert media.get_local_filename("xyz") == "xyz.webm"

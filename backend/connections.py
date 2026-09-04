@@ -21,19 +21,21 @@ class ConnectionManager:
 
     async def broadcast(self, room_id: str, state: dict) -> None:
         """Send state to all connected clients in a room."""
-        if room_id not in self._connections:
+        conns = self._connections.get(room_id)
+        if not conns:
             return
 
         data = json.dumps(state)
         dead: set[WebSocket] = set()
 
-        for ws in self._connections[room_id]:
+        for ws in list(conns):
             try:
                 await ws.send_text(data)
             except Exception:
                 dead.add(ws)
 
-        self._connections[room_id] -= dead
+        if dead:
+            conns -= dead
 
     def get_count(self, room_id: str) -> int:
         """Get number of connected clients in a room."""

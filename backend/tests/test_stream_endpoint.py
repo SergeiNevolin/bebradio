@@ -78,3 +78,39 @@ async def test_serve_track_webm_content_type(client, tmp_path):
     res = await client.get("/api/media/track456")
     assert res.status_code == 200
     assert "audio/webm" in res.headers.get("content-type", "")
+
+
+@pytest.mark.asyncio
+async def test_serve_track_accepts_ranges_header(client, tmp_path):
+    media._media_dir = tmp_path
+    test_file = tmp_path / "ar.m4a"
+    test_file.write_bytes(b"hello world")
+    res = await client.get("/api/media/ar")
+    assert res.status_code == 200
+    assert res.headers.get("accept-ranges") == "bytes"
+
+
+@pytest.mark.asyncio
+async def test_serve_track_open_ended_range(client, tmp_path):
+    media._media_dir = tmp_path
+    test_file = tmp_path / "open.m4a"
+    test_file.write_bytes(b"0123456789")
+    res = await client.get("/api/media/open", headers={"Range": "bytes=5-"})
+    assert res.status_code == 206
+    assert res.content == b"56789"
+
+
+@pytest.mark.asyncio
+async def test_serve_track_starts_at_end_of_file(client, tmp_path):
+    media._media_dir = tmp_path
+    test_file = tmp_path / "eof.m4a"
+    test_file.write_bytes(b"abc")
+    res = await client.get("/api/media/eof", headers={"Range": "bytes=3-3"})
+    assert res.status_code == 416
+
+
+@pytest.mark.asyncio
+async def test_serve_track_invalid_track_id(client, tmp_path):
+    media._media_dir = tmp_path
+    res = await client.get("/api/media/../../etc/passwd")
+    assert res.status_code in (400, 404)

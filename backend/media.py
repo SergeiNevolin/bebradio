@@ -61,14 +61,9 @@ def get_local_filename(track_id: str) -> Optional[str]:
 
 
 def download_track(source_url: str, track_id: str) -> bool:
-    """Download audio from YouTube to the local media directory.
-
-    Uses yt-dlp to download in original (best) quality. The file is saved as
-    ``{track_id}.{ext}`` where ext is determined by yt-dlp.
-
-    Returns True on success, False on failure.
-    """
+    """Download audio from YouTube to the local media directory."""
     media = get_media_dir()
+    media.mkdir(parents=True, exist_ok=True)
     output_template = str(media / f"{track_id}.%(ext)s")
 
     # Check if already downloaded
@@ -146,6 +141,8 @@ def _enforce_size_limit(referenced: set[str]) -> int:
     for path in media.iterdir():
         if not path.is_file():
             continue
+        if path.suffix == ".part":
+            continue
         track_id = path.stem
         if track_id in referenced:
             continue
@@ -188,6 +185,9 @@ async def cleanup_expired_media() -> int:
 
     for path in media.iterdir():
         if not path.is_file():
+            continue
+        # Skip partial downloads still in progress
+        if path.suffix == ".part":
             continue
 
         track_id = path.stem
