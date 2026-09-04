@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'player_volume'
+const MUTED_KEY = 'player_muted'
 const DEFAULT_VOLUME = 0.7
 
 function readStored(): number {
@@ -9,6 +10,14 @@ function readStored(): number {
     return saved !== null ? Number(saved) : DEFAULT_VOLUME
   } catch {
     return DEFAULT_VOLUME
+  }
+}
+
+function readStoredMuted(): boolean {
+  try {
+    return localStorage.getItem(MUTED_KEY) === 'true'
+  } catch {
+    return false
   }
 }
 
@@ -27,7 +36,7 @@ interface VolumeControls {
  */
 export function useVolume(): VolumeControls {
   const [volume, setVolumeState] = useState(readStored)
-  const [muted, setMuted] = useState(false)
+  const [muted, setMuted] = useState(readStoredMuted)
 
   useEffect(() => {
     try {
@@ -36,6 +45,14 @@ export function useVolume(): VolumeControls {
       /* ignore */
     }
   }, [volume])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MUTED_KEY, String(muted))
+    } catch {
+      /* ignore */
+    }
+  }, [muted])
 
   const setVolume = useCallback((v: number) => {
     const clamped = Math.min(1, Math.max(0, v))

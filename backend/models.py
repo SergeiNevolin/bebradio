@@ -135,10 +135,23 @@ class Room:
 
     def to_dict(self) -> dict:
         track = self.current_track()
-        track_votes = self.get_track_votes(track.id) if track else {"likes": 0, "dislikes": 0}
+
+        # Pre-compute vote totals in a single pass over all votes.
+        vote_totals: dict[str, dict[str, int]] = {}
+        for v in self.votes:
+            totals = vote_totals.get(v.track_id)
+            if totals is None:
+                totals = {"likes": 0, "dislikes": 0}
+                vote_totals[v.track_id] = totals
+            if v.vote == 1:
+                totals["likes"] += 1
+            elif v.vote == -1:
+                totals["dislikes"] += 1
+
+        track_votes = vote_totals.get(track.id, {"likes": 0, "dislikes": 0}) if track else {"likes": 0, "dislikes": 0}
         queue_with_votes = []
         for t in self.queue:
-            tv = self.get_track_votes(t.id)
+            tv = vote_totals.get(t.id, {"likes": 0, "dislikes": 0})
             entry = t.to_dict()
             entry["likes"] = tv["likes"]
             entry["dislikes"] = tv["dislikes"]

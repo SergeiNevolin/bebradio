@@ -86,39 +86,6 @@ input:focus {
   width: 100%;
 }
 
-/* --- Blurred, dimmed audio wave backdrop --- */
-.wave-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-  background: var(--bg);
-}
-
-.wave-canvas {
-  position: absolute;
-  top: -6%;
-  left: -6%;
-  width: 112%;
-  height: 112%;
-  filter: blur(34px) saturate(1.15);
-  opacity: 0.9;
-}
-
-.wave-backdrop::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.62);
-}
-
-@media (max-width: 640px) {
-  .wave-canvas {
-    filter: blur(22px) saturate(1.15);
-  }
-}
-
 .navbar {
   position: sticky;
   top: 0;

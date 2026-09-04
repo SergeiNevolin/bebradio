@@ -7,7 +7,7 @@ import Queue from '../components/Queue'
 import AddTrack from '../components/AddTrack'
 import Chat, { type ChatMessage } from '../components/Chat'
 import Listeners from '../components/Listeners'
-import AudioWaveBackdrop from '../components/AudioWaveBackdrop'
+
 import { ReactionBar, ReactionsOverlay, type FloatingReaction } from '../components/Reactions'
 
 import type { RoomState } from '../types'
@@ -147,11 +147,11 @@ export default function Room() {
     }
   }, [roomId, fetchRoom, connectWs])
 
-  const sendWs = (msg: Record<string, unknown>) => {
+  const sendWs = useCallback((msg: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg))
     }
-  }
+  }, [])
 
   const handleUnlock = async () => {
     if (!passwordInput) return
@@ -200,9 +200,9 @@ export default function Room() {
     }
   }
 
-  const handlePlayback = (action: string, extra: Record<string, unknown> = {}) => {
+  const handlePlayback = useCallback((action: string, extra: Record<string, unknown> = {}) => {
     sendWs({ action, ...extra })
-  }
+  }, [sendWs])
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(roomId!)
@@ -268,14 +268,14 @@ export default function Room() {
     }
   }
 
-  const handleSendChat = (text: string) => {
+  const handleSendChat = useCallback((text: string) => {
     sendWs({
       action: 'chat',
       text,
       user_id: user?.id || '',
       username: user?.username || 'Anonymous',
     })
-  }
+  }, [sendWs, user?.id, user?.username])
 
   useEffect(() => {
     if (room?.current_track?.id !== prevTrackId.current) {
@@ -284,7 +284,7 @@ export default function Room() {
     }
   }, [room?.current_track?.id])
 
-  const handleVote = (trackId: string, vote: 1 | -1 | 0) => {
+  const handleVote = useCallback((trackId: string, vote: 1 | -1 | 0) => {
     setUserVote(vote)
     sendWs({
       action: 'vote',
@@ -292,18 +292,18 @@ export default function Room() {
       track_id: trackId,
       vote,
     })
-  }
+  }, [sendWs, user?.id])
 
-  const handleSkipVote = () => {
+  const handleSkipVote = useCallback(() => {
     sendWs({
       action: 'skip_vote',
       user_id: user?.id || '',
     })
-  }
+  }, [sendWs, user?.id])
 
-  const handleReact = (emoji: string) => {
+  const handleReact = useCallback((emoji: string) => {
     sendWs({ action: 'reaction', emoji, ...identity() })
-  }
+  }, [sendWs, identity])
 
   if (loading) return <div className="loading">Loading...</div>
 
@@ -345,11 +345,6 @@ export default function Room() {
 
   return (
     <div className="room-page">
-      <AudioWaveBackdrop
-        active={Boolean(room?.current_track)}
-        isPlaying={room?.is_playing ?? false}
-        seed={room?.current_track?.id ?? ''}
-      />
       <header className="room-header">
         <div className="room-header-left">
           <button className="btn btn-ghost btn-icon" onClick={() => navigate('/')} title="Back to home">

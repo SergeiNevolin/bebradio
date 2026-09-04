@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { Track } from '../types'
 
 interface QueueProps {
@@ -7,7 +8,7 @@ interface QueueProps {
   searching?: boolean
 }
 
-export default function Queue({ queue, currentIndex, searching = false }: QueueProps) {
+function Queue({ queue, currentIndex, searching = false }: QueueProps) {
   if (!queue.length) {
     return (
       <div className="queue">
@@ -55,3 +56,5 @@ export default function Queue({ queue, currentIndex, searching = false }: QueueP
     </div>
   )
 }
+
+export default memo(Queue)

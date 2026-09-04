@@ -50,7 +50,7 @@ describe('Player', () => {
 
   it('renders the seek bar', () => {
     const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
-    expect(screen.getByRole('slider', { name: 'Seek' })).toBeInTheDocument()
+    expect(screen.getByRole('meter', { name: 'Playback position' })).toBeInTheDocument()
     expect(container.querySelector('.seek-fill')).toBeInTheDocument()
   })
 
@@ -392,13 +392,6 @@ describe('Player karaoke toggle', () => {
 })
 
 describe('Player seeking', () => {
-  it('broadcasts a seek when the user jumps with the arrow keys', () => {
-    const onPlayback = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
-    fireEvent.keyDown(document.body, { code: 'ArrowRight' })
-    expect(onPlayback).toHaveBeenCalledWith('seek', { position: 10 })
-  })
-
   it('renders a Skip chip in the control row that votes to skip', () => {
     const onSkipVote = vi.fn()
     render(

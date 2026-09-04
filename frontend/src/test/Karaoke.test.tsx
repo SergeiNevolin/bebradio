@@ -71,15 +71,6 @@ describe('Karaoke', () => {
     expect(await screen.findByText(/auto-generated captions/i)).toBeInTheDocument()
   })
 
-  it('seeks to a line timestamp when it is clicked', async () => {
-    mockLyrics({ available: true, cues })
-    const onSeek = vi.fn()
-    render(<Karaoke roomId="R1" trackId="t1" currentTime={0} onSeek={onSeek} />)
-    const line = await screen.findByText('third line')
-    line.click()
-    expect(onSeek).toHaveBeenCalledWith(5)
-  })
-
   it('re-fetches when the track changes', async () => {
     mockLyrics({ available: true, cues })
     const { rerender } = render(<Karaoke roomId="R1" trackId="t1" currentTime={0} />)

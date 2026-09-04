@@ -1,5 +1,6 @@
 from typing import Optional
 
+import asyncio
 from sqlalchemy import select, delete
 
 from db import (
@@ -13,6 +14,16 @@ from models import ChatMessage, Room, Track, TrackVote
 
 
 rooms: dict[str, Room] = {}
+# Per-room lock to prevent concurrent save_tracks from racing.
+_room_locks: dict[str, asyncio.Lock] = {}
+_room_locks_lock = asyncio.Lock()
+
+
+async def _get_room_lock(room_id: str) -> asyncio.Lock:
+    async with _room_locks_lock:
+        if room_id not in _room_locks:
+            _room_locks[room_id] = asyncio.Lock()
+        return _room_locks[room_id]
 
 
 async def load_room(room_id: str) -> Optional[Room]:
@@ -119,26 +130,34 @@ async def save_room(room: Room) -> None:
 
 
 async def save_tracks(room: Room) -> None:
-    async with get_session() as session:
-        await session.execute(
-            delete(TrackModel).where(TrackModel.room_id == room.id)
-        )
-        for i, t in enumerate(room.queue):
-            session.add(TrackModel(
-                id=t.id,
-                room_id=room.id,
-                title=t.title,
-                artist=t.artist,
-                url=t.url,
-                thumbnail=t.thumbnail,
-                duration=t.duration,
-                added_by=t.added_by,
-                position_index=i,
-                source_url=t.source_url,
-                local_path=t.local_path,
-                video_id=t.video_id,
-            ))
-        await session.commit()
+    lock = await _get_room_lock(room.id)
+    async with lock:
+        async with get_session() as session:
+            await session.execute(
+                delete(TrackModel).where(TrackModel.room_id == room.id)
+            )
+            if room.queue:
+                await session.execute(
+                    TrackModel.__table__.insert(),
+                    [
+                        {
+                            "id": t.id,
+                            "room_id": room.id,
+                            "title": t.title,
+                            "artist": t.artist,
+                            "url": t.url,
+                            "thumbnail": t.thumbnail,
+                            "duration": t.duration,
+                            "added_by": t.added_by,
+                            "position_index": i,
+                            "source_url": t.source_url,
+                            "local_path": t.local_path,
+                            "video_id": t.video_id,
+                        }
+                        for i, t in enumerate(room.queue)
+                    ],
+                )
+            await session.commit()
 
 
 async def save_message(room_id: str, msg: ChatMessage) -> None:
@@ -159,13 +178,14 @@ async def save_votes(room: Room) -> None:
         await session.execute(
             delete(TrackVoteModel).where(TrackVoteModel.room_id == room.id)
         )
-        for v in room.votes:
-            session.add(TrackVoteModel(
-                room_id=room.id,
-                user_id=v.user_id,
-                track_id=v.track_id,
-                vote=v.vote,
-            ))
+        if room.votes:
+            await session.execute(
+                TrackVoteModel.__table__.insert(),
+                [
+                    {"room_id": room.id, "user_id": v.user_id, "track_id": v.track_id, "vote": v.vote}
+                    for v in room.votes
+                ],
+            )
         await session.commit()
 
 

@@ -17,6 +17,9 @@ from config import MEDIA_DIR, MEDIA_MAX_SIZE, MEDIA_TTL
 log = logging.getLogger(__name__)
 
 _media_dir: Optional[Path] = None
+# Per-track lock to prevent concurrent downloads of the same file.
+_download_locks: dict[str, asyncio.Lock] = {}
+_download_locks_lock = asyncio.Lock()
 
 
 def init_media_dir() -> None:
@@ -60,8 +63,16 @@ def get_local_filename(track_id: str) -> Optional[str]:
     return None
 
 
+async def _get_download_lock(track_id: str) -> asyncio.Lock:
+    """Return an asyncio.Lock for the given track, creating it if needed."""
+    async with _download_locks_lock:
+        if track_id not in _download_locks:
+            _download_locks[track_id] = asyncio.Lock()
+        return _download_locks[track_id]
+
+
 def download_track(source_url: str, track_id: str) -> bool:
-    """Download audio from YouTube to the local media directory."""
+    """Download audio from YouTube to the local media directory (blocking)."""
     media = get_media_dir()
     media.mkdir(parents=True, exist_ok=True)
     output_template = str(media / f"{track_id}.%(ext)s")
@@ -91,6 +102,16 @@ def download_track(source_url: str, track_id: str) -> bool:
 
     log.info("download_track: downloaded %s -> %s", source_url, get_track_path(track_id).name)
     return True
+
+
+async def download_track_async(source_url: str, track_id: str) -> bool:
+    """Download audio with a per-track lock to prevent concurrent downloads."""
+    lock = await _get_download_lock(track_id)
+    async with lock:
+        # Re-check after acquiring lock — another task may have finished.
+        if is_downloaded(track_id):
+            return True
+        return await asyncio.to_thread(download_track, source_url, track_id)
 
 
 def delete_track_file(track_id: str) -> bool:

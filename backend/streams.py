@@ -4,7 +4,6 @@ Replaces the old stream-URL refresh logic: instead of keeping googlevideo
 URLs alive, we download tracks to the local media directory before playback.
 """
 
-import asyncio
 import logging
 from typing import Optional
 
@@ -46,7 +45,7 @@ async def ensure_local(room: Room, track: Optional[Track]) -> bool:
             return True
         return False
 
-    success = await asyncio.to_thread(media.download_track, track.source_url, key)
+    success = await media.download_track_async(track.source_url, key)
     if not success:
         return False
 

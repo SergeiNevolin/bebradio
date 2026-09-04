@@ -58,4 +58,42 @@ describe('Chat', () => {
     )
     expect(screen.getByText('Mine').closest('.chat-message')).toHaveClass('chat-message-own')
   })
+
+  it('sends message on Enter key', () => {
+    const onSend = vi.fn()
+    render(<MemoryRouter><Chat messages={[]} onSend={onSend} /></MemoryRouter>)
+    const input = screen.getByPlaceholderText('Type a message...')
+    fireEvent.change(input, { target: { value: 'Enter msg' } })
+    fireEvent.submit(input.closest('form')!)
+    expect(onSend).toHaveBeenCalledWith('Enter msg')
+  })
+
+  it('disables Send button when input is empty', () => {
+    render(<MemoryRouter><Chat messages={[]} onSend={vi.fn()} /></MemoryRouter>)
+    expect(screen.getByText('Send')).toBeDisabled()
+  })
+
+  it('enables Send button when input has text', () => {
+    render(<MemoryRouter><Chat messages={[]} onSend={vi.fn()} /></MemoryRouter>)
+    const input = screen.getByPlaceholderText('Type a message...')
+    fireEvent.change(input, { target: { value: 'hi' } })
+    expect(screen.getByText('Send')).not.toBeDisabled()
+  })
+
+  it('links username to user profile', () => {
+    render(
+      <MemoryRouter>
+        <Chat
+          messages={[{ id: '1', user_id: 'u1', username: 'Alice', text: 'hi', created_at: 1 }]}
+          onSend={vi.fn()}
+        />
+      </MemoryRouter>
+    )
+    expect(screen.getByText('Alice')).toHaveAttribute('href', '/user/u1')
+  })
+
+  it('renders Chat header', () => {
+    render(<MemoryRouter><Chat messages={[]} onSend={vi.fn()} /></MemoryRouter>)
+    expect(screen.getByText('Chat')).toBeInTheDocument()
+  })
 })

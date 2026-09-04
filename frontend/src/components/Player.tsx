@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import type { Track } from '../types'
 import Karaoke from './Karaoke'
 import SeekBar from './player/SeekBar'
@@ -25,7 +25,7 @@ interface PlayerProps {
   roomId?: string
 }
 
-export default function Player({
+function Player({
   track,
   nextTrack,
   isPlaying,
@@ -57,7 +57,6 @@ export default function Player({
     needsGesture,
     crossfading,
     unlock,
-    seek,
   } = useGaplessPlayer({
     trackId: track?.id,
     src: track?.url,
@@ -72,14 +71,6 @@ export default function Player({
     onSync,
   })
 
-  const seekTo = useCallback(
-    (seconds: number) => {
-      seek(seconds)
-      onPlayback('seek', { position: seconds })
-    },
-    [seek, onPlayback],
-  )
-
   // Keyboard shortcuts: space resyncs / starts, up/down adjust volume.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -92,12 +83,6 @@ export default function Player({
           isPlaying ? 'sync' : 'next',
           isPlaying ? { position: localPos } : {},
         )
-      } else if (e.code === 'ArrowRight') {
-        e.preventDefault()
-        seekTo(Math.min(localPos + 10, duration || localPos + 10))
-      } else if (e.code === 'ArrowLeft') {
-        e.preventDefault()
-        seekTo(Math.max(localPos - 10, 0))
       } else if (e.code === 'ArrowUp') {
         e.preventDefault()
         setVolume(volume + 0.1)
@@ -108,7 +93,7 @@ export default function Player({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [track, isPlaying, localPos, duration, volume, onPlayback, seekTo, setVolume])
+  }, [track, isPlaying, localPos, volume, onPlayback, setVolume])
 
   const hasVoted = !!track && skipVoters.includes(currentUserId)
   const skipCount = skipVoters.length
@@ -138,7 +123,7 @@ export default function Player({
             </div>
           </div>
 
-          <SeekBar position={localPos} duration={duration} onSeek={seekTo} />
+          <SeekBar position={localPos} duration={duration} />
 
           <div className="player-controls">
             <VolumeControl
@@ -169,7 +154,7 @@ export default function Player({
           </div>
 
           {roomId && showKaraoke && (
-            <Karaoke roomId={roomId} trackId={track.id} currentTime={localPos} onSeek={seekTo} />
+            <Karaoke roomId={roomId} trackId={track.id} currentTime={localPos} />
           )}
 
           <div className="vote-buttons">
@@ -206,3 +191,5 @@ export default function Player({
     </div>
   )
 }
+
+export default memo(Player)
