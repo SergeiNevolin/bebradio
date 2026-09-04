@@ -21,6 +21,8 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/bebradio
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      # Optional: enables the VK tab in the search box.
+      - VK_TOKEN=${VK_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, relationship
 
-from config import DATABASE_URL
+from config import DATABASE_URL, DEFAULT_SOURCE
 
 
 class Base(DeclarativeBase):
@@ -62,6 +62,7 @@ class TrackModel(Base):
     position_index = Column(Integer, nullable=False, default=0)
     source_url = Column(Text, default="")
     stream_expires_at = Column(Float, default=0.0)
+    source = Column(String(16), default=DEFAULT_SOURCE)
     added_at = Column(Float, server_default=func.extract("epoch", func.now()))
 
     room = relationship("RoomModel", back_populates="tracks")
@@ -117,6 +118,7 @@ _MIGRATIONS = [
     "ALTER TABLE rooms ADD COLUMN IF NOT EXISTS auto_radio BOOLEAN DEFAULT FALSE",
     "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS source_url TEXT DEFAULT ''",
     "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS stream_expires_at DOUBLE PRECISION DEFAULT 0",
+    f"ALTER TABLE tracks ADD COLUMN IF NOT EXISTS source VARCHAR(16) DEFAULT '{DEFAULT_SOURCE}'",
 ]
 
 

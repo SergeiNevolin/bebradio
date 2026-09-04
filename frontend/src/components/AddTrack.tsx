@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useToast } from '../context/ToastContext'
+import type { AddTrackProps, TrackSource } from '../types'
 
 interface SearchResult {
   id: string
@@ -8,11 +9,14 @@ interface SearchResult {
   thumbnail: string
   duration: number
   url: string
+  source?: TrackSource
 }
 
-interface AddTrackProps {
-  onAdd: (url: string) => Promise<{ success: boolean; error?: string }>
-}
+/** Platforms the search box can target, in the order they are offered. */
+const SOURCES: { id: TrackSource; label: string; placeholder: string }[] = [
+  { id: 'youtube', label: 'YouTube', placeholder: 'Search or paste YouTube URL...' },
+  { id: 'vk', label: 'VK', placeholder: 'Search or paste VK URL...' },
+]
 
 function formatDuration(s: number): string {
   if (!s) return ''
@@ -27,6 +31,7 @@ function isUrl(text: string): boolean {
 
 export default function AddTrack({ onAdd }: AddTrackProps) {
   const [query, setQuery] = useState('')
+  const [source, setSource] = useState<TrackSource>(SOURCES[0].id)
   const [results, setResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -39,6 +44,8 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
   const abortRef = useRef(0)
   const { showToast } = useToast()
 
+  const placeholder = SOURCES.find((s) => s.id === source)?.placeholder ?? SOURCES[0].placeholder
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -49,7 +56,7 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const search = useCallback(async (q: string) => {
+  const search = useCallback(async (q: string, from: TrackSource) => {
     if (!q.trim() || isUrl(q)) {
       setResults([])
       setShowDropdown(false)
@@ -63,7 +70,7 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
       const res = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q.trim(), limit: 5 }),
+        body: JSON.stringify({ query: q.trim(), limit: 5, source: from }),
       })
       if (reqId !== abortRef.current) return
       const data = await res.json()
@@ -79,20 +86,39 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
     setSearching(false)
   }, [])
 
-  const handleQueryChange = (value: string) => {
-    setQuery(value)
-    setSearched(false)
-    setActiveIndex(-1)
+  /** Queue a debounced search, or clear the dropdown when there is nothing to look up. */
+  const scheduleSearch = useCallback((value: string, from: TrackSource) => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
     if (!isUrl(value) && value.trim().length > 1) {
       setSearching(true)
       setShowDropdown(true)
-      searchTimer.current = setTimeout(() => search(value), 400)
+      searchTimer.current = setTimeout(() => search(value, from), 400)
     } else {
       setResults([])
       setShowDropdown(false)
       setSearching(false)
     }
+  }, [search])
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value)
+    setSearched(false)
+    setActiveIndex(-1)
+    scheduleSearch(value, source)
+  }
+
+  const handleSourceChange = (next: TrackSource) => {
+    if (next === source) return
+    setSource(next)
+    // Results belong to the platform they came from, so drop them and look the
+    // same query up again on the newly picked one.
+    setResults([])
+    setSearched(false)
+    setActiveIndex(-1)
+    // Discard any in-flight response from the previous platform.
+    abortRef.current++
+    scheduleSearch(query, next)
+    inputRef.current?.focus()
   }
 
   const clearInput = () => {
@@ -104,9 +130,9 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
     inputRef.current?.focus()
   }
 
-  const addTrack = async (url: string) => {
+  const addTrack = async (url: string, from: TrackSource) => {
     setAdding(true)
-    const res = await onAdd(url)
+    const res = await onAdd(url, from)
     if (res.success) {
       setQuery('')
       setResults([])
@@ -122,7 +148,7 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
   const handleSelect = async (result: SearchResult) => {
     setShowDropdown(false)
     setQuery(result.title)
-    await addTrack(result.url)
+    await addTrack(result.url, result.source ?? source)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,13 +157,13 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
     if (!trimmed || adding) return
 
     if (isUrl(trimmed)) {
-      await addTrack(trimmed)
+      await addTrack(trimmed, source)
     } else if (activeIndex >= 0 && activeIndex < results.length) {
       await handleSelect(results[activeIndex])
     } else if (results.length > 0) {
       await handleSelect(results[0])
     } else {
-      search(trimmed)
+      search(trimmed, source)
     }
   }
 
@@ -165,13 +191,29 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
 
   return (
     <div className="add-track">
-      <h3>Add Track</h3>
+      <div className="add-track-head">
+        <h3>Add Track</h3>
+        <div className="source-picker" role="group" aria-label="Search platform">
+          {SOURCES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`source-option${s.id === source ? ' active' : ''}`}
+              aria-pressed={s.id === source}
+              disabled={adding}
+              onClick={() => handleSourceChange(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <form className="add-track-form" onSubmit={handleSubmit}>
         <div className="search-wrapper" ref={dropdownRef}>
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search or paste YouTube URL..."
+            placeholder={placeholder}
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
             onFocus={() => (results.length > 0 || showNoResults || searching) && setShowDropdown(true)}
@@ -192,7 +234,7 @@ export default function AddTrack({ onAdd }: AddTrackProps) {
               )}
               {results.map((r, i) => (
                 <div
-                  key={r.id}
+                  key={`${r.source ?? source}:${r.id}`}
                   className={`search-result${i === activeIndex ? ' active' : ''}`}
                   onClick={() => handleSelect(r)}
                   onMouseEnter={() => setActiveIndex(i)}

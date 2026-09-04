@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
+import providers
 from auth import (
     create_room_token,
     get_current_user,
@@ -33,7 +34,7 @@ from store import (
     save_room,
     save_tracks,
 )
-from youtube import fetch_subtitles, fetch_track
+from youtube import fetch_subtitles
 
 router = APIRouter(prefix="/api")
 
@@ -176,16 +177,19 @@ async def add_to_queue(
             content={"error": "Anonymous users cannot add tracks to this room"},
         )
 
-    result = await asyncio.to_thread(fetch_track, req.url)
+    source = providers.resolve(req.url, req.source)
+    result = await asyncio.to_thread(providers.fetch_track, req.url, source)
     if not result:
         return JSONResponse(status_code=400, content={"error": "Could not fetch video info"})
 
     added_by = user.username if user else req.added_by or "Anonymous"
-    track = Track.from_youtube(result, added_by=added_by)
+    track = Track.from_info(result, added_by=added_by)
     if not track.source_url:
         track.source_url = req.url
     room.queue.append(track)
-    if track.source_url:
+    # Auto-radio grows a queue from a YouTube Mix, so only YouTube tracks are
+    # worth remembering as its seed.
+    if track.source_url and track.source == providers.YOUTUBE:
         room.radio_seed_url = track.source_url
 
     if len(room.queue) == 1:
@@ -215,8 +219,9 @@ async def get_lyrics(
             content={"error": "This room is password protected", "needs_password": True},
         )
 
+    # Timed lyrics come from YouTube captions; other platforms have none.
     track = room.current_track()
-    if track is None or not track.source_url:
+    if track is None or not track.source_url or track.source != providers.YOUTUBE:
         return {"available": False, "track_id": track.id if track else None, "cues": []}
 
     subs = await asyncio.to_thread(fetch_subtitles, track.source_url, lang or "")

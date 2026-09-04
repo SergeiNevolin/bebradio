@@ -75,6 +75,7 @@ jobs:
         run: |
           echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
           echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
+          echo "VK_TOKEN=${{ secrets.VK_TOKEN }}" >> .env
 
       - name: Write TLS certificates
         env:

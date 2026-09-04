@@ -26,7 +26,7 @@ describe('AddTrack', () => {
     fireEvent.change(input, { target: { value: 'https://youtube.com/watch?v=123' } })
     fireEvent.click(screen.getByText('Add'))
 
-    expect(onAdd).toHaveBeenCalledWith('https://youtube.com/watch?v=123')
+    expect(onAdd).toHaveBeenCalledWith('https://youtube.com/watch?v=123', 'youtube')
   })
 
   it('clears input on success and shows toast', async () => {
@@ -67,7 +67,7 @@ describe('AddTrack', () => {
     fireEvent.change(input, { target: { value: 'https://youtube.com/watch?v=123' } })
     fireEvent.submit(container.querySelector('form')!)
 
-    expect(onAdd).toHaveBeenCalledWith('https://youtube.com/watch?v=123')
+    expect(onAdd).toHaveBeenCalledWith('https://youtube.com/watch?v=123', 'youtube')
   })
 
   it('disables input and button while adding', async () => {
@@ -147,5 +147,99 @@ describe('AddTrack', () => {
   it('disables button when input is empty', () => {
     renderWithToast(<AddTrack onAdd={vi.fn()} />)
     expect(screen.getByText('Add')).toBeDisabled()
+  })
+  // --- Platform picker ---
+
+  it('offers YouTube and VK, with YouTube selected by default', () => {
+    renderWithToast(<AddTrack onAdd={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'YouTube' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'VK' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('switches the placeholder when VK is picked', () => {
+    renderWithToast(<AddTrack onAdd={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'VK' }))
+
+    expect(screen.getByPlaceholderText('Search or paste VK URL...')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'VK' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('searches the picked platform', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue({ json: () => Promise.resolve([]) })
+    globalThis.fetch = fetchMock
+
+    renderWithToast(<AddTrack onAdd={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'VK' }))
+    fireEvent.change(screen.getByPlaceholderText('Search or paste VK URL...'), {
+      target: { value: 'кино' },
+    })
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      query: 'кино',
+      source: 'vk',
+    })
+    vi.useRealTimers()
+  })
+
+  it('re-runs the current query when the platform changes', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue({ json: () => Promise.resolve([]) })
+    globalThis.fetch = fetchMock
+
+    renderWithToast(<AddTrack onAdd={vi.fn()} />)
+    fireEvent.change(screen.getByPlaceholderText('Search or paste YouTube URL...'), {
+      target: { value: 'nirvana' },
+    })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).source).toBe('youtube')
+
+    fireEvent.click(screen.getByRole('button', { name: 'VK' }))
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+      query: 'nirvana',
+      source: 'vk',
+    })
+    vi.useRealTimers()
+  })
+
+  it('adds a pasted URL under the picked platform', async () => {
+    const onAdd = vi.fn().mockResolvedValue({ success: true })
+    renderWithToast(<AddTrack onAdd={onAdd} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'VK' }))
+    fireEvent.change(screen.getByPlaceholderText('Search or paste VK URL...'), {
+      target: { value: 'https://vk.com/audio-2001_78' },
+    })
+    fireEvent.click(screen.getByText('Add'))
+
+    expect(onAdd).toHaveBeenCalledWith('https://vk.com/audio-2001_78', 'vk')
+  })
+
+  it('adds a search result under the platform it came from', async () => {
+    vi.useFakeTimers()
+    const onAdd = vi.fn().mockResolvedValue({ success: true })
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve([
+        { id: '-1_2', title: 'Song', artist: 'Band', thumbnail: '', duration: 100,
+          url: 'https://vk.com/audio-1_2', source: 'vk' },
+      ]),
+    })
+
+    renderWithToast(<AddTrack onAdd={onAdd} />)
+    fireEvent.click(screen.getByRole('button', { name: 'VK' }))
+    fireEvent.change(screen.getByPlaceholderText('Search or paste VK URL...'), {
+      target: { value: 'band' },
+    })
+    await vi.advanceTimersByTimeAsync(500)
+
+    fireEvent.click(screen.getByText('Song'))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onAdd).toHaveBeenCalledWith('https://vk.com/audio-1_2', 'vk')
+    vi.useRealTimers()
   })
 })
