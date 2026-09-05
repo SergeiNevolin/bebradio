@@ -18,18 +18,22 @@ def test_needs_refill_requires_setting_and_seed():
 @pytest.mark.asyncio
 async def test_refill_appends_related_tracks(monkeypatch):
     import radio
-    monkeypatch.setattr(
-        radio, "fetch_related",
-        lambda seed, limit: ["https://www.youtube.com/watch?v=rel0000000a",
-                             "https://www.youtube.com/watch?v=rel0000000b"],
-    )
-    monkeypatch.setattr(
-        radio, "fetch_track",
-        lambda url: {
+
+    async def fake_related(seed, limit):
+        return ["https://www.youtube.com/watch?v=rel0000000a",
+                "https://www.youtube.com/watch?v=rel0000000b"]
+
+    async def fake_fetch(url):
+        return {
             "title": "T", "artist": "A", "thumbnail": "",
             "duration": 100, "source_url": url, "media_id": f"media_{url[-1]}",
-        },
+        }
+
+    monkeypatch.setattr(
+        radio, "fetch_related",
+        fake_related,
     )
+    monkeypatch.setattr(radio, "fetch_track", fake_fetch)
     r = models.Room(auto_radio=True)
     r.radio_seed_url = "https://www.youtube.com/watch?v=seed000000a"
     added = await radio.refill(r)
@@ -42,7 +46,11 @@ async def test_refill_appends_related_tracks(monkeypatch):
 @pytest.mark.asyncio
 async def test_refill_noop_when_disabled(monkeypatch):
     import radio
-    monkeypatch.setattr(radio, "fetch_related", lambda *a, **k: (_ for _ in ()).throw(AssertionError("called")))
+
+    async def fail_related(*args, **kwargs):
+        raise AssertionError("called")
+
+    monkeypatch.setattr(radio, "fetch_related", fail_related)
     r = models.Room(auto_radio=False)
     r.radio_seed_url = "https://youtu.be/abc"
     assert await radio.refill(r) is False
@@ -104,15 +112,15 @@ async def test_refill_and_broadcast_announces_search_then_result(monkeypatch):
 
     monkeypatch.setattr(radio.manager, "broadcast", fake_broadcast)
     monkeypatch.setattr(store, "save_tracks", fake_save_tracks)
-    monkeypatch.setattr(
-        radio, "fetch_related",
-        lambda seed, limit: ["https://www.youtube.com/watch?v=rel0000000a"],
-    )
-    monkeypatch.setattr(
-        radio, "fetch_track",
-        lambda url: {"title": "T", "artist": "A",
-                     "thumbnail": "", "duration": 100, "source_url": url},
-    )
+    async def fake_related(seed, limit):
+        return ["https://www.youtube.com/watch?v=rel0000000a"]
+
+    async def fake_fetch(url):
+        return {"title": "T", "artist": "A", "thumbnail": "",
+                "duration": 100, "source_url": url, "media_id": "media_related"}
+
+    monkeypatch.setattr(radio, "fetch_related", fake_related)
+    monkeypatch.setattr(radio, "fetch_track", fake_fetch)
     r = models.Room(auto_radio=True)
     r.radio_seed_url = "https://www.youtube.com/watch?v=seed000000a"
     await radio.refill_and_broadcast(r)
@@ -126,7 +134,7 @@ async def test_refill_exception_resets_radio_filling(monkeypatch):
     """When _collect_tracks raises, radio_filling is reset via finally block."""
     import radio
 
-    def boom(*a, **k):
+    async def boom(*a, **k):
         raise RuntimeError("network error")
 
     monkeypatch.setattr(radio, "fetch_related", boom)
@@ -141,16 +149,15 @@ async def test_refill_exception_resets_radio_filling(monkeypatch):
 @pytest.mark.asyncio
 async def test_refill_skips_too_long_tracks(monkeypatch):
     import radio
-    monkeypatch.setattr(
-        radio, "fetch_related",
-        lambda seed, limit: [
+    async def fake_related(seed, limit):
+        return [
             "https://www.youtube.com/watch?v=shortvideoa",
             "https://www.youtube.com/watch?v=longvideobbb",
-        ],
-    )
+        ]
+    monkeypatch.setattr(radio, "fetch_related", fake_related)
     calls = {"n": 0}
 
-    def fake_fetch(url):
+    async def fake_fetch(url):
         calls["n"] += 1
         if "longvideo" in url:
             return {"title": "Long", "duration": 7200, "source_url": url, "media_id": "media_long"}

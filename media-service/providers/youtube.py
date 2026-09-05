@@ -4,6 +4,7 @@ import logging
 import re
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Optional
@@ -159,6 +160,13 @@ class YouTubeProvider:
                         raw = response.read().decode("utf-8", "replace")
                     cues = self._parse_vtt(raw) if entry.get("ext") == "vtt" else []
                     result = {"lang": chosen, "auto": not bool(manual), "cues": cues}
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429:
+                    log.warning("captions rate-limited by YouTube for %s", provider_item_id)
+                else:
+                    log.warning("captions request failed for %s: HTTP %s", provider_item_id, exc.code)
+            except urllib.error.URLError as exc:
+                log.warning("captions request failed for %s: %s", provider_item_id, exc.reason)
             except Exception:
                 log.exception("caption lookup failed")
 

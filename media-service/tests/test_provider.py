@@ -1,4 +1,5 @@
 import json
+import urllib.error
 
 
 def test_provider_media_id_is_stable_and_opaque(settings):
@@ -65,3 +66,26 @@ def test_parse_vtt_removes_tags_and_decodes_entities(settings):
     cues = YouTubeProvider._parse_vtt(raw)
 
     assert cues == [{"start": 1.0, "dur": 2.5, "text": "Hello & welcome"}]
+
+
+def test_captions_rate_limit_returns_empty_result_without_raising(settings, monkeypatch):
+    from providers.youtube import YouTubeProvider
+
+    provider = YouTubeProvider(settings)
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps({
+            "id": "dQw4w9WgXcQ",
+            "subtitles": {"en": [{"ext": "vtt", "url": "https://captions.test/en.vtt"}]},
+        })
+
+    def fail_request(*args, **kwargs):
+        raise urllib.error.HTTPError("https://captions.test/en.vtt", 429, "Too Many Requests", {}, None)
+
+    monkeypatch.setattr(provider, "_run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(urllib.request, "urlopen", fail_request)
+
+    result = provider.captions("https://youtube.com/watch?v=dQw4w9WgXcQ", "")
+
+    assert result == {"lang": "", "auto": False, "cues": []}
