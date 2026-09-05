@@ -9,8 +9,12 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
+const { mockAuthHeaders } = vi.hoisted(() => ({
+  mockAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer tok' })),
+}))
+
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ authHeaders: () => ({ Authorization: 'Bearer tok' }) }),
+  useAuth: () => ({ authHeaders: mockAuthHeaders, user: null }),
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
@@ -31,6 +35,7 @@ function mockFetch(handler: (url: string, init?: RequestInit) => unknown) {
 describe('Home password rooms', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockAuthHeaders.mockReturnValue({ Authorization: 'Bearer tok' })
     mockFetch(() => [])
   })
 

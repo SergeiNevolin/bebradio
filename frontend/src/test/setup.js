@@ -1,12 +1,15 @@
 import '@testing-library/jest-dom'
+import { cleanup } from '@testing-library/react'
+import { afterEach, afterAll } from 'vitest'
 
-if (typeof globalThis.ResizeObserver === 'undefined') {
-  globalThis.ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-}
+afterEach(() => {
+  cleanup()
+})
+
+afterAll(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 const localStorageMock = (() => {
   let store = {}
@@ -23,3 +26,11 @@ Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock })
 HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
 HTMLMediaElement.prototype.pause = vi.fn()
 HTMLMediaElement.prototype.load = vi.fn()
+
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+}
