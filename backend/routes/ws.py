@@ -11,7 +11,7 @@ from models import ChatMessage, TrackVote
 from playback import go_next, go_prev, jump_to, seek_to
 from radio import maybe_refill
 from store import get_or_load_room, rooms, save_message, save_tracks, save_votes
-from streams import ensure_local_ahead
+from media_prefetch import ensure_room_media
 
 router = APIRouter()
 
@@ -181,7 +181,7 @@ async def _handle_skip_vote(room, room_id: str, msg: dict) -> bool:
 async def _download_ahead(room, room_id: str) -> None:
     """Download next tracks in background, then persist and broadcast."""
     try:
-        changed = await ensure_local_ahead(room)
+        changed = await ensure_room_media(room)
         if changed:
             await save_tracks(room)
             await manager.broadcast(room_id, room.to_dict())

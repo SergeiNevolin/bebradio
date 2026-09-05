@@ -62,7 +62,7 @@ class TrackModel(Base):
     position_index = Column(Integer, nullable=False, default=0)
     source_url = Column(Text, default="")
     local_path = Column(Text, default="")
-    video_id = Column(String(11), default="")
+    media_id = Column(String(64), default="")
     added_at = Column(Float, server_default=func.extract("epoch", func.now()))
 
     room = relationship("RoomModel", back_populates="tracks")
@@ -117,7 +117,7 @@ _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''",
     "ALTER TABLE rooms ADD COLUMN IF NOT EXISTS auto_radio BOOLEAN DEFAULT FALSE",
     "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS local_path TEXT DEFAULT ''",
-    "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS video_id VARCHAR(11) DEFAULT ''",
+    "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS media_id VARCHAR(64) DEFAULT ''",
 ]
 
 

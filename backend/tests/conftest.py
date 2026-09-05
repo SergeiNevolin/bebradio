@@ -10,8 +10,6 @@ from main import app
 @pytest.fixture(scope="session", autouse=True)
 async def setup_db():
     await init_db("sqlite+aiosqlite:///:memory:")
-    from media import init_media_dir
-    init_media_dir()
     yield
     await close_db()
 

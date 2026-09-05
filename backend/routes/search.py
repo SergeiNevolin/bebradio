@@ -1,12 +1,10 @@
-import asyncio
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from config import RATE_LIMIT_SEARCH, RATE_LIMIT_WINDOW
 from ratelimit import rate_limit
 from schemas import SearchRequest
-from youtube import search_youtube
+from media_client import search_youtube
 
 router = APIRouter(prefix="/api")
 
@@ -22,4 +20,4 @@ async def search(
         return _limit
     if not req.query.strip():
         return []
-    return await asyncio.to_thread(search_youtube, req.query.strip(), req.limit)
+    return await search_youtube(req.query.strip(), req.limit)

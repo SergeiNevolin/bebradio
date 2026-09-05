@@ -197,10 +197,12 @@ async def test_deleted_room_disappears_from_list(client):
 
 @pytest.mark.asyncio
 async def test_add_to_queue_rejects_too_long_video(client, monkeypatch):
-    from youtube import fetch_track
+    async def fake_fetch(url):
+        return {"title": "Long", "artist": "A", "thumbnail": "", "duration": 7200, "source_url": url, "media_id": "media_long"}
+
     monkeypatch.setattr(
         "routes.rooms.fetch_track",
-        lambda url: {"title": "Long", "artist": "A", "thumbnail": "", "duration": 7200, "source_url": url},
+        fake_fetch,
     )
     token = await register(client)
     create = await client.post("/api/rooms", json={"name": "Q"}, headers=auth_header(token))
@@ -213,10 +215,20 @@ async def test_add_to_queue_rejects_too_long_video(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_add_to_queue_accepts_short_video(client, monkeypatch):
+    async def fake_fetch(url):
+        return {"title": "Short", "artist": "A", "thumbnail": "", "duration": 180, "source_url": url, "media_id": "media_short"}
+
     monkeypatch.setattr(
         "routes.rooms.fetch_track",
-        lambda url: {"title": "Short", "artist": "A", "thumbnail": "", "duration": 180, "source_url": url},
+        fake_fetch,
     )
+
+    async def fake_ensure(track):
+        track.local_path = "media_short.m4a"
+        track.url = "/api/media/media_short"
+        return True
+
+    monkeypatch.setattr("routes.rooms.ensure_track_ready", fake_ensure)
     token = await register(client)
     create = await client.post("/api/rooms", json={"name": "Q"}, headers=auth_header(token))
     room_id = create.json()["id"]

@@ -12,7 +12,8 @@ from typing import Awaitable, Callable, Optional
 from config import MAX_DURATION, RADIO_BATCH, RADIO_REFILL_AT
 from connections import manager
 from models import Room, Track
-from youtube import fetch_related, fetch_track, video_id
+from media_client import fetch_related, fetch_track
+from media_prefetch import ensure_room_media, ensure_track_ready
 
 RADIO_TAG = "📻 Radio"
 
@@ -39,26 +40,29 @@ def needs_refill(room: Room) -> bool:
 async def _collect_tracks(room: Room, seed: str, limit: int) -> list[Track]:
     """Resolve up to ``limit`` unseen tracks from ``seed``'s YouTube Mix.
 
-    Records every video id it considers in ``room.radio_seen`` so a later
+    Records every media ID it considers in ``room.radio_seen`` so a later
     refill does not offer the same track again.
     """
-    room.radio_seen.add(video_id(seed))
-    candidates = await asyncio.to_thread(fetch_related, seed, limit * 4)
+    candidates = await fetch_related(seed, limit * 4)
 
     picked: list[Track] = []
+    seen_media_ids = room.radio_seen | {
+        track.media_id for track in room.queue if track.media_id
+    }
     for url in candidates:
         if len(picked) >= limit:
             break
-        vid = video_id(url)
-        if not vid or vid in room.radio_seen:
-            continue
-        info = await asyncio.to_thread(fetch_track, url)
+        info = await fetch_track(url)
         if not info:
+            continue
+        media_id = info.get("media_id", "")
+        if not media_id or media_id in seen_media_ids:
             continue
         duration = info.get("duration", 0) or 0
         if duration > MAX_DURATION:
             continue
-        room.radio_seen.add(vid)
+        room.radio_seen.add(media_id)
+        seen_media_ids.add(media_id)
         picked.append(Track.from_youtube(info, added_by=RADIO_TAG))
     return picked
 
@@ -101,6 +105,7 @@ async def refill_and_broadcast(room: Room) -> None:
     from store import save_tracks  # local import avoids an import cycle
 
     announced = False
+    was_empty = not room.queue
 
     async def announce_searching() -> None:
         nonlocal announced
@@ -109,6 +114,14 @@ async def refill_and_broadcast(room: Room) -> None:
 
     added = await refill(room, on_start=announce_searching)
     if added:
+        # A radio refill can start from an empty queue. Prepare its first
+        # track before publishing is_playing=True to connected clients.
+        if was_empty:
+            room.current_index = 0
+            first_track = room.queue[0] if room.queue else None
+            if not await ensure_track_ready(first_track):
+                room.is_playing = False
+                room.position = 0.0
         await save_tracks(room)
     if added or announced:
         # Push the final state so the "searching" indicator clears, even when
