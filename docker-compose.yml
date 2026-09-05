@@ -24,6 +24,21 @@ services:
     networks:
       - app-net
 
+  media-service:
+    build: ./media-service
+    ports:
+      - "8100:8100"
+    volumes:
+      - mediadata:/app/media
+    environment:
+      - MEDIA_DIR=/app/media/tracks
+      - BGUTIL_BASE_URL=http://bgutil-provider:4416
+    depends_on:
+      bgutil-provider:
+        condition: service_started
+    networks:
+      - app-net
+
 
   backend:
     build: ./backend
@@ -36,11 +51,13 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/bebradio
       - SECRET_KEY=dev-secret-key
       - CORS_ORIGINS=http://localhost:3000
-      - BGUTIL_BASE_URL=http://bgutil-provider:4416
+      - MEDIA_SERVICE_URL=http://media-service:8100
     depends_on:
       postgres:
         condition: service_healthy
       bgutil-provider:
+        condition: service_started
+      media-service:
         condition: service_started
     networks:
       - app-net

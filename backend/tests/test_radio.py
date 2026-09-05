@@ -27,7 +27,7 @@ async def test_refill_appends_related_tracks(monkeypatch):
         radio, "fetch_track",
         lambda url: {
             "title": "T", "artist": "A", "thumbnail": "",
-            "duration": 100, "source_url": url,
+            "duration": 100, "source_url": url, "media_id": f"media_{url[-1]}",
         },
     )
     r = models.Room(auto_radio=True)
@@ -153,8 +153,8 @@ async def test_refill_skips_too_long_tracks(monkeypatch):
     def fake_fetch(url):
         calls["n"] += 1
         if "longvideo" in url:
-            return {"title": "Long", "duration": 7200, "source_url": url}
-        return {"title": "Short", "duration": 120, "source_url": url}
+            return {"title": "Long", "duration": 7200, "source_url": url, "media_id": "media_long"}
+        return {"title": "Short", "duration": 120, "source_url": url, "media_id": "media_short"}
 
     monkeypatch.setattr(radio, "fetch_track", fake_fetch)
     r = models.Room(auto_radio=True)

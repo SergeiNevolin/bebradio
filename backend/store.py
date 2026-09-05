@@ -11,6 +11,7 @@ from db import (
     get_session,
 )
 from models import ChatMessage, Room, Track, TrackVote
+from media_client import fetch_track, update_media_references
 
 
 rooms: dict[str, Room] = {}
@@ -48,7 +49,7 @@ async def load_room(room_id: str) -> Optional[Room]:
                 added_by=t.added_by,
                 source_url=t.source_url or "",
                 local_path=t.local_path or "",
-                video_id=t.video_id or "",
+                media_id=t.media_id or "",
             )
             for t in result.scalars().all()
         ]
@@ -77,7 +78,7 @@ async def load_room(room_id: str) -> Optional[Room]:
             for v in result.scalars().all()
         ]
 
-        return Room(
+        room = Room(
             id=rm.id,
             name=rm.name,
             owner_id=rm.owner_id,
@@ -89,6 +90,16 @@ async def load_room(room_id: str) -> Optional[Room]:
             messages=messages,
             votes=votes,
         )
+        migrated = False
+        for track in room.queue:
+            if not track.media_id and track.source_url:
+                info = await fetch_track(track.source_url)
+                if info:
+                    track.media_id = info["media_id"]
+                    migrated = True
+        if migrated:
+            await save_tracks(room)
+        return room
 
 
 async def get_or_load_room(room_id: str) -> Optional[Room]:
@@ -100,8 +111,8 @@ async def get_or_load_room(room_id: str) -> Optional[Room]:
         rooms[room_id] = room
         # Restore track URLs from local_path for any tracks that have files.
         for track in room.queue:
-            if track.local_path and not track.url:
-                key = track.video_id or track.id
+            if track.local_path and track.media_id and not track.url:
+                key = track.media_id
                 track.url = f"/api/media/{key}"
     return room
 
@@ -152,12 +163,15 @@ async def save_tracks(room: Room) -> None:
                             "position_index": i,
                             "source_url": t.source_url,
                             "local_path": t.local_path,
-                            "video_id": t.video_id,
+                            "media_id": t.media_id,
                         }
                         for i, t in enumerate(room.queue)
                     ],
                 )
             await session.commit()
+    await update_media_references([
+        track.media_id for track in room.queue if track.media_id
+    ])
 
 
 async def save_message(room_id: str, msg: ChatMessage) -> None:

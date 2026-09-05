@@ -197,7 +197,6 @@ async def test_deleted_room_disappears_from_list(client):
 
 @pytest.mark.asyncio
 async def test_add_to_queue_rejects_too_long_video(client, monkeypatch):
-    from youtube import fetch_track
     monkeypatch.setattr(
         "routes.rooms.fetch_track",
         lambda url: {"title": "Long", "artist": "A", "thumbnail": "", "duration": 7200, "source_url": url},

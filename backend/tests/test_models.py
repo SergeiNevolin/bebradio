@@ -209,6 +209,7 @@ def test_track_from_youtube_maps_info_dict():
         "title": "Song", "artist": "Band",
         "thumbnail": "http://t", "duration": 123,
         "source_url": "https://youtu.be/abc",
+        "media_id": "media_test",
     }
     t = models.Track.from_youtube(info, added_by="Alice")
     assert (t.title, t.artist, t.thumbnail, t.duration) == (
@@ -216,6 +217,7 @@ def test_track_from_youtube_maps_info_dict():
     )
     assert t.added_by == "Alice"
     assert t.source_url == "https://youtu.be/abc"
+    assert t.media_id == "media_test"
 
 
 def test_track_from_youtube_tolerates_missing_optional_fields():

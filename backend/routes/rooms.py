@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import time
 import uuid
@@ -16,12 +15,12 @@ from auth import (
 )
 from config import MAX_DURATION, RATE_LIMIT_QUEUE, RATE_LIMIT_WINDOW
 from connections import manager
-from media import get_local_filename
+from media_client import fetch_subtitles, fetch_track
 from models import Room, Track
 from playback import go_next, go_prev, jump_to, seek_to
 from radio import maybe_refill
 from ratelimit import rate_limit
-from streams import ensure_local_ahead
+from media_prefetch import ensure_room_media, ensure_track_ready
 from schemas import (
     AddTrackRequest,
     CreateRoomRequest,
@@ -37,7 +36,6 @@ from store import (
     save_room,
     save_tracks,
 )
-from youtube import fetch_subtitles, fetch_track
 
 log = logging.getLogger(__name__)
 
@@ -187,9 +185,9 @@ async def add_to_queue(
             content={"error": "Anonymous users cannot add tracks to this room"},
         )
 
-    result = await asyncio.to_thread(fetch_track, req.url)
+    result = await fetch_track(req.url)
     if not result:
-        log.warning("add_to_queue: failed to fetch video info for url=%s room=%s user=%s", req.url, room_id, user.username if user else "anonymous")
+        log.warning("add_to_queue: failed to resolve media for url=%s room=%s user=%s", req.url, room_id, user.username if user else "anonymous")
         return JSONResponse(status_code=400, content={"error": "Could not fetch video info"})
 
     duration = result.get("duration", 0) or 0
@@ -214,8 +212,7 @@ async def add_to_queue(
 
     # If this is the first track, download it immediately so playback can start.
     if len(room.queue) == 1:
-        from streams import ensure_local
-        if await ensure_local(room, track):
+        if await ensure_track_ready(track):
             pass  # url and local_path set
 
     await save_tracks(room)
@@ -244,7 +241,7 @@ async def get_lyrics(
     if track is None or not track.source_url:
         return {"available": False, "track_id": track.id if track else None, "cues": []}
 
-    subs = await asyncio.to_thread(fetch_subtitles, track.source_url, lang or "")
+    subs = await fetch_subtitles(track.source_url, lang or "")
     return {
         "available": bool(subs["cues"]),
         "track_id": track.id,
@@ -283,7 +280,7 @@ async def update_playback(
     elif req.action == "seek" and req.position is not None:
         seek_to(room, req.position)
 
-    if track_changed and await ensure_local_ahead(room):
+    if track_changed and await ensure_room_media(room):
         queue_changed = True
 
     if queue_changed:
