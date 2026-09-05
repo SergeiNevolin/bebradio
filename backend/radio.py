@@ -13,6 +13,7 @@ from config import MAX_DURATION, RADIO_BATCH, RADIO_REFILL_AT
 from connections import manager
 from models import Room, Track
 from media_client import fetch_related, fetch_track
+from media_prefetch import ensure_room_media
 
 RADIO_TAG = "📻 Radio"
 
@@ -104,6 +105,7 @@ async def refill_and_broadcast(room: Room) -> None:
     from store import save_tracks  # local import avoids an import cycle
 
     announced = False
+    was_empty = not room.queue
 
     async def announce_searching() -> None:
         nonlocal announced
@@ -112,6 +114,13 @@ async def refill_and_broadcast(room: Room) -> None:
 
     added = await refill(room, on_start=announce_searching)
     if added:
+        # A radio refill can start from an empty queue. Prepare its first
+        # track before publishing is_playing=True to connected clients.
+        if was_empty:
+            ready = await ensure_room_media(room)
+            if not ready or not room.current_track() or not room.current_track().url:
+                room.is_playing = False
+                room.position = 0.0
         await save_tracks(room)
     if added or announced:
         # Push the final state so the "searching" indicator clears, even when

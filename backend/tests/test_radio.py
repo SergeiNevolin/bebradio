@@ -121,6 +121,12 @@ async def test_refill_and_broadcast_announces_search_then_result(monkeypatch):
 
     monkeypatch.setattr(radio, "fetch_related", fake_related)
     monkeypatch.setattr(radio, "fetch_track", fake_fetch)
+    async def fake_ensure(room):
+        room.current_track().url = "/api/media/media_related"
+        room.current_track().local_path = "media_related.m4a"
+        return True
+
+    monkeypatch.setattr(radio, "ensure_room_media", fake_ensure)
     r = models.Room(auto_radio=True)
     r.radio_seed_url = "https://www.youtube.com/watch?v=seed000000a"
     await radio.refill_and_broadcast(r)
