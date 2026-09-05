@@ -13,4 +13,6 @@ type RoomRepository interface {
 	SaveVotes(room *entity.Room) error
 	LoadVotes(roomID string) ([]*entity.TrackVote, error)
 	LoadMessages(roomID string) ([]*entity.ChatMessage, error)
+	RecordVisit(userID, roomID string) error
+	RecentRooms(userID string, limit int) ([]map[string]any, error)
 }

@@ -80,6 +80,12 @@ func (db *DB) Migrate() error {
 			track_id VARCHAR(8) NOT NULL,
 			vote INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS user_room_visits (
+			user_id VARCHAR(8) NOT NULL,
+			room_id VARCHAR(6) NOT NULL,
+			visited_at TIMESTAMPTZ DEFAULT NOW(),
+			PRIMARY KEY (user_id, room_id)
+		)`,
 	}
 
 	for _, m := range migrations {

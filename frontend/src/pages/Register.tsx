@@ -33,7 +33,7 @@ export default function Register() {
       <h1 className="home-title">bebradio</h1>
       <p className="home-subtitle">Create a new account</p>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 400 }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 400, margin: '0 auto' }}>
         <input
           type="email"
           placeholder="Email"
@@ -64,7 +64,7 @@ export default function Register() {
         </button>
       </form>
 
-      <p style={{ marginTop: 16, fontSize: 14 }}>
+      <p style={{ marginTop: 16, fontSize: 14, textAlign: 'center' }}>
         Already have an account? <Link to="/login" style={{ color: 'var(--primary)' }}>Sign in</Link>
       </p>
     </div>

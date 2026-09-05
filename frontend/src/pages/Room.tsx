@@ -123,6 +123,12 @@ export default function Room() {
       if (data.access) setRoomAccess(roomId!, data.access)
       setLocked(false)
       setRoom(data)
+      if (token) {
+        fetch(`/api/rooms/${roomId}/visit`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {})
+      }
       return data
     } catch {
       setError('Room not found')

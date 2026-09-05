@@ -3,7 +3,6 @@ import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
 import { applyAccent, getStoredAccent } from './lib/theme'
-import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 import Home from './pages/Home'
 import Room from './pages/Room'
@@ -31,7 +30,7 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+              <Route path="/" element={<Home />} />
               <Route path="/room/:roomId" element={<Room />} />
               <Route path="/user/:userId" element={<Profile />} />
             </Routes>

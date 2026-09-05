@@ -230,3 +230,42 @@ func (r *RoomRepo) LoadVotes(roomID string) ([]*entity.TrackVote, error) {
 	}
 	return votes, nil
 }
+
+func (r *RoomRepo) RecordVisit(userID, roomID string) error {
+	_, err := r.pool.Exec(context.Background(),
+		`INSERT INTO user_room_visits (user_id, room_id, visited_at)
+		 VALUES ($1, $2, NOW())
+		 ON CONFLICT (user_id, room_id) DO UPDATE SET visited_at = NOW()`,
+		userID, roomID,
+	)
+	return err
+}
+
+func (r *RoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, error) {
+	rows, err := r.pool.Query(context.Background(),
+		`SELECT r.id, r.name, v.visited_at
+		 FROM user_room_visits v
+		 JOIN rooms r ON r.id = v.room_id
+		 WHERE v.user_id = $1 AND r.is_private = false
+		 ORDER BY v.visited_at DESC
+		 LIMIT $2`, userID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rooms []map[string]any
+	for rows.Next() {
+		var id, name string
+		var visitedAt interface{}
+		if err := rows.Scan(&id, &name, &visitedAt); err != nil {
+			continue
+		}
+		rooms = append(rooms, map[string]any{
+			"id":   id,
+			"name": name,
+		})
+	}
+	return rooms, nil
+}

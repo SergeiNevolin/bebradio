@@ -142,6 +142,14 @@ func (m *MockRoomRepo) LoadVotes(roomID string) ([]*entity.TrackVote, error) {
 	return m.Votes[roomID], nil
 }
 
+func (m *MockRoomRepo) RecordVisit(userID, roomID string) error {
+	return nil
+}
+
+func (m *MockRoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, error) {
+	return []map[string]any{}, nil
+}
+
 type MockMediaClient struct {
 	SearchFn    func(query string, limit int) ([]map[string]any, error)
 	ResolveFn   func(url string) (map[string]any, error)
