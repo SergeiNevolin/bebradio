@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import SearchBar from './SearchBar'
 import ThemeToggle from './ThemeToggle'
 import AccentPicker from './AccentPicker'
 
@@ -10,6 +11,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-inner">
         <Link to="/" className="navbar-brand">bebradio</Link>
+        <SearchBar />
         <div className="navbar-right">
           {user ? (
             <>
@@ -19,7 +21,7 @@ export default function Navbar() {
           ) : (
             <>
               <Link to="/login" className="btn btn-secondary btn-sm">Sign In</Link>
-              <Link to="/register" className="btn btn-sm">Register</Link>
+              <Link to="/register" className="btn btn-secondary btn-sm">Register</Link>
             </>
           )}
           <AccentPicker />

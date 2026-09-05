@@ -32,7 +32,7 @@ export default function Login() {
       <h1 className="home-title">bebradio</h1>
       <p className="home-subtitle">Sign in to your account</p>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 400 }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 400, margin: '0 auto' }}>
         <input
           type="email"
           placeholder="Email"
@@ -53,7 +53,7 @@ export default function Login() {
         </button>
       </form>
 
-      <p style={{ marginTop: 16, fontSize: 14 }}>
+      <p style={{ marginTop: 16, fontSize: 14, textAlign: 'center' }}>
         Don't have an account? <Link to="/register" style={{ color: 'var(--primary)' }}>Register</Link>
       </p>
     </div>
