@@ -52,6 +52,34 @@ func (s *Server) handleListRooms(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, rooms)
 }
 
+func (s *Server) handleRecentRooms(w http.ResponseWriter, r *http.Request) {
+	userID, ok := s.getUserRequired(r)
+	if !ok {
+		s.writeError(w, 401, "Not authenticated")
+		return
+	}
+	rooms, err := s.room.RecentRooms(userID, 6)
+	if err != nil {
+		s.log.Error("recent rooms failed", "error", err)
+		s.writeError(w, 500, "Failed to get recent rooms")
+		return
+	}
+	s.writeJSON(w, 200, rooms)
+}
+
+func (s *Server) handleRecordVisit(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomID")
+	userID := s.getUserOptional(r)
+	if userID == "" {
+		s.writeJSON(w, 200, map[string]any{"ok": true})
+		return
+	}
+	if err := s.room.RecordVisit(userID, roomID); err != nil {
+		s.log.Error("record visit failed", "error", err)
+	}
+	s.writeJSON(w, 200, map[string]any{"ok": true})
+}
+
 func (s *Server) handleGetRoom(w http.ResponseWriter, r *http.Request) {
 	roomID := chi.URLParam(r, "roomID")
 	access := r.URL.Query().Get("access")

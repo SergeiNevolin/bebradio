@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -158,6 +159,14 @@ func (uc *RoomUsecase) ListPublicRooms() ([]map[string]any, error) {
 			rm.Mu.RUnlock()
 		}
 	}
+
+	// Sort by user_count descending (popularity)
+	sort.Slice(dbRooms, func(i, j int) bool {
+		a, _ := dbRooms[i]["user_count"].(int)
+		b, _ := dbRooms[j]["user_count"].(int)
+		return a > b
+	})
+
 	return dbRooms, nil
 }
 
@@ -219,6 +228,43 @@ func (uc *RoomUsecase) SaveVotes(rm *entity.Room) error {
 
 func (uc *RoomUsecase) CreateAccessToken(roomID string) (string, error) {
 	return uc.auth.CreateRoomToken(roomID)
+}
+
+func (uc *RoomUsecase) RecordVisit(userID, roomID string) error {
+	if userID == "" {
+		return nil
+	}
+	return uc.roomRepo.RecordVisit(userID, roomID)
+}
+
+func (uc *RoomUsecase) RecentRooms(userID string, limit int) ([]map[string]any, error) {
+	if userID == "" {
+		return []map[string]any{}, nil
+	}
+	dbRooms, err := uc.roomRepo.RecentRooms(userID, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	uc.roomsMu.RLock()
+	defer uc.roomsMu.RUnlock()
+
+	for _, r := range dbRooms {
+		roomID, _ := r["id"].(string)
+		if rm, ok := uc.rooms[roomID]; ok {
+			rm.Mu.RLock()
+			listeners := rm.Listeners()
+			r["user_count"] = len(listeners)
+			r["track_count"] = len(rm.Queue)
+			r["is_playing"] = rm.IsPlaying
+			r["has_password"] = rm.PasswordHash != nil
+			rm.Mu.RUnlock()
+		}
+	}
+	if dbRooms == nil {
+		dbRooms = []map[string]any{}
+	}
+	return dbRooms, nil
 }
 
 var ErrWrongPassword = &BusinessError{Code: 403, Message: "Incorrect room password"}

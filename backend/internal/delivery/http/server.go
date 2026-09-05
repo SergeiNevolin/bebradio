@@ -68,11 +68,13 @@ func (s *Server) setupRoutes() {
 		r.Route("/rooms", func(r chi.Router) {
 			r.Post("/", s.handleCreateRoom)
 			r.Get("/", s.handleListRooms)
+			r.Get("/recent", s.handleRecentRooms)
 			r.Get("/{roomID}", s.handleGetRoom)
 			r.Patch("/{roomID}", s.handleUpdateRoom)
 			r.Delete("/{roomID}", s.handleDeleteRoom)
 			r.Post("/{roomID}/join", s.handleJoinRoom)
 			r.Post("/{roomID}/queue", s.handleAddToQueue)
+			r.Post("/{roomID}/visit", s.handleRecordVisit)
 			r.Get("/{roomID}/lyrics", s.handleGetLyrics)
 			r.Post("/{roomID}/playback", s.handlePlayback)
 		})
