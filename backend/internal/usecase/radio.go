@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/bebradio/backend-go/internal/config"
@@ -41,6 +42,12 @@ func (uc *RadioUsecase) seedURLUnlocked(rm *entity.Room) string {
 	return ""
 }
 
+type resolveResult struct {
+	url  string
+	info map[string]any
+	err  error
+}
+
 func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 	rm.Mu.Lock()
 	if !uc.needsRefillUnlocked(rm) {
@@ -74,20 +81,35 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 	}
 	rm.Mu.RUnlock()
 
+	results := make([]resolveResult, len(candidates))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+
+	for i, url := range candidates {
+		wg.Add(1)
+		go func(i int, url string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			info, err := uc.mediaClient.Resolve(url)
+			results[i] = resolveResult{url: url, info: info, err: err}
+		}(i, url)
+	}
+	wg.Wait()
+
 	var picked []*entity.Track
-	for _, url := range candidates {
+	for _, r := range results {
 		if len(picked) >= uc.config.RadioBatch {
 			break
 		}
-		info, err := uc.mediaClient.Resolve(url)
-		if err != nil {
+		if r.err != nil || r.info == nil {
 			continue
 		}
-		mediaID, _ := info["media_id"].(string)
+		mediaID, _ := r.info["media_id"].(string)
 		if mediaID == "" || seenMediaIDs[mediaID] {
 			continue
 		}
-		duration, _ := info["duration"].(float64)
+		duration, _ := r.info["duration"].(float64)
 		if int(duration) > uc.config.MaxDuration {
 			continue
 		}
@@ -97,7 +119,7 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 		rm.Mu.Unlock()
 		seenMediaIDs[mediaID] = true
 
-		track := entity.TrackFromYouTube(info, RadioTag)
+		track := entity.TrackFromYouTube(r.info, RadioTag)
 		track.ID = shortID(8)
 		picked = append(picked, track)
 	}
@@ -109,6 +131,7 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 			rm.Position = 0.0
 			rm.LastSyncAt = time.Now()
 		}
+		rm.RadioSeen = make(map[string]bool)
 		rm.Mu.Unlock()
 	}
 

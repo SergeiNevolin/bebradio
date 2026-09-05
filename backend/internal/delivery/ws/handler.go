@@ -178,7 +178,9 @@ func (h *Handler) handleNext(rm *entity.Room, roomID string) {
 	changed := h.playback.GoNext(rm)
 	if changed {
 		h.media.EnsureRoomMedia(rm)
-		h.room.SaveTracks(rm)
+		if err := h.room.SaveTracks(rm); err != nil {
+			h.log.Error("save tracks after next failed", "room_id", roomID, "error", err)
+		}
 	}
 }
 
@@ -245,7 +247,12 @@ func (h *Handler) handleVote(rm *entity.Room, msg map[string]any, roomID string)
 	}
 	rm.Mu.Unlock()
 
-	h.room.SaveTracks(rm)
+	if err := h.room.SaveVotes(rm); err != nil {
+		h.log.Error("save votes after vote failed", "room_id", roomID, "error", err)
+	}
+	if err := h.room.SaveTracks(rm); err != nil {
+		h.log.Error("save tracks after vote failed", "room_id", roomID, "error", err)
+	}
 
 	currentTrack := rm.CurrentTrack()
 	if currentTrack != nil && currentTrack.ID == trackID {
@@ -288,18 +295,11 @@ func (h *Handler) handleSkipVote(rm *entity.Room, msg map[string]any, roomID str
 }
 
 func (h *Handler) backgroundRefill(rm *entity.Room, roomID string) {
-	rm.Mu.Lock()
-	rm.RadioFilling = true
-	rm.Mu.Unlock()
-
 	h.manager.Broadcast(roomID, rm.ToDict())
 
 	tracks, err := h.radio.Refill(rm)
 	if err != nil {
 		h.log.Error("radio refill failed", "room_id", roomID, "error", err)
-		rm.Mu.Lock()
-		rm.RadioFilling = false
-		rm.Mu.Unlock()
 		return
 	}
 
@@ -311,21 +311,20 @@ func (h *Handler) backgroundRefill(rm *entity.Room, roomID string) {
 			rm.Position = 0
 			rm.LastSyncAt = time.Now()
 		}
-		rm.RadioFilling = false
 		rm.Mu.Unlock()
 
-		h.room.SaveTracks(rm)
-	} else {
-		rm.Mu.Lock()
-		rm.RadioFilling = false
-		rm.Mu.Unlock()
+		if err := h.room.SaveTracks(rm); err != nil {
+			h.log.Error("save tracks after refill failed", "room_id", roomID, "error", err)
+		}
 	}
 
 	h.manager.Broadcast(roomID, rm.ToDict())
 }
 
 func (h *Handler) sendError(conn *websocket.Conn, message string) {
-	conn.WriteJSON(map[string]any{"error": message})
+	if err := conn.WriteJSON(map[string]any{"error": message}); err != nil {
+		h.log.Warn("failed to send error to client", "error", err)
+	}
 }
 
 func toUpper(s string) string {

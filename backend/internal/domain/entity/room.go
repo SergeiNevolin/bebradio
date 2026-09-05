@@ -152,6 +152,9 @@ func (r *Room) ToDict() map[string]any {
 	var currentTrackDict map[string]any
 	if track != nil {
 		currentTrackDict = track.ToDict()
+		cv := voteTotals[track.ID]
+		currentTrackDict["likes"] = cv[0]
+		currentTrackDict["dislikes"] = cv[1]
 	}
 
 	skipVoters := make([]string, 0, len(r.SkipVotes))
@@ -183,7 +186,7 @@ func (r *Room) ToDict() map[string]any {
 		"auto_radio":          r.AutoRadio,
 		"radio_searching":     r.RadioFilling,
 		"has_password":        r.PasswordHash != nil,
-		"track_votes":         [2]int{trackVotes[0], trackVotes[1]},
+		"track_votes":         map[string]int{"likes": trackVotes[0], "dislikes": trackVotes[1]},
 		"skip_voters":         skipVoters,
 		"messages":            msgDicts,
 	}

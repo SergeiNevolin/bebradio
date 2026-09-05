@@ -34,6 +34,8 @@ func (uc *ChatUsecase) SendMessage(rm *entity.Room, userID, username, text strin
 	}
 	rm.Mu.Unlock()
 
-	uc.roomRepo.SaveMessage(rm.ID, msg)
+	if err := uc.roomRepo.SaveMessage(rm.ID, msg); err != nil {
+		uc.log.Error("failed to save chat message", "room_id", rm.ID, "error", err)
+	}
 	return msg
 }

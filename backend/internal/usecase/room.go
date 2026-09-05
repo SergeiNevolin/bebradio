@@ -72,16 +72,22 @@ func (uc *RoomUsecase) GetOrLoadRoom(roomID string) (*entity.Room, error) {
 		return nil, err
 	}
 
-	tracks, _ := uc.roomRepo.LoadTracks(roomID)
-	if tracks != nil {
+	tracks, err := uc.roomRepo.LoadTracks(roomID)
+	if err != nil {
+		uc.log.Warn("failed to load tracks", "room_id", roomID, "error", err)
+	} else if tracks != nil {
 		rm.Queue = tracks
 	}
-	messages, _ := uc.roomRepo.LoadMessages(roomID)
-	if messages != nil {
+	messages, err := uc.roomRepo.LoadMessages(roomID)
+	if err != nil {
+		uc.log.Warn("failed to load messages", "room_id", roomID, "error", err)
+	} else if messages != nil {
 		rm.Messages = messages
 	}
-	votes, _ := uc.roomRepo.LoadVotes(roomID)
-	if votes != nil {
+	votes, err := uc.roomRepo.LoadVotes(roomID)
+	if err != nil {
+		uc.log.Warn("failed to load votes", "room_id", roomID, "error", err)
+	} else if votes != nil {
 		rm.Votes = votes
 	}
 
@@ -108,7 +114,9 @@ func (uc *RoomUsecase) CreateRoom(name, ownerID, password string) (*entity.Room,
 	}
 	if password != "" {
 		hash, err := uc.auth.HashPassword(password)
-		if err == nil {
+		if err != nil {
+			uc.log.Error("failed to hash room password", "error", err)
+		} else {
 			rm.PasswordHash = &hash
 		}
 	}
@@ -123,6 +131,7 @@ func (uc *RoomUsecase) CreateRoom(name, ownerID, password string) (*entity.Room,
 
 	access, err := uc.auth.CreateRoomToken(rm.ID)
 	if err != nil {
+		uc.log.Error("failed to create room token", "room_id", rm.ID, "error", err)
 		return rm, "", nil
 	}
 	return rm, access, nil
@@ -202,6 +211,10 @@ func (uc *RoomUsecase) DeleteRoom(rm *entity.Room) error {
 
 func (uc *RoomUsecase) SaveTracks(rm *entity.Room) error {
 	return uc.roomRepo.SaveTracks(rm)
+}
+
+func (uc *RoomUsecase) SaveVotes(rm *entity.Room) error {
+	return uc.roomRepo.SaveVotes(rm)
 }
 
 func (uc *RoomUsecase) CreateAccessToken(roomID string) (string, error) {

@@ -352,3 +352,61 @@ func TestListPublicRoomsExcludesPrivate(t *testing.T) {
 		t.Errorf("expected 0 public rooms, got %d", len(rooms))
 	}
 }
+
+func TestSaveVotesPersistsToRepo(t *testing.T) {
+	roomRepo := repository.NewMockRoomRepo()
+	userRepo := repository.NewMockUserRepo()
+	mediaClient := repository.NewMockMediaClient()
+	auth := repository.NewMockAuthBridge()
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+
+	rm, _, _ := uc.CreateRoom("Vote Room", "owner1", "")
+	rm.Votes = []*entity.TrackVote{
+		{UserID: "u1", TrackID: "t1", Vote: 1},
+		{UserID: "u2", TrackID: "t1", Vote: -1},
+		{UserID: "u3", TrackID: "t2", Vote: 1},
+	}
+
+	if err := uc.SaveVotes(rm); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	saved, err := roomRepo.LoadVotes(rm.ID)
+	if err != nil {
+		t.Fatalf("unexpected error loading votes: %v", err)
+	}
+	if len(saved) != 3 {
+		t.Fatalf("expected 3 votes in repo, got %d", len(saved))
+	}
+}
+
+func TestSaveVotesOverwritesPrevious(t *testing.T) {
+	roomRepo := repository.NewMockRoomRepo()
+	userRepo := repository.NewMockUserRepo()
+	mediaClient := repository.NewMockMediaClient()
+	auth := repository.NewMockAuthBridge()
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+
+	rm, _, _ := uc.CreateRoom("Vote Room", "owner1", "")
+
+	rm.Votes = []*entity.TrackVote{
+		{UserID: "u1", TrackID: "t1", Vote: 1},
+	}
+	uc.SaveVotes(rm)
+
+	rm.Votes = []*entity.TrackVote{
+		{UserID: "u1", TrackID: "t1", Vote: -1},
+		{UserID: "u2", TrackID: "t1", Vote: 1},
+	}
+	uc.SaveVotes(rm)
+
+	saved, _ := roomRepo.LoadVotes(rm.ID)
+	if len(saved) != 2 {
+		t.Fatalf("expected 2 votes after overwrite, got %d", len(saved))
+	}
+	for _, v := range saved {
+		if v.UserID == "u1" && v.Vote != -1 {
+			t.Errorf("expected u1 vote to be -1, got %d", v.Vote)
+		}
+	}
+}

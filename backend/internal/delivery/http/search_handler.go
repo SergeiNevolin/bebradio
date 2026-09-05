@@ -26,6 +26,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.search.SearchYouTube(req.Query, req.Limit)
 	if err != nil {
+		s.log.Error("search failed", "error", err, "query", req.Query)
 		s.writeError(w, 500, "Search failed")
 		return
 	}
@@ -45,6 +46,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	rangeHeader := r.Header.Get("Range")
 	statusCode, contentType, body, err := s.media.StreamContent(trackID, rangeHeader)
 	if err != nil {
+		s.log.Error("stream content failed", "error", err, "track_id", trackID)
 		s.writeError(w, 502, "Media service unavailable")
 		return
 	}

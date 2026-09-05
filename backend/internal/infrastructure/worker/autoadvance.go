@@ -95,11 +95,43 @@ func (w *AutoAdvance) processRoom(rm *entity.Room) {
 		}
 	}
 
-	w.radio.NeedsRefill(rm)
 	refreshed := w.media.EnsureRoomMedia(rm)
 
+	if w.radio.NeedsRefill(rm) {
+		go w.backgroundRefill(rm, roomID)
+	}
+
 	if advanced || refreshed {
-		w.room.SaveTracks(rm)
+		if err := w.room.SaveTracks(rm); err != nil {
+			w.log.Error("auto-advance save tracks failed", "room_id", roomID, "error", err)
+		}
 		w.manager.Broadcast(roomID, rm.ToDict())
 	}
+}
+
+func (w *AutoAdvance) backgroundRefill(rm *entity.Room, roomID string) {
+	w.manager.Broadcast(roomID, rm.ToDict())
+
+	tracks, err := w.radio.Refill(rm)
+	if err != nil {
+		w.log.Error("radio refill failed", "room_id", roomID, "error", err)
+		return
+	}
+
+	if len(tracks) > 0 {
+		rm.Mu.Lock()
+		rm.Queue = append(rm.Queue, tracks...)
+		if !rm.IsPlaying {
+			rm.IsPlaying = true
+			rm.Position = 0
+			rm.LastSyncAt = time.Now()
+		}
+		rm.Mu.Unlock()
+
+		if err := w.room.SaveTracks(rm); err != nil {
+			w.log.Error("save tracks after refill failed", "room_id", roomID, "error", err)
+		}
+	}
+
+	w.manager.Broadcast(roomID, rm.ToDict())
 }

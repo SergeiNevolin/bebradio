@@ -262,6 +262,114 @@ func TestRefillDeduplicates(t *testing.T) {
 	}
 }
 
+func TestRefillSetsAndClearsFilling(t *testing.T) {
+	mediaClient := repository.NewMockMediaClient()
+	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
+		return []string{"https://youtube.com/watch?v=1"}, nil
+	}
+	mediaClient.ResolveFn = func(url string) (map[string]any, error) {
+		return map[string]any{
+			"title":    "Song",
+			"duration": 200,
+			"source_url": url,
+			"media_id": "m1",
+		}, nil
+	}
+
+	cfg := testRadioConfig()
+	uc := NewRadioUsecase(mediaClient, cfg, radioLog)
+
+	rm := entity.NewRoom("X", "R", "O")
+	rm.AutoRadio = true
+	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
+
+	if rm.RadioFilling {
+		t.Fatal("RadioFilling should start as false")
+	}
+
+	tracks, err := uc.Refill(rm)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tracks) != 1 {
+		t.Errorf("expected 1 track, got %d", len(tracks))
+	}
+	if rm.RadioFilling {
+		t.Error("RadioFilling should be false after Refill completes")
+	}
+}
+
+func TestRefillNoopWhenFillingAlreadyTrue(t *testing.T) {
+	called := false
+	mediaClient := repository.NewMockMediaClient()
+	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
+		called = true
+		return []string{"https://youtube.com/watch?v=1"}, nil
+	}
+
+	cfg := testRadioConfig()
+	uc := NewRadioUsecase(mediaClient, cfg, radioLog)
+
+	rm := entity.NewRoom("X", "R", "O")
+	rm.AutoRadio = true
+	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
+	rm.RadioFilling = true
+
+	tracks, err := uc.Refill(rm)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tracks != nil {
+		t.Error("expected nil tracks when already filling")
+	}
+	if called {
+		t.Error("Related should not be called when already filling")
+	}
+}
+
+func TestRefillCalledAfterNeedsRefill(t *testing.T) {
+	mediaClient := repository.NewMockMediaClient()
+	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
+		return []string{"https://youtube.com/watch?v=1"}, nil
+	}
+	mediaClient.ResolveFn = func(url string) (map[string]any, error) {
+		return map[string]any{
+			"title":    "Radio Song",
+			"duration": 180,
+			"source_url": url,
+			"media_id": "radio_m1",
+		}, nil
+	}
+
+	cfg := testRadioConfig()
+	uc := NewRadioUsecase(mediaClient, cfg, radioLog)
+
+	rm := entity.NewRoom("X", "R", "O")
+	rm.AutoRadio = true
+	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
+
+	if !uc.NeedsRefill(rm) {
+		t.Fatal("expected NeedsRefill to return true")
+	}
+
+	tracks, err := uc.Refill(rm)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("expected 1 track from Refill, got %d", len(tracks))
+	}
+
+	rm.Queue = append(rm.Queue, tracks...)
+
+	rm.Queue = append(rm.Queue, &entity.Track{ID: "extra1"})
+	rm.Queue = append(rm.Queue, &entity.Track{ID: "extra2"})
+
+	if uc.NeedsRefill(rm) {
+		t.Error("expected NeedsRefill to return false after adding tracks")
+	}
+}
+
 type testError struct {
 	msg string
 }

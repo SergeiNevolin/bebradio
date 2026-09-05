@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/bebradio/backend-go/internal/config"
+	"github.com/bebradio/backend-go/internal/delivery/ws"
 	"github.com/bebradio/backend-go/internal/domain/entity"
 	"github.com/bebradio/backend-go/internal/domain/repository"
 	"github.com/bebradio/backend-go/internal/usecase"
@@ -75,7 +76,7 @@ func setupTestServer(t *testing.T) *testDeps {
 	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, testLog)
 	playback := usecase.NewPlaybackUsecase()
 
-	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback)
+	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, ws.NewConnectionManager(testLog))
 
 	return &testDeps{
 		userRepo: userRepo,

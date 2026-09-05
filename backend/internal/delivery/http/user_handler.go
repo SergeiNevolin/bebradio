@@ -17,6 +17,7 @@ func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.user.GetProfile(userID)
 	if err != nil {
+		s.log.Error("get profile failed", "error", err, "user_id", userID)
 		s.writeError(w, 404, "User not found")
 		return
 	}
@@ -42,6 +43,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.user.UpdateProfile(userID, req.Bio, req.AvatarURL)
 	if err != nil {
+		s.log.Error("update profile failed", "error", err, "user_id", userID)
 		s.writeError(w, 500, "Failed to update profile")
 		return
 	}
@@ -54,6 +56,7 @@ func (s *Server) handleGetUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.user.GetUser(userID)
 	if err != nil {
+		s.log.Error("get user failed", "error", err, "user_id", userID)
 		s.writeError(w, 404, "User not found")
 		return
 	}

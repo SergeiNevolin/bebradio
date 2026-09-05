@@ -28,12 +28,12 @@ func NewAuthUsecase(userRepo repository.UserRepository, auth AuthBridge, log *sl
 }
 
 func (uc *AuthUsecase) Register(email, username, password string) (*entity.User, string, error) {
-	existing, _ := uc.userRepo.FindByEmail(email)
-	if existing != nil {
+	existing, err := uc.userRepo.FindByEmail(email)
+	if err == nil && existing != nil {
 		return nil, "", ErrEmailTaken
 	}
-	existing, _ = uc.userRepo.FindByUsername(username)
-	if existing != nil {
+	existing, err = uc.userRepo.FindByUsername(username)
+	if err == nil && existing != nil {
 		return nil, "", ErrUsernameTaken
 	}
 

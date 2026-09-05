@@ -29,6 +29,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 
 	rm, access, err := s.room.CreateRoom(req.Name, userID, req.Password)
 	if err != nil {
+		s.log.Error("create room failed", "error", err, "user_id", userID)
 		s.writeError(w, 500, "Failed to create room")
 		return
 	}
@@ -41,6 +42,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListRooms(w http.ResponseWriter, r *http.Request) {
 	rooms, err := s.room.ListPublicRooms()
 	if err != nil {
+		s.log.Error("list rooms failed", "error", err)
 		s.writeError(w, 500, "Failed to list rooms")
 		return
 	}
@@ -74,8 +76,10 @@ func (s *Server) handleGetRoom(w http.ResponseWriter, r *http.Request) {
 	result := rm.ToDict()
 	if rm.PasswordHash != nil && userID != "" && userID == rm.OwnerID {
 		// Owner gets an access token for password-protected rooms
-		t, _ := s.room.CreateAccessToken(rm.ID)
-		if t != "" {
+		t, err := s.room.CreateAccessToken(rm.ID)
+		if err != nil {
+			s.log.Error("failed to create access token", "room_id", rm.ID, "error", err)
+		} else if t != "" {
 			result["access"] = t
 		}
 	}
@@ -108,7 +112,13 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
-	s.room.UpdateRoomSettings(rm, req.AllowAnonymousAdd, req.IsPrivate, req.AutoRadio, req.Password)
+	if err := s.room.UpdateRoomSettings(rm, req.AllowAnonymousAdd, req.IsPrivate, req.AutoRadio, req.Password); err != nil {
+		s.log.Error("update room settings failed", "error", err, "room_id", roomID)
+		s.writeError(w, 500, "Failed to update room settings")
+		return
+	}
+
+	s.manager.Broadcast(roomID, rm.ToDict())
 	s.writeJSON(w, 200, rm.ToDict())
 }
 
@@ -130,7 +140,11 @@ func (s *Server) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.room.DeleteRoom(rm)
+	if err := s.room.DeleteRoom(rm); err != nil {
+		s.log.Error("delete room failed", "error", err, "room_id", roomID)
+		s.writeError(w, 500, "Failed to delete room")
+		return
+	}
 	s.writeJSON(w, 200, map[string]any{"ok": true})
 }
 
@@ -158,6 +172,7 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, be.Code, be.Message)
 			return
 		}
+		s.log.Error("join room failed", "error", err, "room_id", roomID)
 		s.writeError(w, 500, "Internal error")
 		return
 	}
@@ -196,6 +211,7 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 
 	info, err := s.media.FetchTrack(req.URL)
 	if err != nil {
+		s.log.Error("fetch track failed", "error", err, "url", req.URL)
 		s.writeError(w, 400, "Could not fetch video info")
 		return
 	}
@@ -236,7 +252,13 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	rm.Mu.Unlock()
 
-	s.room.SaveTracks(rm)
+	go func() {
+		if err := s.room.SaveTracks(rm); err != nil {
+			s.log.Error("save tracks failed", "error", err, "room_id", roomID)
+		}
+	}()
+
+	s.manager.Broadcast(roomID, rm.ToDict())
 
 	result := track.ToDict()
 	s.writeJSON(w, 200, result)

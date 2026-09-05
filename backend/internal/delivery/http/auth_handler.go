@@ -37,6 +37,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, be.Code, be.Message)
 			return
 		}
+		s.log.Error("register failed", "error", err, "email", req.Email)
 		s.writeError(w, 500, "Internal server error")
 		return
 	}
@@ -65,6 +66,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, be.Code, be.Message)
 			return
 		}
+		s.log.Error("login failed", "error", err, "email", req.Email)
 		s.writeError(w, 500, "Internal server error")
 		return
 	}

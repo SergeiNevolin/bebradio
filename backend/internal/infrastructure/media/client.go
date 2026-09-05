@@ -66,7 +66,10 @@ func (c *Client) Download(sourceURL, mediaID string) (map[string]any, error) {
 }
 
 func (c *Client) Ensure(items []map[string]any) ([]string, error) {
-	itemsJSON, _ := json.Marshal(items)
+	itemsJSON, err := json.Marshal(items)
+	if err != nil {
+		return nil, fmt.Errorf("marshal items: %w", err)
+	}
 	body := fmt.Sprintf(`{"items":%s}`, string(itemsJSON))
 	resp, err := c.request("POST", "/v1/media/ensure", body, 150)
 	if err != nil {
@@ -113,7 +116,9 @@ func (c *Client) Captions(sourceURL, lang string) (map[string]any, error) {
 		return map[string]any{"lang": "", "auto": false, "cues": []any{}}, nil
 	}
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode captions: %w", err)
+	}
 	return result, nil
 }
 

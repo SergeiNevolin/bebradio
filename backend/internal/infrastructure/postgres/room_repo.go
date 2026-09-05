@@ -64,10 +64,18 @@ func (r *RoomRepo) Delete(id string) error {
 	}
 	defer tx.Rollback(ctx)
 
-	tx.Exec(ctx, `DELETE FROM track_votes WHERE room_id = $1`, id)
-	tx.Exec(ctx, `DELETE FROM chat_messages WHERE room_id = $1`, id)
-	tx.Exec(ctx, `DELETE FROM tracks WHERE room_id = $1`, id)
-	tx.Exec(ctx, `DELETE FROM rooms WHERE id = $1`, id)
+	if _, err := tx.Exec(ctx, `DELETE FROM track_votes WHERE room_id = $1`, id); err != nil {
+		return fmt.Errorf("delete votes: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM chat_messages WHERE room_id = $1`, id); err != nil {
+		return fmt.Errorf("delete messages: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM tracks WHERE room_id = $1`, id); err != nil {
+		return fmt.Errorf("delete tracks: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM rooms WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("delete room: %w", err)
+	}
 
 	return tx.Commit(ctx)
 }
@@ -107,7 +115,9 @@ func (r *RoomRepo) SaveTracks(room *entity.Room) error {
 	}
 	defer tx.Rollback(ctx)
 
-	tx.Exec(ctx, `DELETE FROM tracks WHERE room_id = $1`, room.ID)
+	if _, err := tx.Exec(ctx, `DELETE FROM tracks WHERE room_id = $1`, room.ID); err != nil {
+		return fmt.Errorf("delete old tracks: %w", err)
+	}
 
 	for i, track := range room.Queue {
 		_, err := tx.Exec(ctx,
@@ -185,7 +195,9 @@ func (r *RoomRepo) SaveVotes(room *entity.Room) error {
 	}
 	defer tx.Rollback(ctx)
 
-	tx.Exec(ctx, `DELETE FROM track_votes WHERE room_id = $1`, room.ID)
+	if _, err := tx.Exec(ctx, `DELETE FROM track_votes WHERE room_id = $1`, room.ID); err != nil {
+		return fmt.Errorf("delete old votes: %w", err)
+	}
 
 	for _, v := range room.Votes {
 		_, err := tx.Exec(ctx,

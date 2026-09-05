@@ -51,14 +51,18 @@ func (r *UserRepo) FindByUsername(username string) (*entity.User, error) {
 
 func (r *UserRepo) UpdateProfile(id string, bio, avatarURL *string) (*entity.User, error) {
 	if bio != nil {
-		r.pool.Exec(context.Background(),
+		if _, err := r.pool.Exec(context.Background(),
 			`UPDATE users SET bio = $1 WHERE id = $2`, *bio, id,
-		)
+		); err != nil {
+			return nil, fmt.Errorf("update bio: %w", err)
+		}
 	}
 	if avatarURL != nil {
-		r.pool.Exec(context.Background(),
+		if _, err := r.pool.Exec(context.Background(),
 			`UPDATE users SET avatar_url = $1 WHERE id = $2`, *avatarURL, id,
-		)
+		); err != nil {
+			return nil, fmt.Errorf("update avatar_url: %w", err)
+		}
 	}
 	return r.FindByID(id)
 }

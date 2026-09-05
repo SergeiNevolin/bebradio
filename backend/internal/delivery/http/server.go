@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bebradio/backend-go/internal/config"
+	"github.com/bebradio/backend-go/internal/delivery/ws"
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -22,6 +23,7 @@ type Server struct {
 	search   *usecase.SearchUsecase
 	media    *usecase.MediaUsecase
 	playback *usecase.PlaybackUsecase
+	manager  *ws.ConnectionManager
 }
 
 func NewServer(
@@ -33,6 +35,7 @@ func NewServer(
 	search *usecase.SearchUsecase,
 	media *usecase.MediaUsecase,
 	playback *usecase.PlaybackUsecase,
+	manager *ws.ConnectionManager,
 ) *Server {
 	s := &Server{
 		Router:   chi.NewRouter(),
@@ -44,6 +47,7 @@ func NewServer(
 		search:   search,
 		media:    media,
 		playback: playback,
+		manager:  manager,
 	}
 	s.setupRoutes()
 	return s
