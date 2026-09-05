@@ -136,6 +136,46 @@ async def test_refill_and_broadcast_announces_search_then_result(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_empty_radio_refill_prepares_first_track(monkeypatch):
+    import radio
+
+    async def fake_related(seed, limit):
+        return ["https://www.youtube.com/watch?v=rel0000000a"]
+
+    async def fake_fetch(url):
+        return {
+            "title": "Radio song", "artist": "A", "thumbnail": "",
+            "duration": 100, "source_url": url, "media_id": "media_radio",
+        }
+
+    async def fake_ensure(track):
+        track.url = "/api/media/media_radio"
+        track.local_path = "media_radio.m4a"
+        return True
+
+    monkeypatch.setattr(radio, "fetch_related", fake_related)
+    monkeypatch.setattr(radio, "fetch_track", fake_fetch)
+    monkeypatch.setattr(radio, "ensure_track_ready", fake_ensure)
+
+    async def fake_save_tracks(room):
+        return None
+
+    async def broadcast(*args):
+        return None
+
+    monkeypatch.setattr(radio.manager, "broadcast", broadcast)
+    monkeypatch.setattr("store.save_tracks", fake_save_tracks)
+
+    room = models.Room(auto_radio=True)
+    room.radio_seed_url = "https://www.youtube.com/watch?v=seed000000a"
+    await radio.refill_and_broadcast(room)
+
+    assert room.current_index == 0
+    assert room.is_playing is True
+    assert room.queue[0].url == "/api/media/media_radio"
+
+
+@pytest.mark.asyncio
 async def test_refill_exception_resets_radio_filling(monkeypatch):
     """When _collect_tracks raises, radio_filling is reset via finally block."""
     import radio
