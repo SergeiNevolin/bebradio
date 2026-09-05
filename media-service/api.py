@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import mimetypes
 import re
 from contextlib import asynccontextmanager
@@ -16,6 +17,8 @@ from schemas import (
     ResolveRequest,
 )
 from service import MediaService
+
+log = logging.getLogger(__name__)
 
 _AUDIO_MIME = {
     ".flac": "audio/flac",
@@ -77,7 +80,9 @@ def create_app(service: MediaService) -> FastAPI:
             return item.media_id if await service.ensure(item.source_url, item.media_id) else None
 
         ready = await asyncio.gather(*(prepare(item) for item in request.items))
-        return {"ready": [media_id for media_id in ready if media_id]}
+        ready_ids = [media_id for media_id in ready if media_id]
+        log.info("media ensure requested=%d ready=%d", len(request.items), len(ready_ids))
+        return {"ready": ready_ids}
 
     @router.post("/radio/related")
     async def related(request: RelatedRequest):

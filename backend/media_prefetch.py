@@ -38,7 +38,7 @@ async def ensure_room_media(room: Room) -> bool:
     if 0 <= next_index < len(room.queue):
         tracks.append(room.queue[next_index])
 
-    pending = [track for track in tracks if track.media_id]
+    pending = [track for track in tracks if track.media_id and not track.url]
     if not pending:
         return False
 

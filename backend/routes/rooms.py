@@ -212,8 +212,14 @@ async def add_to_queue(
 
     # If this is the first track, download it immediately so playback can start.
     if len(room.queue) == 1:
-        if await ensure_track_ready(track):
-            pass  # url and local_path set
+        if not await ensure_track_ready(track):
+            room.queue.clear()
+            room.is_playing = False
+            room.position = 0
+            return JSONResponse(
+                status_code=502,
+                content={"error": "Could not download track media"},
+            )
 
     await save_tracks(room)
     await manager.broadcast(room.id, room.to_dict())
