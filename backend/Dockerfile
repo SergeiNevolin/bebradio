@@ -1,12 +1,14 @@
-FROM python:3.11-slim
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /server ./cmd/server
 
+FROM alpine:3.20
+RUN apk --no-cache add ca-certificates
+WORKDIR /app
+COPY --from=builder /server .
 EXPOSE 8000
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./server"]
