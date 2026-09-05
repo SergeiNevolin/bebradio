@@ -39,24 +39,18 @@ services:
     networks:
       - app-net
 
-
   backend:
     build: ./backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
-      - mediadata:/app/media
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/bebradio
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/bebradio
       - SECRET_KEY=dev-secret-key
       - CORS_ORIGINS=http://localhost:3000
       - MEDIA_SERVICE_URL=http://media-service:8100
     depends_on:
       postgres:
         condition: service_healthy
-      bgutil-provider:
-        condition: service_started
       media-service:
         condition: service_started
     networks:
