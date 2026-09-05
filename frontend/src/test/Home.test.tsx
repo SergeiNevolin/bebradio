@@ -36,10 +36,9 @@ describe('Home password rooms', () => {
 
   it('opens a create-room window with an optional password field', async () => {
     render(<MemoryRouter><Home /></MemoryRouter>)
-    fireEvent.change(screen.getByPlaceholderText('Room name'), { target: { value: 'Party' } })
-    fireEvent.click(screen.getByText('Create'))
-
+    fireEvent.click(screen.getByText('Create Room'))
     expect(await screen.findByText('Create a room')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Room name')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Leave empty for an open room')).toBeInTheDocument()
   })
 
@@ -52,10 +51,10 @@ describe('Home password rooms', () => {
     })
 
     render(<MemoryRouter><Home /></MemoryRouter>)
-    fireEvent.change(screen.getByPlaceholderText('Room name'), { target: { value: 'Party' } })
-    fireEvent.click(screen.getByText('Create'))
+    fireEvent.click(screen.getByText('Create Room'))
 
-    fireEvent.change(await screen.findByPlaceholderText('Leave empty for an open room'), { target: { value: 's3cret' } })
+    fireEvent.change(await screen.findByPlaceholderText('Room name'), { target: { value: 'Party' } })
+    fireEvent.change(screen.getByPlaceholderText('Leave empty for an open room'), { target: { value: 's3cret' } })
     fireEvent.click(screen.getByText('Create room'))
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/room/ABC123'))
@@ -74,8 +73,10 @@ describe('Home password rooms', () => {
     })
 
     render(<MemoryRouter><Home /></MemoryRouter>)
-    fireEvent.change(screen.getByPlaceholderText('Enter room code'), { target: { value: 'LOCKED' } })
-    fireEvent.click(screen.getByText('Join'))
+    fireEvent.click(screen.getByText('Join by Code'))
+
+    fireEvent.change(await screen.findByPlaceholderText('e.g. ABC123'), { target: { value: 'LOCKED' } })
+    fireEvent.click(screen.getByText('Join room'))
 
     expect(await screen.findByText('Password required')).toBeInTheDocument()
 
@@ -94,7 +95,7 @@ describe('Home password rooms', () => {
 
     render(<MemoryRouter><Home /></MemoryRouter>)
     const closed = await screen.findByText('Closed')
-    expect(closed.textContent).toContain('🔒')
-    expect((await screen.findByText('Open')).textContent).not.toContain('🔒')
+    expect(closed.closest('.home-card')?.textContent).toContain('\u{1F512}')
+    expect((await screen.findByText('Open')).closest('.home-card')?.textContent).not.toContain('\u{1F512}')
   })
 })
