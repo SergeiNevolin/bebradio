@@ -1,5 +1,48 @@
-server
+# Binaries
 *.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.bin
+
+# Test binary
 *.test
-*.out
+
+# Output of go build
+/build/
+/bin/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependency/cache
+vendor/
+
+# Coverage
+coverage.out
+coverage.html
+*.coverprofile
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
 .env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
