@@ -10,6 +10,26 @@ export interface Track {
   dislikes?: number
 }
 
+export type MashupStatus = 'processing' | 'ready' | 'failed'
+
+export interface Mashup {
+  id: string
+  owner_id: string
+  title: string
+  artist: string
+  duration: number
+  size_bytes: number
+  status: MashupStatus
+  error?: string
+  has_cover: boolean
+  plays: number
+  created_at: string
+  // Present only once status === 'ready'.
+  stream_url?: string
+  // Present only when has_cover is true.
+  cover_url?: string
+}
+
 export interface RoomListItem {
   id: string
   name: string

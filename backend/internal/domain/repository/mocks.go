@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"io"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
 )
@@ -159,6 +160,9 @@ type MockMediaClient struct {
 	ContentFn   func(mediaID, rangeHeader string) (int64, string, []byte, error)
 	DownloadFn  func(sourceURL, mediaID string) (map[string]any, error)
 	UpdateRefsFn func(mediaIDs []string) error
+	UploadMashupFn func(mediaID, filename string, body io.Reader) error
+	MashupStatusFn func(mediaID string) (map[string]any, error)
+	DeleteMashupFn func(mediaID string) error
 }
 
 func NewMockMediaClient() *MockMediaClient {
@@ -219,6 +223,106 @@ func (m *MockMediaClient) UpdateReferences(mediaIDs []string) error {
 		return m.UpdateRefsFn(mediaIDs)
 	}
 	return nil
+}
+
+func (m *MockMediaClient) UploadMashup(mediaID, filename string, body io.Reader) error {
+	if m.UploadMashupFn != nil {
+		return m.UploadMashupFn(mediaID, filename, body)
+	}
+	return nil
+}
+
+func (m *MockMediaClient) MashupStatus(mediaID string) (map[string]any, error) {
+	if m.MashupStatusFn != nil {
+		return m.MashupStatusFn(mediaID)
+	}
+	return map[string]any{"status": "ready"}, nil
+}
+
+func (m *MockMediaClient) DeleteMashup(mediaID string) error {
+	if m.DeleteMashupFn != nil {
+		return m.DeleteMashupFn(mediaID)
+	}
+	return nil
+}
+
+type MockMashupRepo struct {
+	Items     map[string]*entity.Mashup
+	CreateErr error
+}
+
+func NewMockMashupRepo() *MockMashupRepo {
+	return &MockMashupRepo{Items: make(map[string]*entity.Mashup)}
+}
+
+func (m *MockMashupRepo) Create(mashup *entity.Mashup) error {
+	if m.CreateErr != nil {
+		return m.CreateErr
+	}
+	cp := *mashup
+	m.Items[mashup.ID] = &cp
+	return nil
+}
+
+func (m *MockMashupRepo) FindByID(id string) (*entity.Mashup, error) {
+	if v, ok := m.Items[id]; ok {
+		return v, nil
+	}
+	return nil, ErrNotFound
+}
+
+func (m *MockMashupRepo) Delete(id string) error {
+	delete(m.Items, id)
+	return nil
+}
+
+func (m *MockMashupRepo) UpdateStatus(id, status, errMsg string, duration int, sizeBytes int64, hasCover bool) error {
+	if v, ok := m.Items[id]; ok {
+		v.Status = status
+		v.Error = errMsg
+		v.Duration = duration
+		v.SizeBytes = sizeBytes
+		v.HasCover = hasCover
+	}
+	return nil
+}
+
+func (m *MockMashupRepo) List(query string, limit, offset int) ([]*entity.Mashup, error) {
+	out := make([]*entity.Mashup, 0)
+	for _, v := range m.Items {
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+func (m *MockMashupRepo) ListByOwner(ownerID string) ([]*entity.Mashup, error) {
+	out := make([]*entity.Mashup, 0)
+	for _, v := range m.Items {
+		if v.OwnerID == ownerID {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+func (m *MockMashupRepo) CountByOwner(ownerID string) (int, error) {
+	n := 0
+	for _, v := range m.Items {
+		if v.OwnerID == ownerID {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (m *MockMashupRepo) ListProcessing() ([]*entity.Mashup, error) {
+	out := make([]*entity.Mashup, 0)
+	for _, v := range m.Items {
+		if v.Status == "processing" {
+			out = append(out, v)
+		}
+	}
+	return out, nil
 }
 
 type MockAuthBridge struct {

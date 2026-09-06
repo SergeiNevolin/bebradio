@@ -32,6 +32,7 @@ services:
       - mediadata:/app/media
     environment:
       - MEDIA_DIR=/app/media/tracks
+      - MASHUP_DIR=/app/media/mashups
       - BGUTIL_BASE_URL=http://bgutil-provider:4416
     depends_on:
       bgutil-provider:
@@ -48,6 +49,8 @@ services:
       - SECRET_KEY=dev-secret-key
       - CORS_ORIGINS=http://localhost:3000
       - MEDIA_SERVICE_URL=http://media-service:8100
+      - MASHUP_MAX_SIZE=62914560
+      - MASHUP_USER_QUOTA=20
     depends_on:
       postgres:
         condition: service_healthy

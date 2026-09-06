@@ -16,4 +16,9 @@ def settings(tmp_path):
         media_max_size=1024,
         max_downloads=2,
         bgutil_base_url="http://provider:4416",
+        mashup_dir=tmp_path / "mashups",
+        mashup_max_size=1024,
+        mashup_max_duration=10,
+        mashup_total_limit=4096,
+        mashup_max_jobs=2,
     )

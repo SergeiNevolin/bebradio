@@ -1,4 +1,5 @@
 import { getRoomAccess } from './roomAccess'
+import type { Mashup } from '../types'
 
 let authToken: string | null = null
 
@@ -160,4 +161,67 @@ export const api = {
   // GET /api/users/:userID → { user: PublicProfile() }  (NO email field)
   getUser: (userId: string) =>
     request<{ user: UserProfile }>(`/api/users/${userId}`),
+
+  // ── Mashups ─────────────────────────────────────────────────────────
+  // GET /api/mashups?q=&limit=&offset= → []Mashup.ToDict()
+  listMashups: (q = '', limit = 30, offset = 0) => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+    if (q) params.set('q', q)
+    return request<Mashup[]>(`/api/mashups/?${params.toString()}`)
+  },
+
+  // GET /api/mashups/mine → []Mashup.ToDict()  (auth)
+  myMashups: () => request<Mashup[]>('/api/mashups/mine'),
+
+  // GET /api/mashups/:id → Mashup.ToDict()
+  getMashup: (id: string) => request<Mashup>(`/api/mashups/${id}`),
+
+  // DELETE /api/mashups/:id → { ok: true }  (auth + owner)
+  deleteMashup: (id: string) =>
+    fetch(`/api/mashups/${id}`, { method: 'DELETE', headers: authHeaders() }).then(async (res) => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        throw new ApiError(res.status, body.error || 'Failed to delete mashup')
+      }
+    }),
+
+  // POST /api/mashups (multipart) → 202 Mashup.ToDict()
+  // XHR rather than fetch so the upload exposes progress; the browser sets the
+  // multipart boundary, so we must NOT force a Content-Type here.
+  uploadMashup: (
+    data: { file: File; title: string; artist: string },
+    onProgress?: (pct: number) => void,
+  ) =>
+    new Promise<Mashup>((resolve, reject) => {
+      const form = new FormData()
+      form.append('title', data.title)
+      form.append('artist', data.artist)
+      form.append('file', data.file) // file LAST: the Go handler reads title/artist before it
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/mashups/')
+      const headers = authHeaders()
+      if (headers.Authorization) xhr.setRequestHeader('Authorization', headers.Authorization)
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+      xhr.onload = () => {
+        if (xhr.status === 202 || xhr.status === 200) {
+          try {
+            resolve(JSON.parse(xhr.responseText) as Mashup)
+          } catch {
+            reject(new ApiError(xhr.status, 'Malformed server response'))
+          }
+          return
+        }
+        let message = `Upload failed (${xhr.status})`
+        try {
+          message = (JSON.parse(xhr.responseText) as { error?: string }).error || message
+        } catch {
+          /* keep default */
+        }
+        reject(new ApiError(xhr.status, message))
+      }
+      xhr.onerror = () => reject(new ApiError(0, 'Network error during upload'))
+      xhr.send(form)
+    }),
 }

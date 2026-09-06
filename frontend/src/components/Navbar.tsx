@@ -33,7 +33,10 @@ export default function Navbar() {
   return (
     <nav className={styles.navbar}>
       <div className={styles.navbarInner}>
-        <Link to="/" className={styles.navbarBrand}>bebradio</Link>
+        <div className={styles.navbarLeft}>
+          <Link to="/" className={styles.navbarBrand}>bebradio</Link>
+          <Link to="/mashup" className={styles.navbarLink}>Mashups</Link>
+        </div>
         <SearchBar />
         <div className={styles.navbarRight}>
           {user ? (
