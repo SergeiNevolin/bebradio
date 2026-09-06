@@ -117,9 +117,31 @@ def test_transcode_raises_when_ffmpeg_fails(settings, monkeypatch):
     storage = MashupStorage(settings)
     storage.init()
 
-    with pytest.raises(MashupError):
+    with pytest.raises(MashupError) as excinfo:
         storage.transcode("x", settings.mashup_dir / "src.part")
+    assert "boom" in str(excinfo.value)  # ffmpeg stderr is surfaced
     assert not (settings.mashup_dir / "x.m4a.tmp").exists()
+
+
+def test_transcode_forces_output_format(settings, monkeypatch):
+    """The temp file ends in .tmp, so ffmpeg must be told the muxer explicitly."""
+    from mashups import MashupStorage
+
+    seen = {}
+
+    def fake_run(cmd, *a, **k):
+        seen["cmd"] = cmd
+        out = cmd[-1]
+        open(out, "wb").write(b"x" * 10)
+        return _Completed(returncode=0)
+
+    monkeypatch.setattr("mashups.subprocess.run", fake_run)
+    storage = MashupStorage(settings)
+    storage.init()
+    storage.transcode("x", settings.mashup_dir / "src.part")
+
+    assert "-f" in seen["cmd"]
+    assert storage.path("x").exists()
 
 
 def test_delete_removes_all_artifacts(settings):
