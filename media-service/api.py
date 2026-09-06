@@ -5,9 +5,10 @@ import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
+from mashups import MashupError
 from schemas import (
     DownloadRequest,
     EnsureRequest,
@@ -105,6 +106,60 @@ def create_app(service: MediaService) -> FastAPI:
         if not path.is_file():
             raise HTTPException(status_code=404, detail="Track not found")
         return _file_response(path, request)
+
+    @router.post("/mashups/{media_id}", status_code=202)
+    async def upload_mashup(media_id: str, file: UploadFile = File(...)):
+        if not service.mashups.valid_id(media_id):
+            raise HTTPException(status_code=400, detail="Invalid media ID")
+        if service.mashups.is_ready(media_id) or media_id in service.mashup_jobs:
+            raise HTTPException(status_code=409, detail="Mashup already exists")
+        if service.mashups.total_size() >= service.settings.mashup_total_limit:
+            raise HTTPException(status_code=507, detail="Mashup storage is full")
+        try:
+            part = await service.mashups.save_upload(media_id, file)
+        except MashupError as exc:
+            raise HTTPException(status_code=413, detail=str(exc))
+        service.mashup_jobs.submit(media_id, part)
+        return {"media_id": media_id, "status": "processing"}
+
+    @router.get("/mashups/{media_id}/status")
+    async def mashup_status(media_id: str):
+        if not service.mashups.valid_id(media_id):
+            raise HTTPException(status_code=400, detail="Invalid media ID")
+        state = service.mashup_jobs.status(media_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="Mashup not found")
+        return state.as_dict()
+
+    @router.get("/mashups/{media_id}/cover")
+    async def mashup_cover(media_id: str):
+        if not service.mashups.valid_id(media_id):
+            raise HTTPException(status_code=400, detail="Invalid media ID")
+        path = service.mashups.cover_path(media_id)
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="Cover not found")
+        return FileResponse(
+            path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @router.get("/mashups/{media_id}")
+    async def mashup_media(media_id: str, request: Request):
+        if not service.mashups.valid_id(media_id):
+            raise HTTPException(status_code=400, detail="Invalid media ID")
+        path = service.mashups.path(media_id)
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="Mashup not found")
+        return _file_response(path, request)
+
+    @router.delete("/mashups/{media_id}")
+    async def delete_mashup(media_id: str):
+        if not service.mashups.valid_id(media_id):
+            raise HTTPException(status_code=400, detail="Invalid media ID")
+        service.mashups.delete(media_id)
+        service.mashup_jobs.discard(media_id)
+        return {"ok": True}
 
     app.include_router(router)
     return app

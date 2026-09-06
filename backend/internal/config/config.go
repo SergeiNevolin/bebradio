@@ -27,6 +27,10 @@ type Config struct {
 	RateLimitQueue  int
 	RateLimitWindow int
 
+	MashupUserQuota int
+	MashupMaxSize   int64
+	RateLimitUpload int
+
 	Port string
 }
 
@@ -51,6 +55,10 @@ func Load() *Config {
 		RateLimitSearch: getEnvInt("RATE_LIMIT_SEARCH", 15),
 		RateLimitQueue:  getEnvInt("RATE_LIMIT_QUEUE", 10),
 		RateLimitWindow: getEnvInt("RATE_LIMIT_WINDOW", 60),
+
+		MashupUserQuota: getEnvInt("MASHUP_USER_QUOTA", 20),
+		MashupMaxSize:   int64(getEnvInt("MASHUP_MAX_SIZE", 60*1024*1024)),
+		RateLimitUpload: getEnvInt("RATE_LIMIT_UPLOAD", 5),
 
 		Port: getEnv("PORT", "8000"),
 	}

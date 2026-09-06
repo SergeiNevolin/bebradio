@@ -10,7 +10,16 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api/media': mediaUrl,
+      // Order matters: most specific key first. Mashup audio/covers and room
+      // media both live under /v1/... on media-service, not /api/....
+      '/api/mashups/media': {
+        target: mediaUrl,
+        rewrite: (path) => path.replace(/^\/api\/mashups\/media/, '/v1/mashups'),
+      },
+      '/api/media': {
+        target: mediaUrl,
+        rewrite: (path) => path.replace(/^\/api\/media/, '/v1/media'),
+      },
       '/api': backendUrl,
       '/ws': {
         target: backendWs,

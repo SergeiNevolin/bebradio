@@ -8,22 +8,25 @@ import (
 
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/delivery/ws"
+	"github.com/bebradio/backend-go/internal/pkg/ratelimit"
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 type Server struct {
-	Router   *chi.Mux
-	config   *config.Config
-	log      *slog.Logger
-	auth     *usecase.AuthUsecase
-	room     *usecase.RoomUsecase
-	user     *usecase.UserUsecase
-	search   *usecase.SearchUsecase
-	media    *usecase.MediaUsecase
-	playback *usecase.PlaybackUsecase
-	manager  *ws.ConnectionManager
+	Router        *chi.Mux
+	config        *config.Config
+	log           *slog.Logger
+	auth          *usecase.AuthUsecase
+	room          *usecase.RoomUsecase
+	user          *usecase.UserUsecase
+	search        *usecase.SearchUsecase
+	media         *usecase.MediaUsecase
+	playback      *usecase.PlaybackUsecase
+	mashup        *usecase.MashupUsecase
+	manager       *ws.ConnectionManager
+	uploadLimiter *ratelimit.SlidingWindowLimiter
 }
 
 func NewServer(
@@ -35,19 +38,26 @@ func NewServer(
 	search *usecase.SearchUsecase,
 	media *usecase.MediaUsecase,
 	playback *usecase.PlaybackUsecase,
+	mashup *usecase.MashupUsecase,
 	manager *ws.ConnectionManager,
 ) *Server {
+	uploadLimit := config.RateLimitUpload
+	if uploadLimit <= 0 {
+		uploadLimit = 5
+	}
 	s := &Server{
-		Router:   chi.NewRouter(),
-		config:   config,
-		log:      log,
-		auth:     auth,
-		room:     room,
-		user:     user,
-		search:   search,
-		media:    media,
-		playback: playback,
-		manager:  manager,
+		Router:        chi.NewRouter(),
+		config:        config,
+		log:           log,
+		auth:          auth,
+		room:          room,
+		user:          user,
+		search:        search,
+		media:         media,
+		playback:      playback,
+		mashup:        mashup,
+		manager:       manager,
+		uploadLimiter: ratelimit.New(uploadLimit, 3600),
 	}
 	s.setupRoutes()
 	return s
@@ -81,6 +91,15 @@ func (s *Server) setupRoutes() {
 
 		r.Post("/search", s.handleSearch)
 		r.Get("/media/{trackID}", s.handleStream)
+
+		r.Route("/mashups", func(r chi.Router) {
+			r.Get("/", s.handleListMashups)            // ?q=&limit=&offset=
+			r.Post("/", s.handleUploadMashup)          // auth, multipart
+			r.Get("/mine", s.handleMyMashups)          // auth
+			r.Get("/media/{mediaID}", s.handleStreamMashup) // dev fallback, prod goes through nginx
+			r.Get("/{mashupID}", s.handleGetMashup)
+			r.Delete("/{mashupID}", s.handleDeleteMashup) // auth + owner
+		})
 
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/me", s.handleGetMe)

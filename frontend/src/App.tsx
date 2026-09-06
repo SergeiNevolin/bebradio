@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
 const Home = lazy(() => import('./pages/Home'))
+const Mashups = lazy(() => import('./pages/Mashups'))
 const Room = lazy(() => import('./pages/Room'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -47,6 +48,7 @@ export default function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/" element={<Home />} />
+                <Route path="/mashup" element={<Mashups />} />
                 <Route path="/room/:roomId" element={<Room />} />
                 <Route path="/user/:userId" element={<Profile />} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
