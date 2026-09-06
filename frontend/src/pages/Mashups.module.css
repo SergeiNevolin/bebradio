@@ -95,6 +95,17 @@
   to { background-position: -200% 0; }
 }
 
+.sentinel {
+  height: 1px;
+}
+
+.loadingMore {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
 .empty {
   text-align: center;
   color: var(--text-muted);

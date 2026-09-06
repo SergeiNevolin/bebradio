@@ -15,6 +15,7 @@ export type MashupStatus = 'processing' | 'ready' | 'failed'
 export interface Mashup {
   id: string
   owner_id: string
+  owner_name?: string
   title: string
   artist: string
   duration: number
@@ -23,6 +24,9 @@ export interface Mashup {
   error?: string
   has_cover: boolean
   plays: number
+  likes: number
+  // Whether the current viewer has liked this mashup.
+  liked?: boolean
   created_at: string
   // Present only once status === 'ready'.
   stream_url?: string

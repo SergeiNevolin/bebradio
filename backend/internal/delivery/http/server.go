@@ -93,12 +93,17 @@ func (s *Server) setupRoutes() {
 		r.Get("/media/{trackID}", s.handleStream)
 
 		r.Route("/mashups", func(r chi.Router) {
-			r.Get("/", s.handleListMashups)            // ?q=&limit=&offset=
-			r.Post("/", s.handleUploadMashup)          // auth, multipart
-			r.Get("/mine", s.handleMyMashups)          // auth
-			r.Get("/media/{mediaID}", s.handleStreamMashup) // dev fallback, prod goes through nginx
-			r.Get("/{mashupID}", s.handleGetMashup)
-			r.Delete("/{mashupID}", s.handleDeleteMashup) // auth + owner
+			r.Get("/", s.handleListMashups)                        // ?q=&sort=recent|top&limit=&offset=  (optional auth -> liked)
+			r.Post("/", s.handleUploadMashup)                      // auth, multipart: file (+ optional cover)
+			r.Get("/mine", s.handleMyMashups)                      // auth
+			r.Get("/liked", s.handleLikedMashups)                  // auth
+			r.Get("/media/{mediaID}", s.handleStreamMashup)        // dev fallback, prod goes through nginx
+			r.Get("/media/{mediaID}/cover", s.handleStreamMashupCover) // dev fallback
+			r.Get("/{mashupID}", s.handleGetMashup)                // optional auth -> liked
+			r.Delete("/{mashupID}", s.handleDeleteMashup)          // auth + owner
+			r.Post("/{mashupID}/like", s.handleLikeMashup)         // auth
+			r.Delete("/{mashupID}/like", s.handleUnlikeMashup)     // auth
+			r.Put("/{mashupID}/cover", s.handleUploadMashupCover)  // auth + owner, multipart: file
 		})
 
 		r.Route("/users", func(r chi.Router) {

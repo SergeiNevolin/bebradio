@@ -38,9 +38,22 @@ describe('UploadMashupModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }))
 
     await waitFor(() => expect(uploadMashup).toHaveBeenCalled())
-    expect(uploadMashup.mock.calls[0][0]).toEqual({ file, title: 'My Mix', artist: 'Me' })
+    expect(uploadMashup.mock.calls[0][0]).toEqual({ file, title: 'My Mix', artist: 'Me', cover: null })
     await waitFor(() => expect(onUploaded).toHaveBeenCalledWith({ id: 'm1', status: 'processing' }))
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('passes a chosen cover image through to the upload', async () => {
+    uploadMashup.mockResolvedValue({ id: 'm1', status: 'processing' })
+    render(<UploadMashupModal onClose={vi.fn()} onUploaded={vi.fn()} />)
+
+    const file = selectFile()
+    const cover = new File(['img'], 'art.png', { type: 'image/png' })
+    fireEvent.change(screen.getByLabelText('Cover (optional)'), { target: { files: [cover] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }))
+
+    await waitFor(() => expect(uploadMashup).toHaveBeenCalled())
+    expect(uploadMashup.mock.calls[0][0]).toMatchObject({ file, cover })
   })
 
   it('shows an error and stays open when the upload fails', async () => {

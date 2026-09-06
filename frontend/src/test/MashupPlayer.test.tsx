@@ -16,6 +16,7 @@ function makeMashup(over: Partial<Mashup> = {}): Mashup {
     status: 'ready',
     has_cover: false,
     plays: 0,
+    likes: 0,
     created_at: '2026-01-01T00:00:00Z',
     stream_url: '/api/mashups/media/abc',
     ...over,

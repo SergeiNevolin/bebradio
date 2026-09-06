@@ -190,6 +190,44 @@ func (c *Client) UploadMashup(mediaID, filename string, body io.Reader) error {
 	return nil
 }
 
+// UploadMashupCover streams a cover image to media-service as multipart/form-data
+// (PUT, replaces any existing cover). Same io.Pipe trick as UploadMashup so the
+// image never buffers here.
+func (c *Client) UploadMashupCover(mediaID, filename string, body io.Reader) error {
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		part, err := mw.CreateFormFile("file", filename)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		if _, err := io.Copy(part, body); err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		pw.CloseWithError(mw.Close())
+	}()
+
+	req, err := http.NewRequest("PUT", c.baseURL+"/v1/mashups/"+mediaID+"/cover", pr)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+
+	client := &http.Client{Timeout: 2 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("media service unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+	}
+	return nil
+}
+
 func (c *Client) MashupStatus(mediaID string) (map[string]any, error) {
 	req, err := http.NewRequest("GET", c.baseURL+"/v1/mashups/"+mediaID+"/status", nil)
 	if err != nil {

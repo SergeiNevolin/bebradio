@@ -21,4 +21,5 @@ def settings(tmp_path):
         mashup_max_duration=10,
         mashup_total_limit=4096,
         mashup_max_jobs=2,
+        mashup_cover_max_size=512,
     )

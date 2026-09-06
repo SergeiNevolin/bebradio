@@ -59,6 +59,9 @@ class MashupStorage:
     def part_path(self, media_id: str) -> Path:
         return self.settings.mashup_dir / f"{media_id}.part"
 
+    def cover_part_path(self, media_id: str) -> Path:
+        return self.settings.mashup_dir / f"{media_id}.cover.part"
+
     def is_ready(self, media_id: str) -> bool:
         return self.path(media_id).is_file()
 
@@ -88,6 +91,56 @@ class MashupStorage:
             part.unlink(missing_ok=True)
             raise MashupError("uploaded file is empty")
         return part
+
+    async def save_cover_upload(self, media_id: str, upload) -> Path:
+        """Stream a user-supplied cover image to ``<media_id>.cover.part``.
+
+        Mirrors :meth:`save_upload`: aborts and unlinks the moment the body
+        exceeds ``mashup_cover_max_size`` so a hostile client cannot fill the disk.
+        """
+        self.init()
+        part = self.cover_part_path(media_id)
+        size = 0
+        try:
+            with part.open("wb") as handle:
+                while True:
+                    chunk = await upload.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > self.settings.mashup_cover_max_size:
+                        raise MashupError("cover image is too large")
+                    handle.write(chunk)
+        except MashupError:
+            part.unlink(missing_ok=True)
+            raise
+        if size == 0:
+            part.unlink(missing_ok=True)
+            raise MashupError("cover image is empty")
+        return part
+
+    def process_cover(self, media_id: str, src: Path) -> None:
+        """Validate and normalise a cover image into ``<media_id>.jpg``.
+
+        ffmpeg both rejects non-images (non-zero exit) and strips metadata while
+        clamping the longest side to 1000px. Writes to a temp file next to the
+        target and atomically renames it in.
+        """
+        tmp = self.settings.mashup_dir / f"{media_id}.jpg.tmp"
+        proc = subprocess.run(
+            [
+                "ffmpeg", "-nostdin", "-y", "-i", str(src),
+                "-an", "-vf",
+                "scale='min(1000,iw)':'min(1000,ih)':force_original_aspect_ratio=decrease",
+                "-frames:v", "1", "-f", "mjpeg", str(tmp),
+            ],
+            capture_output=True, text=True,
+        )
+        src.unlink(missing_ok=True)
+        if proc.returncode != 0 or not tmp.is_file() or tmp.stat().st_size == 0:
+            tmp.unlink(missing_ok=True)
+            raise MashupError(_ffmpeg_error("cover processing failed", proc))
+        tmp.rename(self.cover_path(media_id))
 
     def probe(self, src: Path) -> ProbeResult:
         """Reject non-audio and over-long files; read title/artist from tags."""
@@ -165,7 +218,12 @@ class MashupStorage:
         return True
 
     def delete(self, media_id: str) -> None:
-        for path in (self.path(media_id), self.cover_path(media_id), self.part_path(media_id)):
+        for path in (
+            self.path(media_id),
+            self.cover_path(media_id),
+            self.part_path(media_id),
+            self.cover_part_path(media_id),
+        ):
             path.unlink(missing_ok=True)
 
     def total_size(self) -> int:
@@ -224,7 +282,11 @@ class MashupJobs:
             try:
                 probe = await asyncio.to_thread(self.storage.probe, src)
                 await asyncio.to_thread(self.storage.transcode, media_id, src)
-                has_cover = await asyncio.to_thread(self.storage.extract_cover, media_id, src)
+                # A cover uploaded by the user while the job ran must win over
+                # whatever art is embedded in the source file.
+                if not self.storage.cover_path(media_id).is_file():
+                    await asyncio.to_thread(self.storage.extract_cover, media_id, src)
+                has_cover = self.storage.cover_path(media_id).is_file()
             except MashupError as exc:
                 self._jobs[media_id] = JobState(status="failed", error=str(exc))
                 log.warning("mashup %s failed: %s", media_id, exc)

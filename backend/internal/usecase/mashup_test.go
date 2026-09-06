@@ -170,6 +170,121 @@ func TestMashupPollTransitionsToFailed(t *testing.T) {
 	}
 }
 
+func TestMashupLikeAndUnlike(t *testing.T) {
+	uc, repo, _ := newMashupUC(t)
+	repo.Create(&entity.Mashup{ID: "m1", OwnerID: "o", MediaID: "abc", Status: "ready"})
+
+	res, err := uc.Like("m1", "user-a")
+	if err != nil {
+		t.Fatalf("like: %v", err)
+	}
+	if res["likes"] != 1 || res["liked"] != true {
+		t.Fatalf("unexpected like result: %v", res)
+	}
+
+	// Idempotent: a repeat like does not double-count.
+	res, _ = uc.Like("m1", "user-a")
+	if res["likes"] != 1 {
+		t.Errorf("repeat like should stay at 1, got %v", res["likes"])
+	}
+
+	res, _ = uc.Like("m1", "user-b")
+	if res["likes"] != 2 {
+		t.Errorf("expected 2 likes, got %v", res["likes"])
+	}
+
+	res, err = uc.Unlike("m1", "user-a")
+	if err != nil {
+		t.Fatalf("unlike: %v", err)
+	}
+	if res["likes"] != 1 || res["liked"] != false {
+		t.Fatalf("unexpected unlike result: %v", res)
+	}
+
+	liked, _ := uc.ListLiked("user-b", 0, 0)
+	if len(liked) != 1 || liked[0]["id"] != "m1" {
+		t.Errorf("user-b should have one liked mashup, got %v", liked)
+	}
+	if none, _ := uc.ListLiked("user-a", 0, 0); len(none) != 0 {
+		t.Errorf("user-a should have no liked mashups, got %v", none)
+	}
+}
+
+func TestMashupLikeNotFound(t *testing.T) {
+	uc, _, _ := newMashupUC(t)
+	if _, err := uc.Like("ghost", "user-a"); !errors.Is(err, ErrMashupNotFound) {
+		t.Fatalf("expected ErrMashupNotFound, got %v", err)
+	}
+}
+
+func TestMashupGetCarriesLikedFlag(t *testing.T) {
+	uc, repo, _ := newMashupUC(t)
+	repo.Create(&entity.Mashup{ID: "m1", OwnerID: "o", MediaID: "abc", Status: "ready"})
+	_, _ = uc.Like("m1", "user-a")
+
+	m, err := uc.Get("m1", "user-a")
+	if err != nil || !m.Liked {
+		t.Fatalf("expected liked=true for user-a, got %+v (err %v)", m, err)
+	}
+	other, _ := uc.Get("m1", "user-b")
+	if other.Liked {
+		t.Errorf("expected liked=false for user-b")
+	}
+}
+
+func TestMashupSetCoverRequiresOwner(t *testing.T) {
+	uc, repo, media := newMashupUC(t)
+	repo.Create(&entity.Mashup{ID: "m1", OwnerID: "owner1", MediaID: "abc", Status: "ready"})
+	called := false
+	media.UploadMashupCoverFn = func(mediaID, filename string, body io.Reader) error {
+		called = true
+		return nil
+	}
+
+	if err := uc.SetCover("m1", "intruder", "c.jpg", strings.NewReader("img")); !errors.Is(err, ErrMashupNotOwner) {
+		t.Fatalf("expected ErrMashupNotOwner, got %v", err)
+	}
+	if called {
+		t.Error("media client must not be called for a non-owner")
+	}
+}
+
+func TestMashupSetCoverSuccess(t *testing.T) {
+	uc, repo, media := newMashupUC(t)
+	repo.Create(&entity.Mashup{ID: "m1", OwnerID: "owner1", MediaID: "abc", Status: "ready"})
+	var gotMedia string
+	media.UploadMashupCoverFn = func(mediaID, filename string, body io.Reader) error {
+		io.Copy(io.Discard, body)
+		gotMedia = mediaID
+		return nil
+	}
+
+	if err := uc.SetCover("m1", "owner1", "c.jpg", strings.NewReader("img")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotMedia != "abc" {
+		t.Errorf("media client got media id %q, want abc", gotMedia)
+	}
+	if !repo.CoverSet["m1"] {
+		t.Error("expected SetCoverUploaded to be recorded")
+	}
+}
+
+func TestMashupSetCoverMediaFailure(t *testing.T) {
+	uc, repo, media := newMashupUC(t)
+	repo.Create(&entity.Mashup{ID: "m1", OwnerID: "owner1", MediaID: "abc", Status: "ready"})
+	media.UploadMashupCoverFn = func(mediaID, filename string, body io.Reader) error {
+		return errors.New("media down")
+	}
+
+	if err := uc.SetCover("m1", "owner1", "c.jpg", strings.NewReader("img")); !errors.Is(err, ErrMashupCoverFail) {
+		t.Fatalf("expected ErrMashupCoverFail, got %v", err)
+	}
+	if repo.CoverSet["m1"] {
+		t.Error("cover flag must not be set when media service fails")
+	}
+}
+
 func TestMashupPollTimesOut(t *testing.T) {
 	oldInterval, oldTimeout := mashupPollInterval, mashupPollTimeout
 	mashupPollInterval, mashupPollTimeout = 2*time.Millisecond, 20*time.Millisecond

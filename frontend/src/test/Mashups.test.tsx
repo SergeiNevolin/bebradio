@@ -1,17 +1,30 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import Mashups from '../pages/Mashups'
 import type { Mashup } from '../types'
 
-const { listMashups, myMashups, getMashup, deleteMashup } = vi.hoisted(() => ({
+const {
+  listMashups,
+  myMashups,
+  likedMashups,
+  getMashup,
+  deleteMashup,
+  likeMashup,
+  unlikeMashup,
+  uploadMashupCover,
+} = vi.hoisted(() => ({
   listMashups: vi.fn(),
   myMashups: vi.fn(),
+  likedMashups: vi.fn(),
   getMashup: vi.fn(),
   deleteMashup: vi.fn(),
+  likeMashup: vi.fn(),
+  unlikeMashup: vi.fn(),
+  uploadMashupCover: vi.fn(),
 }))
 vi.mock('../lib/api', () => ({
-  api: { listMashups, myMashups, getMashup, deleteMashup },
+  api: { listMashups, myMashups, likedMashups, getMashup, deleteMashup, likeMashup, unlikeMashup, uploadMashupCover },
 }))
 
 let mockUser: { id: string; username: string } | null = null
@@ -26,6 +39,7 @@ function mashup(over: Partial<Mashup> = {}): Mashup {
   return {
     id: 'm1',
     owner_id: 'owner1',
+    owner_name: 'dj',
     title: 'Alpha Bootleg',
     artist: 'DJ A',
     duration: 180,
@@ -33,6 +47,8 @@ function mashup(over: Partial<Mashup> = {}): Mashup {
     status: 'ready',
     has_cover: false,
     plays: 0,
+    likes: 3,
+    liked: false,
     created_at: '2026-01-01T00:00:00Z',
     stream_url: '/api/mashups/media/aaa',
     ...over,
@@ -47,47 +63,77 @@ describe('Mashups page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUser = null
-    listMashups.mockResolvedValue([mashup(), mashup({ id: 'm2', title: 'Beta Bootleg' })])
-    myMashups.mockResolvedValue([mashup({ id: 'm9', title: 'My Only Mix' })])
+    listMashups.mockImplementation((_q: string, sort: 'recent' | 'top') =>
+      Promise.resolve(
+        sort === 'top'
+          ? [mashup({ id: 't1', title: 'Top Bootleg', likes: 9 })]
+          : [mashup(), mashup({ id: 'm2', title: 'Beta Bootleg' })],
+      ),
+    )
+    myMashups.mockResolvedValue([mashup({ id: 'm9', title: 'My Only Mix', owner_id: 'owner1' })])
+    likedMashups.mockResolvedValue([mashup({ id: 'l1', title: 'Liked Bootleg', liked: true, likes: 5 })])
+    likeMashup.mockResolvedValue({ likes: 4, liked: true })
+    unlikeMashup.mockResolvedValue({ likes: 3, liked: false })
   })
 
-  it('renders the header and the loaded mashups', async () => {
+  it('renders the three browse sections', async () => {
     renderPage()
     expect(screen.getByRole('heading', { name: 'Mashups' })).toBeInTheDocument()
-    expect(await screen.findAllByText('Alpha Bootleg')).not.toHaveLength(0)
-    expect(screen.getAllByText('Beta Bootleg').length).toBeGreaterThan(0)
+    expect(await screen.findByRole('heading', { name: 'Latest' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Top by likes' })).toBeInTheDocument()
+    expect(await screen.findAllByText('Top Bootleg')).not.toHaveLength(0)
+    // recent + top requested with their sorts
+    expect(listMashups).toHaveBeenCalledWith('', 'recent', 12)
+    expect(listMashups).toHaveBeenCalledWith('', 'top', 24, 0)
   })
 
-  it('debounces the search box into a query request', async () => {
-    renderPage()
-    await screen.findAllByText('Alpha Bootleg')
-
-    fireEvent.change(screen.getByLabelText('Search mashups'), { target: { value: 'beta' } })
-
-    await waitFor(() => expect(listMashups).toHaveBeenLastCalledWith('beta'))
-  })
-
-  it('hides upload button and tabs for anonymous visitors', async () => {
-    renderPage()
-    await screen.findAllByText('Alpha Bootleg')
-    expect(screen.queryByRole('button', { name: 'Upload' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: 'Mine' })).not.toBeInTheDocument()
-  })
-
-  it('switches to the "Mine" tab for a signed-in user', async () => {
+  it('adds the Liked and My mashups sections for a signed-in user', async () => {
     mockUser = { id: 'owner1', username: 'me' }
     renderPage()
-    await screen.findAllByText('Alpha Bootleg')
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Mine' }))
-
-    await waitFor(() => expect(myMashups).toHaveBeenCalled())
+    expect(await screen.findByRole('heading', { name: 'Liked' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'My mashups' })).toBeInTheDocument()
+    expect(await screen.findByText('Liked Bootleg')).toBeInTheDocument()
     expect(await screen.findByText('My Only Mix')).toBeInTheDocument()
   })
 
-  it('shows an empty state when there are no mashups', async () => {
-    listMashups.mockResolvedValue([])
+  it('hides the upload button and personal sections for anonymous visitors', async () => {
     renderPage()
-    expect(await screen.findByText('No mashups found.')).toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Latest' })
+    expect(screen.queryByRole('button', { name: 'Upload' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Liked' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'My mashups' })).not.toBeInTheDocument()
+  })
+
+  it('collapses to a search result grid while a query is active', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Latest' })
+
+    fireEvent.change(screen.getByLabelText('Search mashups'), { target: { value: 'beta' } })
+
+    await waitFor(() => expect(listMashups).toHaveBeenCalledWith('beta', 'recent', 50))
+    expect(await screen.findByRole('heading', { name: 'Search results' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Latest' })).not.toBeInTheDocument()
+  })
+
+  it('toggles a like optimistically and settles on the server count', async () => {
+    mockUser = { id: 'someone', username: 'me' }
+    renderPage()
+    const top = (await screen.findByRole('heading', { name: 'Top by likes' })).parentElement as HTMLElement
+    const likeBtn = within(top).getByRole('button', { name: 'Like Top Bootleg' })
+
+    fireEvent.click(likeBtn)
+
+    await waitFor(() => expect(likeMashup).toHaveBeenCalledWith('t1'))
+    await waitFor(() =>
+      expect(within(top).getByRole('button', { name: 'Unlike Top Bootleg' })).toBeInTheDocument(),
+    )
+  })
+
+  it('asks anonymous visitors to sign in before liking', async () => {
+    renderPage()
+    const top = (await screen.findByRole('heading', { name: 'Top by likes' })).parentElement as HTMLElement
+    fireEvent.click(within(top).getByRole('button', { name: 'Like Top Bootleg' }))
+    expect(showToast).toHaveBeenCalledWith('Sign in to like mashups', 'error')
+    expect(likeMashup).not.toHaveBeenCalled()
   })
 })
