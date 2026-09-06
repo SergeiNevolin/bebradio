@@ -31,6 +31,14 @@ class ProbeResult:
     artist: str
 
 
+def _ffmpeg_error(prefix: str, proc: subprocess.CompletedProcess) -> str:
+    """Append the last few lines of ffmpeg's stderr so the failure is legible
+    in logs and on the mashup card."""
+    tail = [line.strip() for line in (proc.stderr or "").strip().splitlines() if line.strip()]
+    detail = " | ".join(tail[-3:])
+    return f"{prefix}: {detail}" if detail else prefix
+
+
 class MashupStorage:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -120,22 +128,24 @@ class MashupStorage:
         """Transcode to m4a/AAC 192k with EBU R128 loudness normalisation.
 
         Writes to a temp file next to the target and atomically renames it in.
+        The output muxer is forced with ``-f ipod`` because the ``.tmp`` suffix
+        gives ffmpeg no extension to guess an m4a container from.
         """
         tmp = self.settings.mashup_dir / f"{media_id}.m4a.tmp"
         proc = subprocess.run(
             [
-                "ffmpeg", "-y", "-i", str(src),
-                "-vn", "-map", "a:0",
+                "ffmpeg", "-nostdin", "-y", "-i", str(src),
+                "-vn", "-map", "0:a:0",
                 "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
-                "-movflags", "+faststart",
                 "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-                str(tmp),
+                "-movflags", "+faststart",
+                "-f", "ipod", str(tmp),
             ],
             capture_output=True, text=True,
         )
         if proc.returncode != 0 or not tmp.is_file() or tmp.stat().st_size == 0:
             tmp.unlink(missing_ok=True)
-            raise MashupError("transcoding failed")
+            raise MashupError(_ffmpeg_error("transcoding failed", proc))
         tmp.rename(self.path(media_id))
 
     def extract_cover(self, media_id: str, src: Path) -> bool:
@@ -143,9 +153,9 @@ class MashupStorage:
         out = self.cover_path(media_id)
         proc = subprocess.run(
             [
-                "ffmpeg", "-y", "-i", str(src),
+                "ffmpeg", "-nostdin", "-y", "-i", str(src),
                 "-an", "-map", "0:v?", "-c:v", "mjpeg", "-frames:v", "1",
-                str(out),
+                "-f", "mjpeg", str(out),
             ],
             capture_output=True, text=True,
         )
