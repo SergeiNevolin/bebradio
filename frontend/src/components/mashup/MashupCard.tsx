@@ -1,4 +1,3 @@
-import { useRef } from 'react'
 import type { Mashup } from '../../types'
 import { formatTime } from '../../lib/format'
 import styles from './MashupCard.module.css'
@@ -7,40 +6,44 @@ interface MashupCardProps {
   mashup: Mashup
   active: boolean
   isPlaying: boolean
-  canDelete: boolean
-  canManageCover: boolean
+  canEdit: boolean
   onPlay: () => void
-  onDelete: () => void
   onToggleLike: () => void
-  onChangeCover: (file: File) => void
+  onEdit: () => void
 }
 
 export default function MashupCard({
   mashup,
   active,
   isPlaying,
-  canDelete,
-  canManageCover,
+  canEdit,
   onPlay,
-  onDelete,
   onToggleLike,
-  onChangeCover,
+  onEdit,
 }: MashupCardProps) {
   const ready = mashup.status === 'ready'
-  const coverInputRef = useRef<HTMLInputElement>(null)
-
-  const pickCover = (file: File | null) => {
-    if (file) onChangeCover(file)
-  }
+  const playing = active && isPlaying
 
   return (
-    <div className={`${styles.card} ${active ? styles.cardActive : ''}`}>
+    <div
+      className={`${styles.card} ${active ? styles.cardActive : ''} ${ready ? styles.cardReady : ''}`}
+      onClick={ready ? onPlay : undefined}
+    >
       <button
         type="button"
         className={styles.art}
-        onClick={onPlay}
+        onClick={(e) => {
+          e.stopPropagation()
+          onPlay()
+        }}
         disabled={!ready}
-        aria-label={ready ? `Play ${mashup.title}` : `${mashup.title} is not ready`}
+        aria-label={
+          !ready
+            ? `${mashup.title} is not ready`
+            : playing
+              ? `Pause ${mashup.title}`
+              : `Play ${mashup.title}`
+        }
       >
         {mashup.cover_url ? (
           <img className={styles.cover} src={mashup.cover_url} alt="" />
@@ -48,7 +51,7 @@ export default function MashupCard({
           <span className={styles.coverFallback} aria-hidden="true">♪</span>
         )}
         {ready && (
-          <span className={styles.playIcon}>{active && isPlaying ? '⏸' : '▶'}</span>
+          <span className={styles.playIcon}>{playing ? '⏸' : '▶'}</span>
         )}
         {mashup.status === 'processing' && (
           <span className={styles.badge}>processing…</span>
@@ -68,53 +71,35 @@ export default function MashupCard({
           <button
             type="button"
             className={`${styles.likeBtn} ${mashup.liked ? styles.likeBtnOn : ''}`}
-            onClick={onToggleLike}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleLike()
+            }}
             aria-pressed={!!mashup.liked}
             aria-label={mashup.liked ? `Unlike ${mashup.title}` : `Like ${mashup.title}`}
           >
-            <span aria-hidden="true">{mashup.liked ? '♥' : '♡'}</span>
+            <span className={styles.likeIcon} aria-hidden="true">{mashup.liked ? '♥' : '♡'}</span>
             <span>{mashup.likes}</span>
           </button>
           {ready && <span>{formatTime(mashup.duration)}</span>}
           {mashup.status === 'failed' && mashup.error && (
             <span className={styles.errText} title={mashup.error}>{mashup.error}</span>
           )}
+          {canEdit && (
+            <button
+              type="button"
+              className={styles.editBtn}
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit()
+              }}
+              aria-label={`Edit ${mashup.title}`}
+            >
+              Edit
+            </button>
+          )}
         </div>
       </div>
-
-      {canManageCover && (
-        <>
-          <button
-            type="button"
-            className={styles.coverBtn}
-            onClick={() => coverInputRef.current?.click()}
-            aria-label={`Change cover for ${mashup.title}`}
-          >
-            🖼
-          </button>
-          <input
-            ref={coverInputRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(e) => {
-              pickCover(e.target.files?.[0] ?? null)
-              e.target.value = ''
-            }}
-          />
-        </>
-      )}
-
-      {canDelete && (
-        <button
-          type="button"
-          className={styles.delete}
-          onClick={onDelete}
-          aria-label={`Delete ${mashup.title}`}
-        >
-          ×
-        </button>
-      )}
     </div>
   )
 }

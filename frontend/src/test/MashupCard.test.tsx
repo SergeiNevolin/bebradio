@@ -26,12 +26,10 @@ function mashup(over: Partial<Mashup> = {}): Mashup {
 const noop = {
   active: false,
   isPlaying: false,
-  canDelete: false,
-  canManageCover: false,
+  canEdit: false,
   onPlay: vi.fn(),
-  onDelete: vi.fn(),
   onToggleLike: vi.fn(),
-  onChangeCover: vi.fn(),
+  onEdit: vi.fn(),
 }
 
 describe('MashupCard', () => {
@@ -52,15 +50,27 @@ describe('MashupCard', () => {
     expect(onToggleLike).toHaveBeenCalled()
   })
 
-  it('offers a cover control only to the owner and passes the chosen file up', () => {
-    const onChangeCover = vi.fn()
-    const { rerender } = render(<MashupCard mashup={mashup()} {...noop} onChangeCover={onChangeCover} />)
-    expect(screen.queryByRole('button', { name: 'Change cover for Alpha Bootleg' })).not.toBeInTheDocument()
+  it('plays from the artwork and from a click anywhere on the card', () => {
+    const onPlay = vi.fn()
+    render(<MashupCard mashup={mashup()} {...noop} onPlay={onPlay} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Play Alpha Bootleg' }))
+    expect(onPlay).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByText('Alpha Bootleg'))
+    expect(onPlay).toHaveBeenCalledTimes(2)
+  })
 
-    rerender(<MashupCard mashup={mashup()} {...noop} canManageCover onChangeCover={onChangeCover} />)
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement
-    const file = new File(['img'], 'cover.png', { type: 'image/png' })
-    fireEvent.change(input, { target: { files: [file] } })
-    expect(onChangeCover).toHaveBeenCalledWith(file)
+  it('shows a pause affordance on the active, playing card', () => {
+    render(<MashupCard mashup={mashup()} {...noop} active isPlaying />)
+    expect(screen.getByRole('button', { name: 'Pause Alpha Bootleg' })).toBeInTheDocument()
+  })
+
+  it('offers an Edit button only to the owner and passes the intent up', () => {
+    const onEdit = vi.fn()
+    const { rerender } = render(<MashupCard mashup={mashup()} {...noop} onEdit={onEdit} />)
+    expect(screen.queryByRole('button', { name: 'Edit Alpha Bootleg' })).not.toBeInTheDocument()
+
+    rerender(<MashupCard mashup={mashup()} {...noop} canEdit onEdit={onEdit} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Alpha Bootleg' }))
+    expect(onEdit).toHaveBeenCalled()
   })
 })
