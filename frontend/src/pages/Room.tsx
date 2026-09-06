@@ -203,6 +203,7 @@ export default function Room() {
             messages={chatMessages}
             onSend={handleSendChat}
             currentUserId={user?.id || ''}
+            onSelectUser={setProfileUserId}
           />
           <ReactionBar onReact={handleReact} />
         </div>

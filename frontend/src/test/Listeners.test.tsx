@@ -19,10 +19,10 @@ describe('Listeners', () => {
   })
 
   it('sorts registered listeners alphabetically, case-insensitively', () => {
-    render(<Listeners listeners={registered} ownerId="" onSelectUser={() => {}} />)
-    const names = screen.getAllByRole('button')
-      .map((b) => b.textContent)
-      .filter((t) => ['alice', 'Bob', 'Charlie'].includes(t ?? ''))
+    const { container } = render(
+      <Listeners listeners={registered} ownerId="" onSelectUser={() => {}} />,
+    )
+    const names = Array.from(container.querySelectorAll('.name')).map((el) => el.textContent)
     expect(names).toEqual(['alice', 'Bob', 'Charlie'])
   })
 

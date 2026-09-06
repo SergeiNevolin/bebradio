@@ -91,7 +91,9 @@
 
 .roomContent {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) max-content;
+  /* Fixed last track so expanding/collapsing the Listeners panel never
+     reflows the main column or the chat. */
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 220px;
   grid-template-rows: minmax(0, 1fr);
   gap: 32px;
   flex: 1;

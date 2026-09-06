@@ -41,10 +41,51 @@
   align-items: flex-end;
 }
 
+.chatRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.chatMessageOwn .chatRow {
+  flex-direction: row-reverse;
+}
+
+.chatAvatarBtn {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.chatBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chatMessageOwn .chatBody {
+  align-items: flex-end;
+}
+
 .chatUsername {
   font-size: 12px;
   font-weight: 600;
   color: var(--primary);
+}
+
+button.chatUsername {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 
 .chatMessageOwn .chatUsername {
@@ -57,7 +98,7 @@
   background: var(--bg);
   padding: 8px 14px;
   border-radius: 12px;
-  max-width: 80%;
+  max-width: 100%;
   word-break: break-word;
 }
 

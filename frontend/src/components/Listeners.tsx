@@ -1,5 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import styles from './Listeners.module.css'
+import Avatar from './Avatar'
+import { useUserAvatars } from '../hooks/useUserAvatars'
 
 interface Listener {
   id: string
@@ -44,6 +46,7 @@ function Listeners({ listeners, ownerId, onSelectUser }: ListenersProps) {
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
   const guestCount = listeners.length - registered.length
   const total = listeners.length
+  const avatars = useUserAvatars(registered.map((l) => l.id))
 
   return (
     <aside className={styles.panel} data-collapsed={collapsed}>
@@ -66,6 +69,7 @@ function Listeners({ listeners, ownerId, onSelectUser }: ListenersProps) {
               {registered.map((l) => (
                 <li key={l.id}>
                   <button className={styles.row} onClick={() => onSelectUser(l.id)}>
+                    <Avatar name={l.name} src={avatars[l.id]} size={24} />
                     <span className={styles.name}>{l.name}</span>
                     {l.id === ownerId && (
                       <span className={styles.crown} title="Room creator">👑</span>

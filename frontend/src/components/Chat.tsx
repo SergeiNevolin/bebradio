@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, memo } from 'react'
-import { Link } from 'react-router-dom'
 import styles from './Chat.module.css'
+import Avatar from './Avatar'
+import { useUserAvatars } from '../hooks/useUserAvatars'
 
 export interface ChatMessage {
   id: string
@@ -14,12 +15,16 @@ interface ChatProps {
   messages: ChatMessage[]
   onSend: (text: string) => void
   currentUserId?: string
+  // Opens the user's profile in a modal (provided by the room page). When
+  // omitted, usernames render as plain text.
+  onSelectUser?: (userId: string) => void
 }
 
-function Chat({ messages, onSend, currentUserId }: ChatProps) {
+function Chat({ messages, onSend, currentUserId, onSelectUser }: ChatProps) {
   const [text, setText] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevLen = useRef(messages.length)
+  const avatars = useUserAvatars(messages.map((m) => m.user_id))
 
   useEffect(() => {
     // Only auto-scroll when a *new* message arrives, not on initial load.
@@ -44,21 +49,46 @@ function Chat({ messages, onSend, currentUserId }: ChatProps) {
         {messages.length === 0 && (
           <div className={styles.chatEmpty}>No messages yet</div>
         )}
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`${styles.chatMessage} ${msg.user_id === currentUserId ? styles.chatMessageOwn : ''}`}
-          >
-            {msg.user_id ? (
-              <Link to={`/user/${msg.user_id}`} className={`${styles.chatUsername} profile-link`}>
-                {msg.username}
-              </Link>
-            ) : (
-              <span className={styles.chatUsername}>{msg.username}</span>
-            )}
-            <span className={styles.chatText}>{msg.text}</span>
-          </div>
-        ))}
+        {messages.map((msg) => {
+          const own = msg.user_id === currentUserId
+          const clickable = !!msg.user_id && !!onSelectUser
+          const avatar = <Avatar name={msg.username} src={avatars[msg.user_id]} size={28} />
+          return (
+            <div
+              key={msg.id}
+              className={`${styles.chatMessage} ${own ? styles.chatMessageOwn : ''}`}
+            >
+              <div className={styles.chatRow}>
+                {clickable ? (
+                  <button
+                    type="button"
+                    className={styles.chatAvatarBtn}
+                    onClick={() => onSelectUser!(msg.user_id)}
+                    aria-label={`Open ${msg.username}'s profile`}
+                  >
+                    {avatar}
+                  </button>
+                ) : (
+                  avatar
+                )}
+                <div className={styles.chatBody}>
+                  {clickable ? (
+                    <button
+                      type="button"
+                      className={`${styles.chatUsername} profile-link`}
+                      onClick={() => onSelectUser!(msg.user_id)}
+                    >
+                      {msg.username}
+                    </button>
+                  ) : (
+                    <span className={styles.chatUsername}>{msg.username}</span>
+                  )}
+                  <span className={styles.chatText}>{msg.text}</span>
+                </div>
+              </div>
+            </div>
+          )
+        })}
         <div ref={bottomRef} />
       </div>
       <form className={styles.chatInput} onSubmit={handleSubmit}>

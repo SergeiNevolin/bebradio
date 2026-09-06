@@ -80,7 +80,22 @@ describe('Chat', () => {
     expect(screen.getByText('Send')).not.toBeDisabled()
   })
 
-  it('links username to user profile', () => {
+  it('opens the profile modal when a username is clicked', () => {
+    const onSelectUser = vi.fn()
+    render(
+      <MemoryRouter>
+        <Chat
+          messages={[{ id: '1', user_id: 'u1', username: 'Alice', text: 'hi', created_at: 1 }]}
+          onSend={vi.fn()}
+          onSelectUser={onSelectUser}
+        />
+      </MemoryRouter>
+    )
+    fireEvent.click(screen.getByText('Alice'))
+    expect(onSelectUser).toHaveBeenCalledWith('u1')
+  })
+
+  it('renders usernames as plain text when onSelectUser is not provided', () => {
     render(
       <MemoryRouter>
         <Chat
@@ -89,7 +104,7 @@ describe('Chat', () => {
         />
       </MemoryRouter>
     )
-    expect(screen.getByText('Alice')).toHaveAttribute('href', '/user/u1')
+    expect(screen.getByText('Alice').tagName).toBe('SPAN')
   })
 
   it('renders Chat header', () => {
