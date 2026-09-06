@@ -4,10 +4,10 @@ import { useToast } from '../context/ToastContext'
 import { api } from '../lib/api'
 import type { Mashup } from '../types'
 import { useMashupPlayer } from '../hooks/useMashupPlayer'
-import ScrollRow from '../components/ScrollRow'
 import MashupCard from '../components/mashup/MashupCard'
 import MashupPlayer from '../components/mashup/MashupPlayer'
 import UploadMashupModal from '../components/mashup/UploadMashupModal'
+import EditMashupModal from '../components/mashup/EditMashupModal'
 import styles from './Mashups.module.css'
 
 const RECENT_LIMIT = 12
@@ -23,6 +23,7 @@ export default function Mashups() {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [showUpload, setShowUpload] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [recent, setRecent] = useState<Mashup[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
@@ -168,15 +169,20 @@ export default function Mashups() {
     }
   }, [debouncedQuery, showToast])
 
-  // Infinite scroll for the "Top by likes" list.
+  // Infinite scroll for the "Top by likes" column. The observer's root is that
+  // column's own scroll box, since each section now scrolls independently.
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const topScrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (debouncedQuery || topDone) return
     const el = sentinelRef.current
     if (!el) return
-    const io = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) loadTopPage(false)
-    })
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadTopPage(false)
+      },
+      { root: topScrollRef.current },
+    )
     io.observe(el)
     return () => io.disconnect()
   }, [debouncedQuery, topDone, loadTopPage, top.length])
@@ -193,6 +199,10 @@ export default function Mashups() {
   useEffect(() => {
     setList(playerList)
   }, [playerList, setList])
+
+  // The mashup open in the settings dialog, resolved live so cover changes made
+  // inside it show up without a reopen.
+  const editing = editingId ? playerList.find((m) => m.id === editingId) ?? null : null
 
   // Poll any still-processing mashups every 2s until they settle.
   const processingIds = useMemo(
@@ -288,18 +298,24 @@ export default function Mashups() {
       mashup={m}
       active={m.id === activeId}
       isPlaying={player.isPlaying}
-      canDelete={!!user && user.id === m.owner_id}
-      canManageCover={!!user && user.id === m.owner_id}
-      onPlay={() => player.play(m)}
-      onDelete={() => handleDelete(m)}
+      canEdit={!!user && user.id === m.owner_id}
+      onPlay={() => (m.id === activeId ? player.toggle() : player.play(m))}
       onToggleLike={() => handleToggleLike(m)}
-      onChangeCover={(file) => handleChangeCover(m, file)}
+      onEdit={() => setEditingId(m.id)}
     />
   )
 
   const skeletonGrid = (
     <div className={styles.grid}>
       {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className={styles.skeleton} />
+      ))}
+    </div>
+  )
+
+  const skeletonList = (
+    <div className={styles.list}>
+      {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className={styles.skeleton} />
       ))}
     </div>
@@ -328,87 +344,91 @@ export default function Mashups() {
       </div>
 
       {debouncedQuery ? (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Search results</h2>
-          {searchLoading ? (
-            skeletonGrid
-          ) : searchResults.length === 0 ? (
-            <div className={styles.empty}>
-              <p>No mashups found.</p>
-            </div>
-          ) : (
-            <div className={styles.grid}>{searchResults.map(renderCard)}</div>
-          )}
+        <section className={styles.searchColumn}>
+          <h2 className={styles.columnTitle}>Search results</h2>
+          <div className={styles.searchScroll}>
+            {searchLoading ? (
+              skeletonGrid
+            ) : searchResults.length === 0 ? (
+              <div className={styles.empty}>
+                <p>No mashups found.</p>
+              </div>
+            ) : (
+              <div className={styles.grid}>{searchResults.map(renderCard)}</div>
+            )}
+          </div>
         </section>
       ) : (
-        <>
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Latest</h2>
-            {recentLoading ? (
-              skeletonGrid
-            ) : recent.length === 0 ? (
-              <div className={styles.empty}>
-                <p>No mashups yet.</p>
-                {user && <p className={styles.emptySub}>Be the first — hit Upload.</p>}
-              </div>
-            ) : (
-              <ScrollRow>
-                {recent.map((m) => (
-                  <div key={m.id} className={styles.rowItem}>
-                    {renderCard(m)}
+        <div className={styles.board}>
+          <section className={styles.column}>
+            <h2 className={styles.columnTitle}>Latest</h2>
+            <div className={styles.columnScroll}>
+              {recentLoading ? (
+                skeletonList
+              ) : recent.length === 0 ? (
+                <div className={styles.empty}>
+                  <p>No mashups yet.</p>
+                  {user && <p className={styles.emptySub}>Be the first — hit Upload.</p>}
+                </div>
+              ) : (
+                <div className={styles.list}>{recent.map(renderCard)}</div>
+              )}
+            </div>
+          </section>
+
+          <section className={styles.column}>
+            <h2 className={styles.columnTitle}>Top by likes</h2>
+            <div className={styles.columnScroll} ref={topScrollRef}>
+              {topLoading && top.length === 0 ? (
+                skeletonList
+              ) : top.length === 0 ? (
+                <div className={styles.empty}>
+                  <p>No mashups yet.</p>
+                </div>
+              ) : (
+                <div className={styles.list}>
+                  {top.map(renderCard)}
+                  {!topDone && <div ref={sentinelRef} className={styles.sentinel} />}
+                  {topLoading && <div className={styles.loadingMore}>Loading…</div>}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {user && (
+            <section className={styles.column}>
+              <h2 className={styles.columnTitle}>Liked</h2>
+              <div className={styles.columnScroll}>
+                {likedLoading ? (
+                  skeletonList
+                ) : liked.length === 0 ? (
+                  <div className={styles.empty}>
+                    <p>You haven’t liked any mashups yet.</p>
                   </div>
-                ))}
-              </ScrollRow>
-            )}
-          </section>
-
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Top by likes</h2>
-            {topLoading && top.length === 0 ? (
-              skeletonGrid
-            ) : top.length === 0 ? (
-              <div className={styles.empty}>
-                <p>No mashups yet.</p>
+                ) : (
+                  <div className={styles.list}>{liked.map(renderCard)}</div>
+                )}
               </div>
-            ) : (
-              <>
-                <div className={styles.grid}>{top.map(renderCard)}</div>
-                {!topDone && <div ref={sentinelRef} className={styles.sentinel} />}
-                {topLoading && <div className={styles.loadingMore}>Loading…</div>}
-              </>
-            )}
-          </section>
-
-          {user && (
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Liked</h2>
-              {likedLoading ? (
-                skeletonGrid
-              ) : liked.length === 0 ? (
-                <div className={styles.empty}>
-                  <p>You haven’t liked any mashups yet.</p>
-                </div>
-              ) : (
-                <div className={styles.grid}>{liked.map(renderCard)}</div>
-              )}
             </section>
           )}
 
           {user && (
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>My mashups</h2>
-              {mineLoading ? (
-                skeletonGrid
-              ) : mine.length === 0 ? (
-                <div className={styles.empty}>
-                  <p>You have not uploaded any mashups yet.</p>
-                </div>
-              ) : (
-                <div className={styles.grid}>{mine.map(renderCard)}</div>
-              )}
+            <section className={styles.column}>
+              <h2 className={styles.columnTitle}>My mashups</h2>
+              <div className={styles.columnScroll}>
+                {mineLoading ? (
+                  skeletonList
+                ) : mine.length === 0 ? (
+                  <div className={styles.empty}>
+                    <p>You have not uploaded any mashups yet.</p>
+                  </div>
+                ) : (
+                  <div className={styles.list}>{mine.map(renderCard)}</div>
+                )}
+              </div>
             </section>
           )}
-        </>
+        </div>
       )}
 
       <MashupPlayer player={player} />
@@ -417,6 +437,17 @@ export default function Mashups() {
         <UploadMashupModal
           onClose={() => setShowUpload(false)}
           onUploaded={handleUploaded}
+        />
+      )}
+
+      {editing && (
+        <EditMashupModal
+          mashup={editing}
+          canManageCover={!!user && user.id === editing.owner_id}
+          canDelete={!!user && user.id === editing.owner_id}
+          onChangeCover={(file) => handleChangeCover(editing, file)}
+          onDelete={() => handleDelete(editing)}
+          onClose={() => setEditingId(null)}
         />
       )}
     </div>
