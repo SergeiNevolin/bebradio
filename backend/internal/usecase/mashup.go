@@ -16,9 +16,10 @@ import (
 var (
 	ErrMashupQuota      = &BusinessError{Code: 409, Message: "Upload quota reached, delete an old mashup first"}
 	ErrMashupNotFound   = &BusinessError{Code: 404, Message: "Mashup not found"}
-	ErrMashupNotOwner   = &BusinessError{Code: 403, Message: "You can only delete your own mashups"}
+	ErrMashupNotOwner   = &BusinessError{Code: 403, Message: "You can only modify your own mashups"}
 	ErrMashupUploadFail = &BusinessError{Code: 502, Message: "Media service could not accept the upload"}
 	ErrMashupMediaDown  = &BusinessError{Code: 502, Message: "Media service unavailable, mashup not deleted"}
+	ErrMashupCoverFail  = &BusinessError{Code: 502, Message: "Media service could not accept the cover"}
 )
 
 // vars, not consts, so tests can shrink them.
@@ -40,8 +41,11 @@ func NewMashupUsecase(repo repository.MashupRepository, mediaClient repository.M
 	return &MashupUsecase{repo: repo, mediaClient: mediaClient, config: cfg, log: log}
 }
 
-func (uc *MashupUsecase) List(query string, limit, offset int) ([]map[string]any, error) {
-	items, err := uc.repo.List(strings.TrimSpace(query), limit, offset)
+func (uc *MashupUsecase) List(query, sort string, limit, offset int, viewerID string) ([]map[string]any, error) {
+	if sort != "top" {
+		sort = "recent"
+	}
+	items, err := uc.repo.List(strings.TrimSpace(query), sort, limit, offset, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -56,12 +60,60 @@ func (uc *MashupUsecase) ListMine(ownerID string) ([]map[string]any, error) {
 	return toDicts(items), nil
 }
 
-func (uc *MashupUsecase) Get(mashupID string) (*entity.Mashup, error) {
-	m, err := uc.repo.FindByID(mashupID)
+func (uc *MashupUsecase) ListLiked(userID string, limit, offset int) ([]map[string]any, error) {
+	items, err := uc.repo.ListLikedByUser(userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return toDicts(items), nil
+}
+
+func (uc *MashupUsecase) Get(mashupID, viewerID string) (*entity.Mashup, error) {
+	m, err := uc.repo.Detail(mashupID, viewerID)
 	if err != nil {
 		return nil, ErrMashupNotFound
 	}
 	return m, nil
+}
+
+// Like / Unlike are idempotent; they return {"likes": n, "liked": bool}.
+func (uc *MashupUsecase) Like(mashupID, userID string) (map[string]any, error) {
+	if _, err := uc.repo.FindByID(mashupID); err != nil {
+		return nil, ErrMashupNotFound
+	}
+	n, err := uc.repo.Like(mashupID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"likes": n, "liked": true}, nil
+}
+
+func (uc *MashupUsecase) Unlike(mashupID, userID string) (map[string]any, error) {
+	if _, err := uc.repo.FindByID(mashupID); err != nil {
+		return nil, ErrMashupNotFound
+	}
+	n, err := uc.repo.Unlike(mashupID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"likes": n, "liked": false}, nil
+}
+
+// SetCover streams a cover image through media-service (owner only) and flips
+// has_cover / cover_updated_at on the row.
+func (uc *MashupUsecase) SetCover(mashupID, userID, filename string, body io.Reader) error {
+	m, err := uc.repo.FindByID(mashupID)
+	if err != nil {
+		return ErrMashupNotFound
+	}
+	if m.OwnerID != userID {
+		return ErrMashupNotOwner
+	}
+	if err := uc.mediaClient.UploadMashupCover(m.MediaID, filename, body); err != nil {
+		uc.log.Error("mashup cover upload to media service failed", "mashup_id", mashupID, "error", err)
+		return ErrMashupCoverFail
+	}
+	return uc.repo.SetCoverUploaded(mashupID)
 }
 
 // Create enforces the per-user quota, inserts a processing row, streams the file

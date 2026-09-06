@@ -110,6 +110,94 @@ def test_probe_reads_tags(settings, monkeypatch):
     assert result.artist == "DJ"
 
 
+@pytest.mark.asyncio
+async def test_save_cover_upload_aborts_on_oversize(settings):
+    from mashups import MashupError, MashupStorage
+
+    storage = MashupStorage(settings)
+    upload = _FakeUpload(b"x" * (settings.mashup_cover_max_size + 10))
+
+    with pytest.raises(MashupError):
+        await storage.save_cover_upload("big", upload)
+
+    assert not storage.cover_part_path("big").exists()
+
+
+@pytest.mark.asyncio
+async def test_save_cover_upload_rejects_empty(settings):
+    from mashups import MashupError, MashupStorage
+
+    storage = MashupStorage(settings)
+    with pytest.raises(MashupError):
+        await storage.save_cover_upload("empty", _FakeUpload(b""))
+
+
+def test_process_cover_raises_when_ffmpeg_fails(settings, monkeypatch):
+    from mashups import MashupError, MashupStorage
+
+    monkeypatch.setattr("mashups.subprocess.run", lambda *a, **k: _Completed(returncode=1, stderr="not an image"))
+    storage = MashupStorage(settings)
+    storage.init()
+    src = settings.mashup_dir / "x.cover.part"
+    src.write_bytes(b"junk")
+
+    with pytest.raises(MashupError) as excinfo:
+        storage.process_cover("x", src)
+    assert "not an image" in str(excinfo.value)
+    assert not storage.cover_path("x").exists()
+    assert not src.exists()  # the part file is always cleaned up
+
+
+def test_process_cover_writes_jpg(settings, monkeypatch):
+    from mashups import MashupStorage
+
+    def fake_run(cmd, *a, **k):
+        open(cmd[-1], "wb").write(b"\xff\xd8jpegdata")
+        return _Completed(returncode=0)
+
+    monkeypatch.setattr("mashups.subprocess.run", fake_run)
+    storage = MashupStorage(settings)
+    storage.init()
+    src = settings.mashup_dir / "x.cover.part"
+    src.write_bytes(b"png-bytes")
+
+    storage.process_cover("x", src)
+
+    assert storage.cover_path("x").read_bytes() == b"\xff\xd8jpegdata"
+    assert not src.exists()
+
+
+@pytest.mark.asyncio
+async def test_job_keeps_a_user_supplied_cover(settings, monkeypatch):
+    """A cover uploaded while the transcode runs must not be replaced by
+    whatever art is embedded in the source file."""
+    from mashups import MashupJobs, MashupStorage, ProbeResult
+
+    storage = MashupStorage(settings)
+    storage.init()
+    storage.cover_path("mid").write_bytes(b"user-cover")
+
+    monkeypatch.setattr(storage, "probe", lambda src: ProbeResult(duration=5.0, title="", artist=""))
+    monkeypatch.setattr(storage, "transcode", lambda mid, src: storage.path(mid).write_bytes(b"m4a"))
+    extract_called = False
+
+    def _extract(mid, src):
+        nonlocal extract_called
+        extract_called = True
+        return True
+
+    monkeypatch.setattr(storage, "extract_cover", _extract)
+
+    jobs = MashupJobs(storage, settings)
+    src = storage.part_path("mid")
+    src.write_bytes(b"src")
+    await jobs._run("mid", src)
+
+    assert not extract_called
+    assert storage.cover_path("mid").read_bytes() == b"user-cover"
+    assert jobs.status("mid").has_cover is True
+
+
 def test_transcode_raises_when_ffmpeg_fails(settings, monkeypatch):
     from mashups import MashupError, MashupStorage
 
@@ -230,6 +318,25 @@ async def test_mashup_media_endpoint_supports_range(mashup_app):
     assert ranged.content == b"2345"
     assert ranged.headers["content-range"] == "bytes 2-5/10"
     assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_upload_cover_endpoint(mashup_app, monkeypatch):
+    app, service = mashup_app
+
+    def fake_run(cmd, *a, **k):
+        open(cmd[-1], "wb").write(b"\xff\xd8jpeg")
+        return _Completed(returncode=0)
+
+    monkeypatch.setattr("mashups.subprocess.run", fake_run)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.put("/v1/mashups/song/cover", files={"file": ("art.png", b"png-bytes")})
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "has_cover": True}
+    assert service.mashups.cover_path("song").is_file()
+    assert not service.mashups.cover_part_path("song").exists()
 
 
 @pytest.mark.asyncio

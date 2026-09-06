@@ -12,6 +12,7 @@ interface UploadMashupModalProps {
 export default function UploadMashupModal({ onClose, onUploaded }: UploadMashupModalProps) {
   const { showToast } = useToast()
   const [file, setFile] = useState<File | null>(null)
+  const [cover, setCover] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [artist, setArtist] = useState('')
   const [progress, setProgress] = useState<number | null>(null)
@@ -37,7 +38,7 @@ export default function UploadMashupModal({ onClose, onUploaded }: UploadMashupM
     setError('')
     try {
       const mashup = await api.uploadMashup(
-        { file, title: title.trim(), artist: artist.trim() },
+        { file, title: title.trim(), artist: artist.trim(), cover },
         (pct) => setProgress(pct),
       )
       showToast('Upload received, processing…', 'success')
@@ -89,6 +90,16 @@ export default function UploadMashupModal({ onClose, onUploaded }: UploadMashupM
             value={artist}
             disabled={busy}
             onChange={(e) => setArtist(e.target.value)}
+            style={{ width: '100%', marginTop: 6, marginBottom: 14 }}
+          />
+
+          <label className="toggle-label" htmlFor="mashup-cover">Cover (optional)</label>
+          <input
+            id="mashup-cover"
+            type="file"
+            accept="image/*"
+            disabled={busy}
+            onChange={(e) => setCover(e.target.files?.[0] ?? null)}
             style={{ width: '100%', marginTop: 6 }}
           />
 

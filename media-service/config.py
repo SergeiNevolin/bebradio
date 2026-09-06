@@ -16,6 +16,7 @@ class Settings:
     mashup_max_duration: int = 900
     mashup_total_limit: int = 20 * 1024 * 1024 * 1024
     mashup_max_jobs: int = 2
+    mashup_cover_max_size: int = 5 * 1024 * 1024
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -30,4 +31,5 @@ class Settings:
             mashup_max_duration=int(os.getenv("MASHUP_MAX_DURATION", "900")),
             mashup_total_limit=int(os.getenv("MASHUP_TOTAL_LIMIT", str(20 * 1024 * 1024 * 1024))),
             mashup_max_jobs=int(os.getenv("MASHUP_MAX_JOBS", "2")),
+            mashup_cover_max_size=int(os.getenv("MASHUP_COVER_MAX_SIZE", str(5 * 1024 * 1024))),
         )

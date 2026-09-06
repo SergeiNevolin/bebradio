@@ -144,6 +144,17 @@ def create_app(service: MediaService) -> FastAPI:
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
+    @router.put("/mashups/{media_id}/cover")
+    async def upload_mashup_cover(media_id: str, file: UploadFile = File(...)):
+        if not service.mashups.valid_id(media_id):
+            raise HTTPException(status_code=400, detail="Invalid media ID")
+        try:
+            part = await service.mashups.save_cover_upload(media_id, file)
+            await asyncio.to_thread(service.mashups.process_cover, media_id, part)
+        except MashupError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return {"ok": True, "has_cover": True}
+
     @router.get("/mashups/{media_id}")
     async def mashup_media(media_id: str, request: Request):
         if not service.mashups.valid_id(media_id):

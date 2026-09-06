@@ -61,9 +61,10 @@ func setupTestServer(t *testing.T) *testDeps {
 	cfg := &config.Config{
 		MaxDuration:     3600,
 		CORSOrigins:     []string{"http://localhost:3000"},
-		MashupUserQuota: 20,
-		MashupMaxSize:   60 * 1024 * 1024,
-		RateLimitUpload: 5,
+		MashupUserQuota:    20,
+		MashupMaxSize:      60 * 1024 * 1024,
+		MashupCoverMaxSize: 5 * 1024 * 1024,
+		RateLimitUpload:    5,
 	}
 
 	authBridge := repository.NewMockAuthBridge()

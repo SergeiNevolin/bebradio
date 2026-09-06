@@ -163,9 +163,13 @@ export const api = {
     request<{ user: UserProfile }>(`/api/users/${userId}`),
 
   // ── Mashups ─────────────────────────────────────────────────────────
-  // GET /api/mashups?q=&limit=&offset= → []Mashup.ToDict()
-  listMashups: (q = '', limit = 30, offset = 0) => {
-    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  // GET /api/mashups?q=&sort=recent|top&limit=&offset= → []Mashup.ToDict()
+  listMashups: (q = '', sort: 'recent' | 'top' = 'recent', limit = 30, offset = 0) => {
+    const params = new URLSearchParams({
+      sort,
+      limit: String(limit),
+      offset: String(offset),
+    })
     if (q) params.set('q', q)
     return request<Mashup[]>(`/api/mashups/?${params.toString()}`)
   },
@@ -173,8 +177,34 @@ export const api = {
   // GET /api/mashups/mine → []Mashup.ToDict()  (auth)
   myMashups: () => request<Mashup[]>('/api/mashups/mine'),
 
+  // GET /api/mashups/liked?limit=&offset= → []Mashup.ToDict()  (auth)
+  likedMashups: (limit = 30, offset = 0) =>
+    request<Mashup[]>(`/api/mashups/liked?limit=${limit}&offset=${offset}`),
+
   // GET /api/mashups/:id → Mashup.ToDict()
   getMashup: (id: string) => request<Mashup>(`/api/mashups/${id}`),
+
+  // POST/DELETE /api/mashups/:id/like → { likes, liked }  (auth)
+  likeMashup: (id: string) =>
+    request<{ likes: number; liked: boolean }>(`/api/mashups/${id}/like`, { method: 'POST' }),
+  unlikeMashup: (id: string) =>
+    request<{ likes: number; liked: boolean }>(`/api/mashups/${id}/like`, { method: 'DELETE' }),
+
+  // PUT /api/mashups/:id/cover (multipart) → { ok: true }  (auth + owner)
+  uploadMashupCover: (id: string, cover: File) => {
+    const form = new FormData()
+    form.append('file', cover)
+    return fetch(`/api/mashups/${id}/cover`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: form,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new ApiError(res.status, body.error || 'Failed to upload cover')
+      }
+    })
+  },
 
   // DELETE /api/mashups/:id → { ok: true }  (auth + owner)
   deleteMashup: (id: string) =>
@@ -189,14 +219,15 @@ export const api = {
   // XHR rather than fetch so the upload exposes progress; the browser sets the
   // multipart boundary, so we must NOT force a Content-Type here.
   uploadMashup: (
-    data: { file: File; title: string; artist: string },
+    data: { file: File; title: string; artist: string; cover?: File | null },
     onProgress?: (pct: number) => void,
   ) =>
     new Promise<Mashup>((resolve, reject) => {
       const form = new FormData()
       form.append('title', data.title)
       form.append('artist', data.artist)
-      form.append('file', data.file) // file LAST: the Go handler reads title/artist before it
+      if (data.cover) form.append('cover', data.cover)
+      form.append('file', data.file) // file LAST: the Go handler reads title/artist/cover before it
       const xhr = new XMLHttpRequest()
       xhr.open('POST', '/api/mashups/')
       const headers = authHeaders()
