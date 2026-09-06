@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, type ReactNode, type WheelEvent } from 'react'
+import styles from './ScrollRow.module.css'
 
 interface ScrollRowProps {
   children: ReactNode
@@ -46,21 +47,21 @@ export default function ScrollRow({ children, className = '' }: ScrollRowProps) 
   }
 
   return (
-    <div className={`scroll-row ${className}`}>
+    <div className={`${styles.scrollRow} ${className}`}>
       {canLeft && (
-        <button className="scroll-row-btn scroll-row-btn-left" onClick={() => scroll(-1)}>
+        <button className={`${styles.scrollRowBtn} ${styles.scrollRowBtnLeft}`} onClick={() => scroll(-1)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
       )}
       <div
-        className="scroll-row-track"
+        className={styles.scrollRowTrack}
         ref={ref}
         onWheel={onWheel}
       >
         {children}
       </div>
       {canRight && (
-        <button className="scroll-row-btn scroll-row-btn-right" onClick={() => scroll(1)}>
+        <button className={`${styles.scrollRowBtn} ${styles.scrollRowBtnRight}`} onClick={() => scroll(1)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       )}

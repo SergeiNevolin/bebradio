@@ -1,16 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-interface RoomResult {
-  id: string
-  name: string
-  user_count: number
-  is_playing: boolean
-}
+import { api } from '../lib/api'
+import { type RoomListItem } from '../types'
+import styles from './SearchBar.module.css'
 
 export default function SearchBar() {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<RoomResult[]>([])
+  const [results, setResults] = useState<RoomListItem[]>([])
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
@@ -22,11 +18,10 @@ export default function SearchBar() {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch('/api/rooms')
-        const data: RoomResult[] = await res.json()
+        const rooms = await api.getRooms()
         const q = query.trim().toLowerCase()
         setResults(
-          data.filter(
+          rooms.filter(
             (r) => r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q),
           ),
         )
@@ -52,10 +47,10 @@ export default function SearchBar() {
   }
 
   return (
-    <div className="navbar-search" ref={ref}>
+    <div className={styles.navbarSearch} ref={ref}>
       <input
         type="text"
-        className="search-bar-input"
+        className={styles.searchBarInput}
         placeholder="Search rooms..."
         value={query}
         onChange={(e) => {
@@ -65,19 +60,19 @@ export default function SearchBar() {
         onFocus={() => query.trim() && setOpen(true)}
       />
       {open && results.length > 0 && (
-        <div className="search-bar-dropdown">
+        <div className={styles.searchBarDropdown}>
           {results.slice(0, 8).map((room) => (
             <div
               key={room.id}
-              className="search-bar-item"
+              className={styles.searchBarItem}
               onClick={() => handleSelect(room.id)}
             >
-              <div className="search-bar-item-name">
+              <div className={styles.searchBarItemName}>
                 {room.name}
               </div>
-              <div className="search-bar-item-meta">
-                <span className="search-bar-item-code">{room.id}</span>
-                {room.is_playing && <span className="room-list-item-playing">LIVE</span>}
+              <div className={styles.searchBarItemMeta}>
+                <span className={styles.searchBarItemCode}>{room.id}</span>
+                {room.is_playing && <span className={styles.roomListItemPlaying}>LIVE</span>}
                 <span>{room.user_count} listening</span>
               </div>
             </div>
@@ -85,8 +80,8 @@ export default function SearchBar() {
         </div>
       )}
       {open && query.trim() && results.length === 0 && (
-        <div className="search-bar-dropdown">
-          <div className="search-bar-empty">No rooms found</div>
+        <div className={styles.searchBarDropdown}>
+          <div className={styles.searchBarEmpty}>No rooms found</div>
         </div>
       )}
     </div>

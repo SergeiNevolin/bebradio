@@ -53,7 +53,7 @@ describe('AuthContext', () => {
     await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
     expect(screen.getByTestId('user').textContent).toBe('alice')
     expect(fetch).toHaveBeenCalledWith('/api/auth/me', {
-      headers: { Authorization: 'Bearer tok123' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok123' },
     })
   })
 

@@ -24,13 +24,13 @@ describe('Karaoke', () => {
   })
 
   it('shows a loading state before the request resolves', () => {
-    mockLyrics({ available: true, cues })
+    mockLyrics({ cues, auto: false })
     render(<Karaoke roomId="R1" trackId="t1" currentTime={0} />)
     expect(screen.getByText(/loading lyrics/i)).toBeInTheDocument()
   })
 
   it('renders every lyric line once loaded', async () => {
-    mockLyrics({ available: true, auto: false, cues })
+    mockLyrics({ cues, auto: false })
     render(<Karaoke roomId="R1" trackId="t1" currentTime={0} />)
     expect(await screen.findByText('first line')).toBeInTheDocument()
     expect(screen.getByText('second line')).toBeInTheDocument()
@@ -38,23 +38,25 @@ describe('Karaoke', () => {
   })
 
   it('marks the line matching the current playback time as active', async () => {
-    mockLyrics({ available: true, cues })
+    mockLyrics({ cues, auto: false })
     render(<Karaoke roomId="R1" trackId="t1" currentTime={3.5} />)
     const active = await screen.findByText('second line')
-    expect(active).toHaveClass('is-active')
-    expect(screen.getByText('first line')).toHaveClass('is-past')
-    expect(screen.getByText('third line')).not.toHaveClass('is-active')
+    expect(active).toHaveClass('karaokeLineActive')
+    expect(screen.getByText('first line')).toHaveClass('karaokeLinePast')
+    expect(screen.getByText('third line')).not.toHaveClass('karaokeLineActive')
   })
 
   it('fetches the room lyrics endpoint', async () => {
-    mockLyrics({ available: true, cues })
+    mockLyrics({ cues, auto: false })
     render(<Karaoke roomId="ROOM9" trackId="t1" currentTime={0} />)
     await screen.findByText('first line')
-    expect(fetch).toHaveBeenCalledWith('/api/rooms/ROOM9/lyrics')
+    expect(fetch).toHaveBeenCalledWith('/api/rooms/ROOM9/lyrics', {
+      headers: { 'Content-Type': 'application/json' },
+    })
   })
 
   it('shows an empty state when the track has no lyrics', async () => {
-    mockLyrics({ available: false, cues: [] })
+    mockLyrics({ cues: [], available: false, auto: false })
     render(<Karaoke roomId="R1" trackId="t1" currentTime={0} />)
     expect(await screen.findByText(/no lyrics for this track/i)).toBeInTheDocument()
   })
@@ -65,14 +67,15 @@ describe('Karaoke', () => {
     expect(await screen.findByText(/couldn.t load lyrics/i)).toBeInTheDocument()
   })
 
-  it('notes when captions are auto-generated', async () => {
-    mockLyrics({ available: true, auto: true, cues })
+  it('renders lines with no auto-generated note when not flagged', async () => {
+    mockLyrics({ cues, auto: false })
     render(<Karaoke roomId="R1" trackId="t1" currentTime={0} />)
-    expect(await screen.findByText(/auto-generated captions/i)).toBeInTheDocument()
+    expect(await screen.findByText('first line')).toBeInTheDocument()
+    expect(screen.queryByText(/auto-generated captions/i)).not.toBeInTheDocument()
   })
 
   it('re-fetches when the track changes', async () => {
-    mockLyrics({ available: true, cues })
+    mockLyrics({ cues, auto: false })
     const { rerender } = render(<Karaoke roomId="R1" trackId="t1" currentTime={0} />)
     await screen.findByText('first line')
     expect(fetch).toHaveBeenCalledTimes(1)

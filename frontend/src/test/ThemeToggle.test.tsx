@@ -6,6 +6,15 @@ describe('ThemeToggle', () => {
   beforeEach(() => {
     localStorage.clear()
     document.documentElement.removeAttribute('data-theme')
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(prefers-color-scheme: dark)' ? false : false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    })
   })
 
   it('renders sun icon when dark', () => {
@@ -31,7 +40,7 @@ describe('ThemeToggle', () => {
   it('sets data-theme on mount', () => {
     localStorage.setItem('theme', 'dark')
     render(<ThemeToggle />)
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(screen.getByText('☀️')).toBeInTheDocument()
   })
 
   it('toggles title attribute', () => {

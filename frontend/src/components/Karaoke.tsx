@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '../lib/api'
+import styles from './Karaoke.module.css'
 
 interface Cue {
   start: number
@@ -26,14 +28,13 @@ export default function Karaoke({ roomId, trackId, currentTime }: KaraokeProps) 
     let cancelled = false
     setStatus('loading')
     setCues([])
-    fetch(`/api/rooms/${roomId}/lyrics`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('request failed'))))
-      .then((data: { available?: boolean; auto?: boolean; cues?: Cue[] }) => {
+    api.getLyrics(roomId)
+      .then((data) => {
         if (cancelled) return
         const list = data.cues ?? []
         setCues(list)
-        setAuto(Boolean(data.auto))
-        setStatus(data.available && list.length ? 'ready' : 'empty')
+        setAuto(data.auto ?? false)
+        setStatus(list.length ? 'ready' : 'empty')
       })
       .catch(() => {
         if (!cancelled) setStatus('error')
@@ -71,23 +72,19 @@ export default function Karaoke({ roomId, trackId, currentTime }: KaraokeProps) 
     activeRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
   }, [activeIndex])
 
-  if (status === 'loading') return <div className="karaoke karaoke-msg">Loading lyrics…</div>
-  if (status === 'error') return <div className="karaoke karaoke-msg">Couldn’t load lyrics.</div>
-  if (status === 'empty') return <div className="karaoke karaoke-msg">No lyrics for this track.</div>
+  if (status === 'loading') return <div className={`${styles.karaoke} ${styles.karaokeMsg}`}>Loading lyrics…</div>
+  if (status === 'error') return <div className={`${styles.karaoke} ${styles.karaokeMsg}`}>Couldn't load lyrics.</div>
+  if (status === 'empty') return <div className={`${styles.karaoke} ${styles.karaokeMsg}`}>No lyrics for this track.</div>
 
   return (
-    <div className="karaoke">
-      {auto && <div className="karaoke-note">Auto-generated captions — timing may drift</div>}
-      <ul className="karaoke-lines">
+    <div className={styles.karaoke}>
+      {auto && <div className={styles.karaokeNote}>Auto-generated captions — timing may drift</div>}
+      <ul className={styles.karaokeLines}>
         {cues.map((c, i) => (
           <li
             key={`${i}-${c.start}`}
             ref={i === activeIndex ? activeRef : null}
-            className={
-              'karaoke-line' +
-              (i === activeIndex ? ' is-active' : '') +
-              (i < activeIndex ? ' is-past' : '')
-            }
+            className={`${styles.karaokeLine}${i === activeIndex ? ` ${styles.karaokeLineActive}` : ''}${i < activeIndex ? ` ${styles.karaokeLinePast}` : ''}`}
           >
             {c.text}
           </li>

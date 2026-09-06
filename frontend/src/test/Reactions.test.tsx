@@ -23,7 +23,7 @@ describe('ReactionsOverlay', () => {
 
   it('renders nothing when empty', () => {
     const { container } = render(<ReactionsOverlay items={[]} />)
-    expect(container.querySelectorAll('.floating-reaction')).toHaveLength(0)
+    expect(container.querySelectorAll('.floatingReaction')).toHaveLength(0)
   })
 
   it('renders each floating reaction with its emoji and username', () => {
@@ -35,13 +35,13 @@ describe('ReactionsOverlay', () => {
 
   it('positions a reaction horizontally from its left value', () => {
     const { container } = render(<ReactionsOverlay items={[item({ left: 63 })]} />)
-    expect(container.querySelector('.floating-reaction')).toHaveStyle({ left: '63%' })
+    expect(container.querySelector('.floatingReaction')).toHaveStyle({ left: '63%' })
   })
 
   it('renders no reactions when items is empty', () => {
     const { container } = render(<ReactionsOverlay items={[]} />)
-    expect(container.querySelector('.reactions-overlay')).toBeInTheDocument()
-    expect(container.querySelectorAll('.floating-reaction')).toHaveLength(0)
+    expect(container.querySelector('.reactionsOverlay')).toBeInTheDocument()
+    expect(container.querySelectorAll('.floatingReaction')).toHaveLength(0)
   })
 })
 

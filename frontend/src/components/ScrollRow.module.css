@@ -1,0 +1,59 @@
+.scrollRow {
+  position: relative;
+  width: 100%;
+}
+
+.scrollRowTrack {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  padding: 4px 0 8px;
+}
+
+.scrollRowTrack::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollRowBtn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.scrollRow:hover .scrollRowBtn {
+  opacity: 1;
+}
+
+.scrollRowBtn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.scrollRowBtnLeft {
+  left: -6px;
+}
+
+.scrollRowBtnRight {
+  right: -6px;
+}
+
+@media (max-width: 640px) {
+  .scrollRowBtn {
+    display: none;
+  }
+}

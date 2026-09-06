@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import type { Track } from '../types'
+import styles from './Queue.module.css'
 
 interface QueueProps {
   queue: Track[]
@@ -11,12 +12,12 @@ interface QueueProps {
 function Queue({ queue, currentIndex, searching = false }: QueueProps) {
   if (!queue.length) {
     return (
-      <div className="queue">
+      <div className={styles.queue}>
         <h3>Queue</h3>
-        <div className="queue-empty">
+        <div className={styles.queueEmpty}>
           {searching ? (
-            <span className="queue-searching">
-              <span className="radio-spinner" aria-hidden="true" />
+            <span className={styles.queueSearching}>
+              <span className={styles.radioSpinner} aria-hidden="true" />
               Radio is finding tracks…
             </span>
           ) : (
@@ -28,28 +29,28 @@ function Queue({ queue, currentIndex, searching = false }: QueueProps) {
   }
 
   return (
-    <div className="queue">
+    <div className={styles.queue}>
       <h3>Queue ({queue.length})</h3>
-      <div className="queue-list">
+      <div className={styles.queueList}>
         {queue.map((track, i) => (
           <div
             key={track.id}
-            className={`queue-item ${i === currentIndex ? 'active' : ''}`}
+            className={`${styles.queueItem} ${i === currentIndex ? styles.queueItemActive : ''}`}
           >
-            <span className="queue-item-num">{i + 1}</span>
+            <span className={styles.queueItemNum}>{i + 1}</span>
             {track.thumbnail && (
-              <img className="queue-item-thumb" src={track.thumbnail} alt="" />
+              <img className={styles.queueItemThumb} src={track.thumbnail} alt="" />
             )}
-            <div className="queue-item-info">
-              <div className="title">{track.title}</div>
-              <div className="artist">{track.artist}</div>
+            <div className={styles.queueItemInfo}>
+              <div className={styles.title}>{track.title}</div>
+              <div className={styles.artist}>{track.artist}</div>
             </div>
           </div>
         ))}
       </div>
       {searching && (
-        <div className="queue-searching queue-searching-foot">
-          <span className="radio-spinner" aria-hidden="true" />
+        <div className={`${styles.queueSearching} ${styles.queueSearchingFoot}`}>
+          <span className={styles.radioSpinner} aria-hidden="true" />
           Radio is finding more tracks…
         </div>
       )}

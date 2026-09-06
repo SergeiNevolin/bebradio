@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ACCENT_PRESETS, DEFAULT_ACCENT, applyAccent, getStoredAccent } from '../lib/theme'
+import styles from './AccentPicker.module.css'
 
 export default function AccentPicker() {
   const [open, setOpen] = useState(false)
@@ -27,22 +28,22 @@ export default function AccentPicker() {
   }, [open])
 
   return (
-    <div className="accent-picker" ref={ref}>
+    <div className={styles.accentPicker} ref={ref}>
       <button
         type="button"
-        className="accent-swatch"
+        className={styles.accentSwatch}
         onClick={() => setOpen((o) => !o)}
         title="Accent color"
         aria-label="Accent color"
       />
       {open && (
-        <div className="accent-pop" role="menu">
-          <div className="accent-grid">
+        <div className={styles.accentPop} role="menu">
+          <div className={styles.accentGrid}>
             {ACCENT_PRESETS.map((preset) => (
               <button
                 key={preset.name}
                 type="button"
-                className={`accent-dot${accent === preset.value ? ' is-active' : ''}`}
+                className={`${styles.accentDot}${accent === preset.value ? ` ${styles.accentDotActive}` : ''}`}
                 style={{ background: preset.value || DEFAULT_ACCENT }}
                 title={preset.name}
                 aria-label={preset.name}
@@ -53,14 +54,6 @@ export default function AccentPicker() {
               />
             ))}
           </div>
-          <label className="accent-custom">
-            <span>Свой цвет</span>
-            <input
-              type="color"
-              value={accent || DEFAULT_ACCENT}
-              onChange={(e) => setAccent(e.target.value)}
-            />
-          </label>
         </div>
       )}
     </div>

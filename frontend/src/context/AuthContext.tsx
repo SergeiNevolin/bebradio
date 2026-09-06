@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { api, setAuthToken } from '../lib/api'
 
 interface User {
   id: string
-  email: string
+  email?: string
   username: string
 }
 
@@ -23,19 +24,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
   const [loading, setLoading] = useState(true)
 
-  const fetchUser = useCallback(async (tok: string) => {
+  const fetchUser = useCallback(async (_tok: string) => {
     try {
-      const res = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${tok}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setUser(data.user)
-      } else {
-        localStorage.removeItem('token')
-        setToken(null)
-        setUser(null)
-      }
+      const data = await api.getMe()
+      setUser(data.user)
     } catch {
       localStorage.removeItem('token')
       setToken(null)
@@ -46,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (token) {
+      setAuthToken(token)
       fetchUser(token)
     } else {
       setLoading(false)
@@ -54,15 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-      const data = await res.json()
-      if (!res.ok) return { success: false, error: data.error || 'Login failed' }
+      const data = await api.login(email, password)
       localStorage.setItem('token', data.token)
       setToken(data.token)
+      setAuthToken(data.token)
       setUser(data.user)
       return { success: true }
     } catch {
@@ -72,15 +60,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(async (email: string, username: string, password: string) => {
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, username, password }),
-      })
-      const data = await res.json()
-      if (!res.ok) return { success: false, error: data.error || 'Registration failed' }
+      const data = await api.register(email, username, password)
       localStorage.setItem('token', data.token)
       setToken(data.token)
+      setAuthToken(data.token)
       setUser(data.user)
       return { success: true }
     } catch {
@@ -91,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem('token')
     setToken(null)
+    setAuthToken(null)
     setUser(null)
   }, [])
 

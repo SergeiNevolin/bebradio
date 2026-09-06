@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import ThemeToggle from '../components/ThemeToggle'
+import styles from './Home.module.css'
 
 export default function Register() {
   const { register } = useAuth()
@@ -26,12 +27,12 @@ export default function Register() {
   }
 
   return (
-    <div className="home">
+    <div className={styles.home}>
       <div style={{ position: 'absolute', top: 20, right: 20 }}>
         <ThemeToggle />
       </div>
-      <h1 className="home-title">bebradio</h1>
-      <p className="home-subtitle">Create a new account</p>
+      <h1 className={styles.homeTitle}>bebradio</h1>
+      <p className={styles.homeSubtitle}>Create a new account</p>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 400, margin: '0 auto' }}>
         <input

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import Navbar from '../components/Navbar'
@@ -38,18 +38,20 @@ describe('Navbar', () => {
     expect(screen.getByText('Register')).toHaveAttribute('href', '/register')
   })
 
-  it('shows username and Logout when logged in', () => {
+  it('shows username and Sign out when logged in', () => {
     mockUser = { id: '1', username: 'alice' }
     renderNavbar()
-    expect(screen.getByText('alice')).toHaveAttribute('href', '/user/1')
-    expect(screen.getByText('Logout')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /open user navigation/i }))
+    expect(screen.getByText('alice')).toBeInTheDocument()
+    expect(screen.getByText('Sign out')).toBeInTheDocument()
     expect(screen.queryByText('Sign In')).not.toBeInTheDocument()
   })
 
-  it('calls logout on Logout click', () => {
+  it('calls logout on Sign out click', () => {
     mockUser = { id: '1', username: 'alice' }
     renderNavbar()
-    screen.getByText('Logout').click()
+    fireEvent.click(screen.getByRole('button', { name: /open user navigation/i }))
+    fireEvent.click(screen.getByText('Sign out'))
     expect(mockLogout).toHaveBeenCalled()
   })
 })

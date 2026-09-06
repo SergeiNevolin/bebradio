@@ -1,0 +1,170 @@
+.roomPage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding-bottom: 32px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.roomHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  margin-bottom: 24px;
+}
+
+.roomHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.roomHeaderRight {
+  display: flex;
+  gap: 8px;
+}
+
+.roomTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.roomTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.roomMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.roomStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.roomDivider {
+  color: var(--border);
+}
+
+.roomCodeBtn {
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.roomCodeBtn:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.roomContent {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 32px;
+  flex: 1;
+  min-height: 0;
+}
+
+.roomMain {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.roomChat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.authBanner {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-hover) 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 24px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 1024px) {
+  .roomContent {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .roomPage {
+    overflow: visible;
+    padding-bottom: 24px;
+  }
+
+  .roomHeader {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 0;
+    margin-bottom: 16px;
+  }
+
+  .roomTitle {
+    font-size: 20px;
+  }
+
+  .roomContent {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow: visible;
+  }
+
+  .roomMain {
+    gap: 16px;
+    overflow: visible;
+  }
+
+  .roomChat {
+    height: auto;
+    overflow: visible;
+  }
+}

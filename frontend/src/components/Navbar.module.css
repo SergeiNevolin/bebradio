@@ -1,0 +1,190 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.navbarInner {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 40px;
+}
+
+.navbarBrand {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  justify-self: start;
+  padding: 8px 12px;
+  margin: -8px -12px;
+}
+
+.navbarRight {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-self: end;
+}
+
+.navbarUserMenu {
+  position: relative;
+}
+
+.navbarAvatarBtn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.navbarAvatarBtn:hover {
+  background: var(--surface);
+}
+
+.navbarAvatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.navbarAvatarSm {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+
+.navbarDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 300;
+  animation: dropdownFadeIn 0.12s ease;
+  overflow: hidden;
+}
+
+:global([data-theme='dark']) .navbarDropdown {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.navbarDropdownHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.navbarDropdownUser {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.navbarDropdownUsername {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navbarDropdownEmail {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navbarDropdownDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.navbarDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.navbarDropdownItem:hover {
+  background: var(--surface-hover);
+}
+
+.navbarDropdownItem svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.navbarDropdownItemDanger {
+  color: var(--danger);
+}
+
+.navbarDropdownItemDanger svg {
+  color: var(--danger);
+}
+
+.navbarDropdownItemDanger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.navbarDropdownItemDanger:hover svg {
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .navbarInner {
+    padding: 12px 14px;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+  }
+
+  .navbarRight {
+    gap: 8px;
+  }
+
+  .navbarDropdown {
+    position: fixed;
+    top: 56px;
+    right: 14px;
+    width: 220px;
+  }
+}

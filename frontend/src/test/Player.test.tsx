@@ -38,7 +38,7 @@ describe('Player', () => {
 
   it('renders thumbnail img with correct src', () => {
     const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
-    const img = container.querySelector('.player-thumb') as HTMLImageElement
+    const img = container.querySelector('.playerThumb') as HTMLImageElement
     expect(img).toBeInTheDocument()
     expect(img.src).toBe('https://example.com/thumb.jpg')
   })
@@ -51,13 +51,13 @@ describe('Player', () => {
   it('renders the seek bar', () => {
     const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.getByRole('meter', { name: 'Playback position' })).toBeInTheDocument()
-    expect(container.querySelector('.seek-fill')).toBeInTheDocument()
+    expect(container.querySelector('.seekFill')).toBeInTheDocument()
   })
 
   it('renders volume control', () => {
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.getByTitle('Mute')).toBeInTheDocument()
-    expect(document.querySelector('.volume-slider')).toBeInTheDocument()
+    expect(document.querySelector('.volumeSlider')).toBeInTheDocument()
   })
 
   it('does not render prev/next buttons', () => {
@@ -366,7 +366,7 @@ describe('Player karaoke toggle', () => {
     Element.prototype.scrollIntoView = vi.fn()
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ available: false, cues: [] }) }),
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ cues: [], available: false, auto: false }) }),
     )
   })
   afterEach(() => {
@@ -387,7 +387,9 @@ describe('Player karaoke toggle', () => {
     fireEvent.click(btn)
     expect(btn).toHaveAttribute('aria-pressed', 'true')
     expect(await screen.findByText(/no lyrics for this track/i)).toBeInTheDocument()
-    expect(fetch).toHaveBeenCalledWith('/api/rooms/ROOM1/lyrics')
+    expect(fetch).toHaveBeenCalledWith('/api/rooms/ROOM1/lyrics', {
+      headers: { 'Content-Type': 'application/json' },
+    })
   })
 })
 
@@ -398,7 +400,7 @@ describe('Player seeking', () => {
       <Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onSkipVote={onSkipVote} skipVoters={['x']} />
     )
     const skip = screen.getByRole('button', { name: /skip \(1\)/i })
-    expect(skip).toHaveClass('player-chip')
+    expect(skip).toHaveClass('playerChip')
     fireEvent.click(skip)
     expect(onSkipVote).toHaveBeenCalled()
   })
