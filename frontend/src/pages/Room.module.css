@@ -91,10 +91,16 @@
 
 .roomContent {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) max-content;
   grid-template-rows: minmax(0, 1fr);
   gap: 32px;
   flex: 1;
+  min-height: 0;
+}
+
+.roomListeners {
+  display: flex;
+  min-width: 0;
   min-height: 0;
 }
 

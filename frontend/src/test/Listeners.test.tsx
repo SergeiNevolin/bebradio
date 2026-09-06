@@ -1,24 +1,80 @@
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import Listeners from '../components/Listeners'
 
+const registered = [
+  { id: 'u-charlie', name: 'Charlie' },
+  { id: 'u-alice', name: 'alice' },
+  { id: 'u-bob', name: 'Bob' },
+]
+
+beforeEach(() => {
+  localStorage.clear()
+})
+
 describe('Listeners', () => {
-  it('shows the listener count', () => {
-    render(<Listeners listeners={[]} count={3} />)
-    expect(screen.getByText('3 listening')).toBeInTheDocument()
+  it('shows the total count in the header', () => {
+    render(<Listeners listeners={registered} ownerId="" onSelectUser={() => {}} />)
+    expect(screen.getByText('3')).toBeInTheDocument()
   })
 
-  it('renders a chip per listener name', () => {
-    render(<Listeners listeners={[{ id: 'a', name: 'Alice' }, { id: 'b', name: 'Bob' }]} count={2} />)
-    expect(screen.getByText('Alice')).toBeInTheDocument()
+  it('sorts registered listeners alphabetically, case-insensitively', () => {
+    render(<Listeners listeners={registered} ownerId="" onSelectUser={() => {}} />)
+    const names = screen.getAllByRole('button')
+      .map((b) => b.textContent)
+      .filter((t) => ['alice', 'Bob', 'Charlie'].includes(t ?? ''))
+    expect(names).toEqual(['alice', 'Bob', 'Charlie'])
+  })
+
+  it('marks the room creator with a crown', () => {
+    render(<Listeners listeners={registered} ownerId="u-bob" onSelectUser={() => {}} />)
+    const bobRow = screen.getByText('Bob').closest('button')!
+    expect(bobRow.textContent).toContain('👑')
+    const aliceRow = screen.getByText('alice').closest('button')!
+    expect(aliceRow.textContent).not.toContain('👑')
+  })
+
+  it('aggregates anonymous listeners into a guest count', () => {
+    const listeners = [
+      ...registered,
+      { id: 'anon:1.2.3.4:5000', name: 'Anonymous' },
+      { id: 'anon:5.6.7.8:6000', name: 'Anonymous' },
+    ]
+    render(<Listeners listeners={listeners} ownerId="" onSelectUser={() => {}} />)
+    expect(screen.getByText('+ 2 guests')).toBeInTheDocument()
+    expect(screen.queryByText('Anonymous')).not.toBeInTheDocument()
+    expect(screen.getByText('5')).toBeInTheDocument()
+  })
+
+  it('uses the singular form for a single guest', () => {
+    render(
+      <Listeners
+        listeners={[{ id: 'anon:1.2.3.4:5000', name: 'Anonymous' }]}
+        ownerId=""
+        onSelectUser={() => {}}
+      />,
+    )
+    expect(screen.getByText('+ 1 guest')).toBeInTheDocument()
+  })
+
+  it('calls onSelectUser with the user id when a listener is clicked', () => {
+    const onSelectUser = vi.fn()
+    render(<Listeners listeners={registered} ownerId="" onSelectUser={onSelectUser} />)
+    fireEvent.click(screen.getByText('Bob'))
+    expect(onSelectUser).toHaveBeenCalledWith('u-bob')
+  })
+
+  it('hides the list when collapsed and persists the choice', () => {
+    const { unmount } = render(
+      <Listeners listeners={registered} ownerId="" onSelectUser={() => {}} />,
+    )
     expect(screen.getByText('Bob')).toBeInTheDocument()
-  })
+    fireEvent.click(screen.getByRole('button', { name: /hide listeners/i }))
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument()
+    expect(localStorage.getItem('listeners-collapsed')).toBe('1')
 
-  it('collapses overflow into a +N chip', () => {
-    const listeners = Array.from({ length: 7 }, (_, i) => ({ id: `u${i}`, name: `User${i}` }))
-    render(<Listeners listeners={listeners} count={7} max={4} />)
-    expect(screen.getByText('User3')).toBeInTheDocument()
-    expect(screen.queryByText('User4')).not.toBeInTheDocument()
-    expect(screen.getByText('+3')).toBeInTheDocument()
+    unmount()
+    render(<Listeners listeners={registered} ownerId="" onSelectUser={() => {}} />)
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument()
   })
 })

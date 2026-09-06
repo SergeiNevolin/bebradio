@@ -1,4 +1,3 @@
-import Listeners from '../Listeners'
 import type { RoomState } from '../../types'
 import styles from '../../pages/Room.module.css'
 
@@ -30,10 +29,10 @@ export default function RoomHeader({
             {room?.name || 'Room'}
           </h1>
           <div className={styles.roomMeta}>
-            <Listeners
-              listeners={room?.listeners ?? []}
-              count={room?.user_count || 0}
-            />
+            <span className={styles.roomStatus}>
+              <span className={styles.statusDot} />
+              {room?.user_count || 0} listening
+            </span>
             {room?.auto_radio && (
               <>
                 <span className={styles.roomDivider}>·</span>

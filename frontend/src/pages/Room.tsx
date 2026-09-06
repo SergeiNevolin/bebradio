@@ -9,6 +9,8 @@ import Queue from '../components/Queue'
 import AddTrack from '../components/AddTrack'
 import Chat from '../components/Chat'
 import { ReactionBar, ReactionsOverlay } from '../components/Reactions'
+import Listeners from '../components/Listeners'
+import ProfileModal from '../components/ProfileModal'
 import RoomHeader from '../components/room/RoomHeader'
 import RoomPasswordGate from '../components/room/RoomPasswordGate'
 import RoomSettingsModal from '../components/room/RoomSettingsModal'
@@ -27,6 +29,7 @@ export default function Room() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [profileUserId, setProfileUserId] = useState<string | null>(null)
 
   const {
     room, setRoom, loading, setLoading, error, setError, locked, setLocked,
@@ -203,7 +206,18 @@ export default function Room() {
           />
           <ReactionBar onReact={handleReact} />
         </div>
+        <div className={styles.roomListeners}>
+          <Listeners
+            listeners={room?.listeners ?? []}
+            ownerId={room?.owner_id ?? ''}
+            onSelectUser={setProfileUserId}
+          />
+        </div>
       </div>
+
+      {profileUserId && (
+        <ProfileModal userId={profileUserId} onClose={() => setProfileUserId(null)} />
+      )}
     </div>
   )
 }
