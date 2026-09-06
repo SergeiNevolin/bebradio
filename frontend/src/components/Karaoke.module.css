@@ -1,0 +1,58 @@
+.karaoke {
+  margin-top: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--surface);
+  opacity: 0.6;
+}
+
+.karaokeMsg {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.karaokeNote {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.karaokeLines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+.karaokeLine {
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.4;
+  opacity: 0.7;
+  cursor: pointer;
+  transition: color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.karaokeLine:hover {
+  color: var(--text);
+}
+
+.karaokeLinePast {
+  opacity: 0.4;
+}
+
+.karaokeLineActive {
+  color: var(--primary);
+  opacity: 1;
+  font-weight: 700;
+  font-size: 17px;
+  transform: scale(1.02);
+}

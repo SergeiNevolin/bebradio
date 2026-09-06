@@ -1,20 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../lib/api'
 import { setRoomAccess } from '../lib/roomAccess'
+import { type RoomListItem } from '../types'
 import ScrollRow from '../components/ScrollRow'
-
-interface RoomListItem {
-  id: string
-  name: string
-  user_count: number
-  track_count: number
-  is_playing: boolean
-  has_password: boolean
-}
+import styles from './Home.module.css'
 
 export default function Home() {
-  const { authHeaders, user } = useAuth()
+  const { user } = useAuth()
   const [roomName, setRoomName] = useState('')
   const [roomPassword, setRoomPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -36,9 +30,8 @@ export default function Home() {
 
   const fetchRooms = async () => {
     try {
-      const res = await fetch('/api/rooms')
-      const data = await res.json()
-      setRooms(data)
+      const rooms = await api.getRooms()
+      setRooms(rooms)
     } catch { /* ignore */ }
     setRoomsLoading(false)
   }
@@ -46,10 +39,10 @@ export default function Home() {
   const fetchRecent = useCallback(async () => {
     if (!user) return
     try {
-      const res = await fetch('/api/rooms/recent', { headers: authHeaders() })
-      if (res.ok) setRecentRooms(await res.json())
+      const rooms = await api.getRecentRooms()
+      setRecentRooms(rooms)
     } catch { /* ignore */ }
-  }, [user, authHeaders])
+  }, [user])
 
   useEffect(() => {
     fetchRooms()
@@ -63,19 +56,7 @@ export default function Home() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/rooms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({
-          name: roomName.trim(),
-          password: roomPassword.trim() || null,
-        }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to create room')
-      }
-      const data = await res.json()
+      const data = await api.createRoom(roomName.trim(), roomPassword.trim() || undefined)
       if (data.access) setRoomAccess(data.id, data.access)
       closeCreate()
       navigate(`/room/${data.id}`)
@@ -92,10 +73,8 @@ export default function Home() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/rooms/${code}`)
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      if (data.locked) {
+      const data = await api.getRoomByCode(code)
+      if ((data as Record<string, unknown>).locked) {
         setPasswordPrompt(code)
         setPromptPassword('')
         setShowJoin(false)
@@ -116,16 +95,7 @@ export default function Home() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/rooms/${passwordPrompt}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: promptPassword }),
-      })
-      if (!res.ok) {
-        setError('Incorrect room password')
-        return
-      }
-      const data = await res.json()
+      const data = await api.joinRoom(passwordPrompt, promptPassword)
       setRoomAccess(passwordPrompt, data.access)
       setPasswordPrompt(null)
       navigate(`/room/${passwordPrompt}`)
@@ -137,25 +107,25 @@ export default function Home() {
   }
 
   const totalListeners = rooms.reduce((sum, r) => sum + r.user_count, 0)
-  const activeRooms = rooms.filter((r) => r.user_count > 0 || r.track_count > 0)
-  const idleRooms = rooms.filter((r) => r.user_count === 0 && r.track_count === 0)
+  const activeRooms = rooms.filter((r) => r.user_count > 0 || (r.track_count ?? 0) > 0)
+  const idleRooms = rooms.filter((r) => r.user_count === 0 && (r.track_count ?? 0) === 0)
 
   const renderCard = (room: RoomListItem) => (
-    <div key={room.id} className="home-card" onClick={() => handleJoin(room.id)}>
-      <div className="home-card-indicator">
-        {room.is_playing && <span className="home-card-live">LIVE</span>}
-        {room.has_password && <span className="home-card-lock">🔒</span>}
+    <div key={room.id} className={styles.homeCard} onClick={() => handleJoin(room.id)}>
+      <div className={styles.homeCardIndicator}>
+        {room.is_playing && <span className={styles.homeCardLive}>LIVE</span>}
+        {room.has_password && <span className={styles.homeCardLock}>🔒</span>}
       </div>
-      <div className="home-card-body">
-        <div className="home-card-name">{room.name}</div>
-        <div className="home-card-id">{room.id}</div>
+      <div className={styles.homeCardBody}>
+        <div className={styles.homeCardName}>{room.name}</div>
+        <div className={styles.homeCardId}>{room.id}</div>
       </div>
-      <div className="home-card-footer">
-        <span className="home-card-stat">
+      <div className={styles.homeCardFooter}>
+        <span className={styles.homeCardStat}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           {room.user_count}
         </span>
-        <span className="home-card-stat">
+        <span className={styles.homeCardStat}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           {room.track_count}
         </span>
@@ -164,39 +134,39 @@ export default function Home() {
   )
 
   return (
-    <div className="home">
+    <div className={styles.home}>
       {/* Hero */}
-      <div className="home-hero">
-        <div className="home-hero-content">
-          <h1 className="home-hero-title">Listen together</h1>
-          <p className="home-hero-sub">Create a room or join one to start listening with friends</p>
-          <div className="home-hero-actions">
-            <button className="btn btn-hero" onClick={() => setShowCreate(true)} disabled={loading}>
+      <div className={styles.homeHero}>
+        <div className={styles.homeHeroContent}>
+          <h1 className={styles.homeHeroTitle}>Listen together</h1>
+          <p className={styles.homeHeroSub}>Create a room or join one to start listening with friends</p>
+          <div className={styles.homeHeroActions}>
+            <button className={`btn ${styles.btnHero}`} onClick={() => setShowCreate(true)} disabled={loading}>
               Create Room
             </button>
-            <button className="btn btn-hero btn-secondary" onClick={() => setShowJoin(true)} disabled={loading}>
+            <button className={`btn ${styles.btnHero} btn-secondary`} onClick={() => setShowJoin(true)} disabled={loading}>
               Join by Code
             </button>
           </div>
           {error && !showCreate && !passwordPrompt && <div className="error-msg" style={{ marginTop: 12 }}>{error}</div>}
         </div>
-        <div className="home-hero-stats">
-          <div className="home-hero-stat">
-            <span className="home-hero-stat-num">{rooms.length}</span>
-            <span className="home-hero-stat-label">rooms</span>
+        <div className={styles.homeHeroStats}>
+          <div className={styles.homeHeroStat}>
+            <span className={styles.homeHeroStatNum}>{rooms.length}</span>
+            <span className={styles.homeHeroStatLabel}>rooms</span>
           </div>
-          <div className="home-hero-stat">
-            <span className="home-hero-stat-num">{totalListeners}</span>
-            <span className="home-hero-stat-label">listening</span>
+          <div className={styles.homeHeroStat}>
+            <span className={styles.homeHeroStatNum}>{totalListeners}</span>
+            <span className={styles.homeHeroStatLabel}>listening</span>
           </div>
         </div>
       </div>
 
       {/* Recently Played */}
       {user && recentRooms.length > 0 && (
-        <section className="home-section">
-          <div className="home-section-header">
-            <h2 className="home-section-title">Recently Played</h2>
+        <section className={styles.homeSection}>
+          <div className={styles.homeSectionHeader}>
+            <h2 className={styles.homeSectionTitle}>Recently Played</h2>
           </div>
           <ScrollRow>
             {recentRooms.map(renderCard)}
@@ -205,16 +175,16 @@ export default function Home() {
       )}
 
       {/* Top Rooms */}
-      <section className="home-section">
-        <div className="home-section-header">
-          <h2 className="home-section-title">Top Rooms</h2>
+      <section className={styles.homeSection}>
+        <div className={styles.homeSectionHeader}>
+          <h2 className={styles.homeSectionTitle}>Top Rooms</h2>
         </div>
         {roomsLoading ? (
-          <div className="home-loading">Loading...</div>
+          <div className={styles.homeLoading}>Loading...</div>
         ) : activeRooms.length === 0 && idleRooms.length === 0 ? (
-          <div className="home-empty">
+          <div className={styles.homeEmpty}>
             <p>No rooms yet</p>
-            <p className="home-empty-sub">Create the first one!</p>
+            <p className={styles.homeEmptySub}>Create the first one!</p>
           </div>
         ) : (
           <>
@@ -225,8 +195,8 @@ export default function Home() {
             )}
             {idleRooms.length > 0 && (
               <>
-                <div className="home-section-header" style={{ marginTop: 24 }}>
-                  <h2 className="home-section-title" style={{ fontSize: 14, color: 'var(--text-muted)' }}>Waiting for listeners</h2>
+                <div className={styles.homeSectionHeader} style={{ marginTop: 24 }}>
+                  <h2 className={styles.homeSectionTitle} style={{ fontSize: 14, color: 'var(--text-muted)' }}>Waiting for listeners</h2>
                 </div>
                 <ScrollRow>
                   {idleRooms.map(renderCard)}

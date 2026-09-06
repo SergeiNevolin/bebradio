@@ -1,4 +1,6 @@
 // Keep in sync with REACTION_EMOJIS on the backend (config.py).
+import styles from './Reactions.module.css'
+
 export const REACTIONS = ['❤️', '🔥', '😂', '👍', '🎉', '😮', '🙌', '💃']
 
 export interface FloatingReaction {
@@ -10,12 +12,12 @@ export interface FloatingReaction {
 
 export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
   return (
-    <div className="reaction-bar">
+    <div className={styles.reactionBar}>
       {REACTIONS.map((emoji) => (
         <button
           key={emoji}
           type="button"
-          className="reaction-btn"
+          className={styles.reactionBtn}
           onClick={() => onReact(emoji)}
           aria-label={`React ${emoji}`}
         >
@@ -28,11 +30,11 @@ export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
 
 export function ReactionsOverlay({ items }: { items: FloatingReaction[] }) {
   return (
-    <div className="reactions-overlay" aria-hidden="true">
+    <div className={styles.reactionsOverlay} aria-hidden="true">
       {items.map((r) => (
-        <span key={r.key} className="floating-reaction" style={{ left: `${r.left}%` }}>
-          <span className="floating-reaction-emoji">{r.emoji}</span>
-          <span className="floating-reaction-user">{r.username}</span>
+        <span key={r.key} className={styles.floatingReaction} style={{ left: `${r.left}%` }}>
+          <span className={styles.floatingReactionEmoji}>{r.emoji}</span>
+          <span className={styles.floatingReactionUser}>{r.username}</span>
         </span>
       ))}
     </div>

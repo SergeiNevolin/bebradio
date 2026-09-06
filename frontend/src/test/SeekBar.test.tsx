@@ -11,7 +11,7 @@ describe('SeekBar', () => {
 
   it('fills proportionally to the position', () => {
     const { container } = render(<SeekBar position={50} duration={200} />)
-    const fill = container.querySelector('.seek-fill') as HTMLElement
+    const fill = container.querySelector('.seekFill') as HTMLElement
     expect(fill.style.width).toBe('25%')
   })
 

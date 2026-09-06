@@ -29,9 +29,9 @@ describe('Queue', () => {
 
   it('highlights current track', () => {
     const { container } = render(<Queue queue={tracks} currentIndex={1} />)
-    const items = container.querySelectorAll('.queue-item')
-    expect(items[1]).toHaveClass('active')
-    expect(items[0]).not.toHaveClass('active')
+    const items = container.querySelectorAll('.queueItem')
+    expect(items[1]).toHaveClass('queueItemActive')
+    expect(items[0]).not.toHaveClass('queueItemActive')
   })
 
   it('renders track numbers', () => {

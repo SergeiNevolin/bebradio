@@ -1,3 +1,5 @@
+import styles from './VolumeControl.module.css'
+
 interface VolumeControlProps {
   volume: number
   muted: boolean
@@ -10,10 +12,10 @@ export default function VolumeControl({ volume, muted, onVolume, onToggleMute }:
   const effective = muted ? 0 : volume
 
   return (
-    <div className="volume-control">
+    <div className={styles.volumeControl}>
       <button
         type="button"
-        className="volume-btn"
+        className={styles.volumeBtn}
         onClick={onToggleMute}
         title={silent ? 'Unmute' : 'Mute'}
         aria-label={silent ? 'Unmute' : 'Mute'}
@@ -28,7 +30,7 @@ export default function VolumeControl({ volume, muted, onVolume, onToggleMute }:
       </button>
       <input
         type="range"
-        className="volume-slider"
+        className={styles.volumeSlider}
         min="0"
         max="1"
         step="0.01"

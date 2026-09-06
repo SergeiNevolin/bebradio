@@ -5,6 +5,7 @@ import SeekBar from './player/SeekBar'
 import VolumeControl from './player/VolumeControl'
 import { useGaplessPlayer } from '../hooks/useGaplessPlayer'
 import { useVolume } from '../hooks/useVolume'
+import styles from './Player.module.css'
 
 /** Seconds of overlap between tracks. 0 would disable crossfading. */
 const CROSSFADE_SECONDS = 3
@@ -100,43 +101,43 @@ function Player({
   const voteTotal = likes + dislikes
 
   return (
-    <div className={`player${crossfading ? ' is-crossfading' : ''}`}>
+    <div className={`${styles.player}${crossfading ? ' is-crossfading' : ''}`}>
       <audio ref={deckRefs[0]} preload="auto" />
       <audio ref={deckRefs[1]} preload="auto" />
 
       {needsGesture && track && (
-        <button type="button" className="player-unlock" onClick={unlock}>
+        <button type="button" className={styles.playerUnlock} onClick={unlock}>
           ▶ Tap to enable sound
         </button>
       )}
 
       {!track ? (
-        <div className="player-empty">Add a track to start listening together</div>
+        <div className={styles.playerEmpty}>Add a track to start listening together</div>
       ) : (
         <>
-          <div className="player-head">
-            {track.thumbnail && <img className="player-thumb" src={track.thumbnail} alt="" />}
-            <div className="player-info">
-              <div className="title">{track.title}</div>
-              <div className="artist">{track.artist}</div>
-              <div className="added-by">Added by {track.added_by}</div>
+          <div className={styles.playerHead}>
+            {track.thumbnail && <img className={styles.playerThumb} src={track.thumbnail} alt="" />}
+            <div className={styles.playerInfo}>
+              <div className={styles.title}>{track.title}</div>
+              <div className={styles.artist}>{track.artist}</div>
+              <div className={styles.addedBy}>Added by {track.added_by}</div>
             </div>
           </div>
 
           <SeekBar position={localPos} duration={duration} />
 
-          <div className="player-controls">
+          <div className={styles.playerControls}>
             <VolumeControl
               volume={volume}
               muted={muted}
               onVolume={setVolume}
               onToggleMute={toggleMute}
             />
-            <div className="player-controls-gap" />
+            <div className={styles.playerControlsGap} />
             {roomId && (
               <button
                 type="button"
-                className={`player-chip${showKaraoke ? ' is-on' : ''}`}
+                className={`${styles.playerChip}${showKaraoke ? ` ${styles.playerChipOn}` : ''}`}
                 aria-pressed={showKaraoke}
                 onClick={() => setShowKaraoke((v) => !v)}
               >
@@ -145,7 +146,7 @@ function Player({
             )}
             <button
               type="button"
-              className={`player-chip${hasVoted ? ' is-on' : ''}`}
+              className={`${styles.playerChip}${hasVoted ? ` ${styles.playerChipOn}` : ''}`}
               onClick={onSkipVote}
               title="Vote to skip"
             >

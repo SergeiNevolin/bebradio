@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { useToast } from '../context/ToastContext'
+import { api } from '../lib/api'
+import { formatTime as formatDuration } from '../lib/format'
+import styles from './AddTrack.module.css'
 
 interface SearchResult {
   id: string
@@ -12,13 +15,6 @@ interface SearchResult {
 
 interface AddTrackProps {
   onAdd: (url: string) => Promise<{ success: boolean; error?: string }>
-}
-
-function formatDuration(s: number): string {
-  if (!s) return ''
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
 function isUrl(text: string): boolean {
@@ -60,14 +56,9 @@ function AddTrack({ onAdd }: AddTrackProps) {
     setSearching(true)
     setSearched(false)
     try {
-      const res = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q.trim(), limit: 5 }),
-      })
+      const results = await api.searchTracks(q.trim())
       if (reqId !== abortRef.current) return
-      const data = await res.json()
-      setResults(data)
+      setResults(results)
       setSearched(true)
       setShowDropdown(true)
       setActiveIndex(-1)
@@ -164,10 +155,10 @@ function AddTrack({ onAdd }: AddTrackProps) {
   const showNoResults = searched && !searching && results.length === 0 && query.trim().length > 1 && !isUrl(query)
 
   return (
-    <div className="add-track">
+    <div className={styles.addTrack}>
       <h3>Add Track</h3>
-      <form className="add-track-form" onSubmit={handleSubmit}>
-        <div className="search-wrapper" ref={dropdownRef}>
+      <form className={styles.addTrackForm} onSubmit={handleSubmit}>
+        <div className={styles.searchWrapper} ref={dropdownRef}>
           <input
             ref={inputRef}
             type="text"
@@ -177,32 +168,32 @@ function AddTrack({ onAdd }: AddTrackProps) {
             onFocus={() => (results.length > 0 || showNoResults || searching) && setShowDropdown(true)}
             onKeyDown={handleKeyDown}
             disabled={adding}
-            className={adding ? 'input-disabled' : ''}
+            className={adding ? styles.inputDisabled : ''}
           />
-          {searching && <span className="search-spinner" />}
+          {searching && <span className={styles.searchSpinner} />}
           {query && !adding && (
-            <button type="button" className="search-clear" onClick={clearInput}>
+            <button type="button" className={styles.searchClear} onClick={clearInput}>
               ×
             </button>
           )}
           {showDropdown && (results.length > 0 || showNoResults || searching) && (
-            <div className="search-dropdown">
+            <div className={styles.searchDropdown}>
               {searching && results.length === 0 && (
-                <div className="search-loading">Searching...</div>
+                <div className={styles.searchLoading}>Searching...</div>
               )}
               {results.map((r, i) => (
                 <div
                   key={r.id}
-                  className={`search-result${i === activeIndex ? ' active' : ''}`}
+                  className={`${styles.searchResult}${i === activeIndex ? ` ${styles.searchResultActive}` : ''}`}
                   onClick={() => handleSelect(r)}
                   onMouseEnter={() => setActiveIndex(i)}
                 >
                   {r.thumbnail && (
-                    <img className="search-result-thumb" src={r.thumbnail} alt="" />
+                    <img className={styles.searchResultThumb} src={r.thumbnail} alt="" />
                   )}
-                  <div className="search-result-info">
-                    <div className="search-result-title">{r.title}</div>
-                    <div className="search-result-meta">
+                  <div className={styles.searchResultInfo}>
+                    <div className={styles.searchResultTitle}>{r.title}</div>
+                    <div className={styles.searchResultMeta}>
                       {r.artist}
                       {r.duration > 0 && <> · {formatDuration(r.duration)}</>}
                     </div>
@@ -210,17 +201,17 @@ function AddTrack({ onAdd }: AddTrackProps) {
                 </div>
               ))}
               {searching && results.length > 0 && (
-                <div className="search-loading">Searching more...</div>
+                <div className={styles.searchLoading}>Searching more...</div>
               )}
               {showNoResults && (
-                <div className="search-no-results">No results found</div>
+                <div className={styles.searchNoResults}>No results found</div>
               )}
             </div>
           )}
         </div>
         <button className="btn" type="submit" disabled={adding || !query.trim()}>
           {adding ? (
-            <span className="btn-content"><span className="btn-spinner" /> Adding...</span>
+            <span className={styles.btnContent}><span className={styles.btnSpinner} /> Adding...</span>
           ) : (
             'Add'
           )}

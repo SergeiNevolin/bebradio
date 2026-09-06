@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { Link } from 'react-router-dom'
+import styles from './Chat.module.css'
 
 export interface ChatMessage {
   id: string
@@ -37,30 +38,30 @@ function Chat({ messages, onSend, currentUserId }: ChatProps) {
   }
 
   return (
-    <div className="chat">
-      <div className="chat-header">Chat</div>
-      <div className="chat-messages">
+    <div className={styles.chat}>
+      <div className={styles.chatHeader}>Chat</div>
+      <div className={styles.chatMessages}>
         {messages.length === 0 && (
-          <div className="chat-empty">No messages yet</div>
+          <div className={styles.chatEmpty}>No messages yet</div>
         )}
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`chat-message ${msg.user_id === currentUserId ? 'chat-message-own' : ''}`}
+            className={`${styles.chatMessage} ${msg.user_id === currentUserId ? styles.chatMessageOwn : ''}`}
           >
             {msg.user_id ? (
-              <Link to={`/user/${msg.user_id}`} className="chat-username profile-link">
+              <Link to={`/user/${msg.user_id}`} className={`${styles.chatUsername} profile-link`}>
                 {msg.username}
               </Link>
             ) : (
-              <span className="chat-username">{msg.username}</span>
+              <span className={styles.chatUsername}>{msg.username}</span>
             )}
-            <span className="chat-text">{msg.text}</span>
+            <span className={styles.chatText}>{msg.text}</span>
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
-      <form className="chat-input" onSubmit={handleSubmit}>
+      <form className={styles.chatInput} onSubmit={handleSubmit}>
         <input
           type="text"
           placeholder="Type a message..."

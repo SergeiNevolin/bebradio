@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import styles from './Listeners.module.css'
 
 interface Listener {
   id: string
@@ -17,17 +18,17 @@ function Listeners({ listeners, count, max = 4 }: ListenersProps) {
 
   return (
     <span
-      className="listeners"
+      className={styles.listeners}
       title={listeners.length ? listeners.map((l) => l.name).join(', ') : undefined}
     >
       <span className="status-dot" />
-      <span className="listeners-count">{count} listening</span>
+      <span className={styles.listenersCount}>{count} listening</span>
       {shown.length > 0 && (
-        <span className="listener-chips">
+        <span className={styles.listenerChips}>
           {shown.map((l) => (
-            <span key={l.id} className="listener-chip">{l.name}</span>
+            <span key={l.id} className={styles.listenerChip}>{l.name}</span>
           ))}
-          {extra > 0 && <span className="listener-chip listener-chip-more">+{extra}</span>}
+          {extra > 0 && <span className={`${styles.listenerChip} ${styles.listenerChipMore}`}>+{extra}</span>}
         </span>
       )}
     </span>

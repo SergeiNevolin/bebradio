@@ -10,6 +10,15 @@ export interface Track {
   dislikes?: number
 }
 
+export interface RoomListItem {
+  id: string
+  name: string
+  user_count: number
+  track_count?: number
+  is_playing: boolean
+  has_password: boolean
+}
+
 export interface RoomState {
   id: string
   name: string
@@ -35,29 +44,4 @@ export interface RoomState {
   locked?: boolean
   // Issued to the room owner (and after a successful password check via /join).
   access?: string
-}
-
-export interface PlayerProps {
-  track: Track | null
-  nextTrack?: Track | null
-  isPlaying: boolean
-  position: number
-  onPlayback: (action: string, extra?: Record<string, unknown>) => void
-  likes: number
-  dislikes: number
-  userVote: 1 | -1 | 0
-  onVote: (trackId: string, vote: 1 | -1 | 0) => void
-  onSkipVote: () => void
-  skipVoters: string[]
-  currentUserId: string
-  roomId?: string
-}
-
-export interface QueueProps {
-  queue: Track[]
-  currentIndex: number
-}
-
-export interface AddTrackProps {
-  onAdd: (url: string) => Promise<{ success: boolean; error?: string }>
 }

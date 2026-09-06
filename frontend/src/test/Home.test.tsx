@@ -72,7 +72,7 @@ describe('Home password rooms', () => {
 
   it('prompts for a password when joining a locked room, then joins', async () => {
     mockFetch((url, init) => {
-      if (url === '/api/rooms/LOCKED' && !init) return { id: 'LOCKED', name: 'Secret', locked: true, has_password: true }
+      if (url === '/api/rooms/LOCKED' && !init?.method) return { id: 'LOCKED', name: 'Secret', locked: true, has_password: true }
       if (url === '/api/rooms/LOCKED/join') return { access: 'granted' }
       return []
     })
@@ -100,7 +100,7 @@ describe('Home password rooms', () => {
 
     render(<MemoryRouter><Home /></MemoryRouter>)
     const closed = await screen.findByText('Closed')
-    expect(closed.closest('.home-card')?.textContent).toContain('\u{1F512}')
-    expect((await screen.findByText('Open')).closest('.home-card')?.textContent).not.toContain('\u{1F512}')
+    expect(closed.closest('.homeCard')?.textContent).toContain('\u{1F512}')
+    expect((await screen.findByText('Open')).closest('.homeCard')?.textContent).not.toContain('\u{1F512}')
   })
 })

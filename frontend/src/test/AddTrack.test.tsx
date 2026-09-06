@@ -123,7 +123,7 @@ describe('AddTrack', () => {
     fireEvent.change(input, { target: { value: 'rock music' } })
     await vi.advanceTimersByTimeAsync(400)
 
-    expect(document.querySelector('.search-spinner')).toBeInTheDocument()
+    expect(document.querySelector('.searchSpinner')).toBeInTheDocument()
 
     resolveFetch!({ json: () => [] })
     await vi.advanceTimersByTimeAsync(0)

@@ -56,7 +56,7 @@ describe('Chat', () => {
         />
       </MemoryRouter>
     )
-    expect(screen.getByText('Mine').closest('.chat-message')).toHaveClass('chat-message-own')
+    expect(screen.getByText('Mine').closest('.chatMessage')).toHaveClass('chatMessageOwn')
   })
 
   it('sends message on Enter key', () => {

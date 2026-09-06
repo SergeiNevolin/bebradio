@@ -1,0 +1,245 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  margin-top: 24px;
+  padding-bottom: 64px;
+  width: 100%;
+}
+
+.homeTitle {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  text-align: center;
+}
+
+.homeSubtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.homeHero {
+  background: linear-gradient(135deg, rgba(var(--primary-r),var(--primary-g),var(--primary-b),0.12) 0%, rgba(var(--primary-r),var(--primary-g),var(--primary-b),0.04) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+}
+
+.homeHeroContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.homeHeroTitle {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.homeHeroSub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+.homeHeroActions {
+  display: flex;
+  gap: 12px;
+}
+
+.btnHero {
+  padding: 12px 32px;
+  font-size: 15px;
+}
+
+.homeHeroStats {
+  display: flex;
+  gap: 24px;
+  flex-shrink: 0;
+}
+
+.homeHeroStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.homeHeroStatNum {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1;
+}
+
+.homeHeroStatLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.homeSection {
+  width: 100%;
+}
+
+.homeSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.homeSectionTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.homeCard {
+  flex: 0 0 200px;
+  scroll-snap-align: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+.homeCard:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+:global([data-theme='dark']) .homeCard:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.homeCard:active {
+  transform: scale(0.98);
+}
+
+.homeCardIndicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.homeCardLive {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--primary);
+  background: rgba(var(--primary-r),var(--primary-g),var(--primary-b),0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+}
+
+.homeCardLock {
+  font-size: 12px;
+}
+
+.homeCardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.homeCardName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.homeCardId {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+.homeCardFooter {
+  display: flex;
+  gap: 14px;
+}
+
+.homeCardStat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.homeCardStat svg {
+  opacity: 0.6;
+}
+
+.homeLoading {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.homeEmpty {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--text-muted);
+}
+
+.homeEmpty p {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.homeEmptySub {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .home {
+    margin-top: 16px;
+    gap: 24px;
+  }
+
+  .homeHero {
+    flex-direction: column;
+    padding: 28px 20px;
+    gap: 24px;
+  }
+
+  .homeHeroTitle {
+    font-size: 22px;
+  }
+
+  .homeHeroActions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .homeCard {
+    flex: 0 0 160px;
+    padding: 14px;
+  }
+}
