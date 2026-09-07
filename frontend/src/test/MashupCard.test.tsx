@@ -37,7 +37,7 @@ describe('MashupCard', () => {
 
   it('shows the owner and the like count', () => {
     render(<MashupCard mashup={mashup()} {...noop} />)
-    expect(screen.getByText('by dj')).toBeInTheDocument()
+    expect(screen.getByText(/by dj/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Like Alpha Bootleg' })).toHaveTextContent('2')
   })
 

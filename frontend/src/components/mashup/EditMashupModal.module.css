@@ -4,22 +4,23 @@
   gap: 12px;
 }
 
-.cover,
-.coverFallback {
-  width: 56px;
-  height: 56px;
+.cover {
+  width: 64px;
+  height: 64px;
   border-radius: 8px;
   flex-shrink: 0;
   object-fit: cover;
-  background: var(--border);
-}
-
-.coverFallback {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.glyph {
   font-size: 24px;
-  color: var(--text-muted);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .meta {
@@ -42,6 +43,13 @@
   text-overflow: ellipsis;
 }
 
+.stats {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .section {
   border-top: 1px solid var(--border);
   padding-top: 16px;
@@ -49,7 +57,7 @@
 }
 
 .sectionTitle {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   margin-bottom: 4px;
 }
@@ -60,7 +68,14 @@
   margin-bottom: 12px;
 }
 
-.danger .sectionTitle {
+.dangerBox {
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.dangerBox .sectionTitle {
   color: var(--danger);
 }
 
