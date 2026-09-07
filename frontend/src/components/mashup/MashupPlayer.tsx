@@ -176,6 +176,7 @@ export default function MashupPlayer({
               {queueCount > 0 && <span className={styles.qcount}>{queueCount}</span>}
             </span>
             <VolumeControl
+              variant="bar"
               volume={volume}
               muted={muted}
               onVolume={setVolume}
