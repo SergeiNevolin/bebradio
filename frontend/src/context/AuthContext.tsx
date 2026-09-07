@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
-import { api, setAuthToken } from '../lib/api'
+import { api, setAuthToken, ApiError } from '../lib/api'
 
 interface User {
   id: string
@@ -53,8 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthToken(data.token)
       setUser(data.user)
       return { success: true }
-    } catch {
-      return { success: false, error: 'Network error' }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Network error'
+      return { success: false, error: message }
     }
   }, [])
 
@@ -66,8 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthToken(data.token)
       setUser(data.user)
       return { success: true }
-    } catch {
-      return { success: false, error: 'Network error' }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Network error'
+      return { success: false, error: message }
     }
   }, [])
 
