@@ -1,5 +1,7 @@
 import { useRef } from 'react'
 import type { Mashup } from '../../types'
+import { formatTime } from '../../lib/format'
+import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import styles from './EditMashupModal.module.css'
 
 interface EditMashupModalProps {
@@ -25,6 +27,15 @@ export default function EditMashupModal({
 }: EditMashupModalProps) {
   const coverInputRef = useRef<HTMLInputElement>(null)
 
+  const stats = [
+    mashup.status === 'ready' ? formatTime(mashup.duration) : mashup.status,
+    `${mashup.likes} ${mashup.likes === 1 ? 'like' : 'likes'}`,
+    `uploaded ${new Date(mashup.created_at).toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+    })}`,
+  ].join(' · ')
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -37,18 +48,26 @@ export default function EditMashupModal({
             {mashup.cover_url ? (
               <img className={styles.cover} src={mashup.cover_url} alt="" />
             ) : (
-              <div className={styles.coverFallback} aria-hidden="true">♪</div>
+              <div className={styles.cover} style={{ background: tintForId(mashup.id) }}>
+                <span className={styles.glyph} aria-hidden="true">{monoGlyph(mashup.title)}</span>
+              </div>
             )}
             <div className={styles.meta}>
               <div className={styles.title} title={mashup.title}>{mashup.title}</div>
-              <div className={styles.artist}>{mashup.artist || 'Unknown artist'}</div>
+              <div className={styles.artist}>
+                {mashup.artist || 'Unknown artist'}
+                {mashup.owner_name ? ` · by ${mashup.owner_name}` : ''}
+              </div>
+              <div className={styles.stats}>{stats}</div>
             </div>
           </div>
 
           {canManageCover && (
             <section className={styles.section}>
               <h4 className={styles.sectionTitle}>Cover</h4>
-              <p className={styles.hint}>A square PNG or JPG looks best.</p>
+              <p className={styles.hint}>
+                A square PNG or JPG looks best. Up to 5&nbsp;MB; it is re-encoded to 1000&nbsp;px.
+              </p>
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -71,9 +90,12 @@ export default function EditMashupModal({
           )}
 
           {canDelete && (
-            <section className={`${styles.section} ${styles.danger}`}>
-              <h4 className={styles.sectionTitle}>Delete</h4>
-              <p className={styles.hint}>The mashup and its files are removed for good.</p>
+            <section className={styles.dangerBox}>
+              <h4 className={styles.sectionTitle}>Delete this mashup</h4>
+              <p className={styles.hint}>
+                The track, its cover and the transcoded file are removed for good.
+                Likes are removed with it.
+              </p>
               <button
                 type="button"
                 className="btn btn-danger"
@@ -88,7 +110,7 @@ export default function EditMashupModal({
           )}
 
           <div className={styles.footer}>
-            <button type="button" className="btn" onClick={onClose}>Done</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Done</button>
           </div>
         </div>
       </div>
