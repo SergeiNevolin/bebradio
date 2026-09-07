@@ -85,7 +85,7 @@
 }
 
 .title {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.25;
@@ -93,7 +93,7 @@
 
 .meta {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
 }
 
@@ -126,7 +126,7 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   padding: 6px 10px;
@@ -146,7 +146,7 @@
 }
 
 .dur {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -235,7 +235,7 @@
   margin: 22px 0 8px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -243,7 +243,7 @@
 }
 
 .queueEmpty {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -256,6 +256,9 @@
   margin: 0 -8px;
   border: none;
   background: transparent;
+  /* A <button> does not inherit the page text colour, so .qtitle would
+     otherwise stay the UA default (black) in both themes. */
+  color: var(--text);
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
@@ -266,8 +269,8 @@
 }
 
 .qart {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   border-radius: 6px;
   object-fit: cover;
@@ -278,7 +281,7 @@
 }
 
 .qart .glyph {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .qbody {
@@ -290,7 +293,7 @@
 }
 
 .qtitle {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -298,7 +301,7 @@
 }
 
 .qsub {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -307,7 +310,7 @@
 
 .qdur {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }

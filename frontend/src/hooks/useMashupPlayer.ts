@@ -8,10 +8,46 @@ import { useVolume } from './useVolume'
  * would be overkill here. Volume comes from the shared useVolume() hook so it
  * stays in step with the room player and survives reloads.
  *
+ * A compact snapshot (current track, playback offset, shuffle and repeat) is
+ * mirrored to localStorage so a window reload resumes where it left off. Volume
+ * is already persisted by useVolume().
+ *
  * The component that consumes this must render `<audio ref={audioRef} />`.
  */
 
 export type RepeatMode = 'off' | 'all' | 'one'
+
+const STORAGE_KEY = 'mashup-player'
+
+interface PersistedState {
+  /** id of the mashup that was playing. */
+  id: string
+  /** playback offset in seconds. */
+  position: number
+  /** whether it was playing when the page was left. */
+  playing: boolean
+  shuffle: boolean
+  repeat: RepeatMode
+}
+
+/** Read and validate the saved snapshot; any problem yields null. */
+function loadPersisted(): PersistedState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const p = JSON.parse(raw) as Partial<PersistedState>
+    if (!p || typeof p.id !== 'string') return null
+    return {
+      id: p.id,
+      position: typeof p.position === 'number' && p.position > 0 ? p.position : 0,
+      playing: !!p.playing,
+      shuffle: !!p.shuffle,
+      repeat: p.repeat === 'all' || p.repeat === 'one' ? p.repeat : 'off',
+    }
+  } catch {
+    return null
+  }
+}
 
 /**
  * The walk order over `list`, as indices. Without shuffle it is `[0..n)`. With
@@ -37,14 +73,16 @@ function buildOrder(n: number, shuffled: boolean, currentIndex: number): number[
 
 export function useMashupPlayer() {
   const audioRef = useRef<HTMLAudioElement>(null)
+  // Read the saved snapshot once, on mount.
+  const [boot] = useState(loadPersisted)
   const [list, setList] = useState<Mashup[]>([])
   const [index, setIndex] = useState(-1)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [position, setPosition] = useState(0)
+  const [position, setPosition] = useState(boot?.position ?? 0)
   const [duration, setDuration] = useState(0)
   const [buffered, setBuffered] = useState(0)
-  const [shuffle, setShuffle] = useState(false)
-  const [repeat, setRepeat] = useState<RepeatMode>('off')
+  const [shuffle, setShuffle] = useState(boot?.shuffle ?? false)
+  const [repeat, setRepeat] = useState<RepeatMode>(boot?.repeat ?? 'off')
   const [order, setOrder] = useState<number[]>([])
   const { volume, muted, setVolume, toggleMute } = useVolume()
 
@@ -58,6 +96,17 @@ export function useMashupPlayer() {
   indexRef.current = index
   const repeatRef = useRef(repeat)
   repeatRef.current = repeat
+  const shuffleRef = useRef(shuffle)
+  shuffleRef.current = shuffle
+  const currentRef = useRef(current)
+  currentRef.current = current
+
+  // Reload-restore plumbing. `pendingRestoreRef` holds the saved snapshot until
+  // the walkable list arrives with the matching track; the two `restore*` refs
+  // then carry the offset / resume flag into the load effect below.
+  const pendingRestoreRef = useRef<PersistedState | null>(boot)
+  const restorePosRef = useRef<number | null>(null)
+  const restorePlayRef = useRef(false)
 
   // Rebuild the walk order whenever the list grows or shrinks. The current track
   // is preserved: buildOrder keeps it at the head under shuffle, and plain order
@@ -133,6 +182,25 @@ export function useMashupPlayer() {
     if (audioRef.current) audioRef.current.volume = muted ? 0 : volume
   }, [volume, muted, current])
 
+  // Once the walkable list arrives, jump back to the track and offset saved from
+  // the previous session. Fires once: the pending snapshot is dropped as soon as
+  // the track is found, the user picks something first, or it proves gone.
+  useEffect(() => {
+    const pending = pendingRestoreRef.current
+    if (!pending) return
+    if (indexRef.current >= 0) {
+      pendingRestoreRef.current = null
+      return
+    }
+    if (list.length === 0) return
+    const i = list.findIndex((x) => x.id === pending.id)
+    if (i < 0) return // maybe in a section that has not loaded yet — keep waiting
+    pendingRestoreRef.current = null
+    restorePosRef.current = pending.position
+    restorePlayRef.current = pending.playing
+    setIndex(i)
+  }, [list])
+
   // Load and auto-play whenever the selected mashup changes.
   useEffect(() => {
     const el = audioRef.current
@@ -147,9 +215,38 @@ export function useMashupPlayer() {
       setDuration(0)
       return
     }
+
+    // A reload-restore seeks to the saved offset once metadata is in, and only
+    // resumes playback if it was playing when the page was left (the browser may
+    // still block that until the first interaction).
+    const restorePos = restorePosRef.current
+    const restorePlay = restorePlayRef.current
+    restorePosRef.current = null
+    restorePlayRef.current = false
+
     el.src = current.stream_url
     el.load()
     el.volume = muted ? 0 : volume
+
+    if (restorePos != null) {
+      setPosition(restorePos)
+      const applyOffset = () => {
+        try {
+          el.currentTime = restorePos
+        } catch {
+          /* not seekable yet */
+        }
+        el.removeEventListener('loadedmetadata', applyOffset)
+      }
+      el.addEventListener('loadedmetadata', applyOffset)
+      if (restorePlay) {
+        el.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false))
+      } else {
+        setIsPlaying(false)
+      }
+      return
+    }
+
     el.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id])
@@ -193,16 +290,58 @@ export function useMashupPlayer() {
     }
   }, [next])
 
-  // Stop playback when the page unmounts (leaving /mashup).
+  // Write the current snapshot to localStorage. Cheap enough to call often.
+  // With nothing playing we leave any existing snapshot untouched — on a reload
+  // `current` is briefly null before the restore lands, and clearing here would
+  // throw the saved position away.
+  const persist = useCallback(() => {
+    try {
+      const cur = currentRef.current
+      const el = audioRef.current
+      if (!cur) return
+      const snapshot: PersistedState = {
+        id: cur.id,
+        position: el && Number.isFinite(el.currentTime) ? el.currentTime : 0,
+        playing: !!el && !el.paused,
+        shuffle: shuffleRef.current,
+        repeat: repeatRef.current,
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot))
+    } catch {
+      /* storage unavailable — skip */
+    }
+  }, [])
+
+  // Save on the events that change what we'd want to restore…
+  useEffect(() => {
+    persist()
+  }, [current?.id, shuffle, repeat, persist])
+
+  // …and periodically / when the tab goes away, to capture the moving offset.
+  useEffect(() => {
+    const save = () => persist()
+    const timer = window.setInterval(save, 5000)
+    window.addEventListener('pagehide', save)
+    window.addEventListener('beforeunload', save)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('pagehide', save)
+      window.removeEventListener('beforeunload', save)
+    }
+  }, [persist])
+
+  // Stop playback when the page unmounts (leaving /mashup), saving first so a
+  // later return to /mashup still resumes.
   useEffect(() => {
     return () => {
+      persist()
       const el = audioRef.current
       if (el) {
         el.pause()
         el.removeAttribute('src')
       }
     }
-  }, [])
+  }, [persist])
 
   // If the list shrinks past the current index (e.g. after a delete), clamp it.
   useEffect(() => {

@@ -3,10 +3,10 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: 10px;
-  padding: 10px;
+  padding: 11px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -49,7 +49,7 @@
 }
 
 .glyph {
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.92);
 }
@@ -59,15 +59,15 @@
   position: absolute;
   right: 8px;
   bottom: 8px;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
   background: var(--primary);
   color: #fff;
-  font-size: 13px;
+  font-size: 15px;
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 0.15s ease, transform 0.15s ease;
@@ -113,7 +113,7 @@
 
 .title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -121,7 +121,7 @@
 
 .meta {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -148,10 +148,10 @@
 
 .foot {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  min-height: 30px;
+  min-height: 34px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -164,7 +164,7 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   padding: 5px 8px;
@@ -185,7 +185,7 @@
 }
 
 .likeIcon {
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1;
 }
 
