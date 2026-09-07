@@ -43,23 +43,26 @@ class MediaStorage:
         return self.settings.media_dir / f"{media_id}.m4a"
 
     def captions_path(self, media_id: str, lang: str = "") -> Optional[Path]:
-        """Subtitle file downloaded alongside the audio, or None. Prefers the
-        requested language, then ru, then en, then whatever exists."""
+        """Subtitle file downloaded alongside the audio, or None. Prefers manual
+        captions over auto-generated (`.auto.` in the name), then the requested
+        language, then ru, then en, then whatever exists."""
         if not self.valid_id(media_id):
             return None
         vtts = [p for p in self.settings.media_dir.glob(f"{media_id}*.vtt") if p.is_file()]
         if not vtts:
             return None
 
-        def rank(path: Path) -> int:
+        def rank(path: Path) -> tuple[bool, int]:
             name = path.name.lower()
             if lang and f".{lang.lower()}." in name:
-                return 0
-            if ".ru" in name:
-                return 1
-            if ".en" in name:
-                return 2
-            return 3
+                lang_score = 0
+            elif ".ru" in name:
+                lang_score = 1
+            elif ".en" in name:
+                lang_score = 2
+            else:
+                lang_score = 3
+            return (".auto." in name, lang_score)
 
         return min(vtts, key=rank)
 

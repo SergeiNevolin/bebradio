@@ -124,6 +124,23 @@ def test_captions_path_language_priority(settings):
     assert storage.captions_path("../escape") is None
 
 
+def test_captions_path_prefers_manual_over_auto(settings):
+    from storage import MediaStorage
+
+    settings.media_dir.mkdir(parents=True)
+    # Manual only for en; auto only for ru.
+    (settings.media_dir / "media_x.en.vtt").write_text("WEBVTT")
+    (settings.media_dir / "media_x.auto.ru.vtt").write_text("WEBVTT")
+
+    storage = MediaStorage(settings, lambda *_: True)
+
+    # Manual beats auto even though ru would otherwise outrank en.
+    assert storage.captions_path("media_x").name == "media_x.en.vtt"
+    # Falls back to auto when that is all there is.
+    (settings.media_dir / "media_x.en.vtt").unlink()
+    assert storage.captions_path("media_x").name == "media_x.auto.ru.vtt"
+
+
 @pytest.mark.asyncio
 async def test_cleanup_keeps_vtt_while_audio_referenced(settings):
     from storage import MediaStorage

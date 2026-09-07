@@ -121,26 +121,40 @@ class YouTubeProvider:
                 urls.append(f"https://www.youtube.com/watch?v={related_id}")
         return urls
 
+    _SUB_LANGS = "en,en-orig,ru,ru-orig"
+
     def download(self, source_url: str, output_path: Path) -> bool:
-        # Grab subtitles in the same pass and drop them next to the audio as
-        # media_<hash>.<lang>.vtt (yt-dlp derives that name from the -o template).
-        # Missing subtitles are a warning, not a download failure. No
-        # --convert-subs: ffmpeg is not in the image and YouTube serves vtt.
-        result = self._run([
+        audio_tmpl = str(output_path.with_suffix(".%(ext)s"))
+        if not self._run([
             *self._common_args, "-f", "bestaudio/best", "--no-playlist",
-            "--write-subs", "--write-auto-subs",
-            "--sub-langs", "ru.*,en.*", "--sub-format", "vtt/best",
-            "-o", str(output_path.with_suffix(".%(ext)s")), source_url,
-        ], 120)
-        return bool(result)
+            "-o", audio_tmpl, source_url,
+        ], 120):
+            return False
+
+        # Captions are best-effort and fetched in their own passes: a YouTube
+        # rate-limit on subtitles must not fail the audio we already have.
+        # Manual and ASR captions land in separate files
+        # (media_<hash>.<lang>.vtt vs media_<hash>.auto.<lang>.vtt) so the reader
+        # can prefer manual and label auto-generated captions honestly. Exact
+        # language codes only -- "en.*" would also pull auto-translations. No
+        # --convert-subs: ffmpeg is not in the image and YouTube serves vtt.
+        auto_tmpl = f"subtitle:{output_path.with_suffix('')}.auto.%(ext)s"
+        self._run([
+            *self._common_args, "--skip-download", "--no-playlist", "--write-subs",
+            "--sub-langs", self._SUB_LANGS, "--sub-format", "vtt/best",
+            "-o", audio_tmpl, source_url,
+        ], 60)
+        self._run([
+            *self._common_args, "--skip-download", "--no-playlist", "--write-auto-subs",
+            "--sub-langs", self._SUB_LANGS, "--sub-format", "vtt/best",
+            "-o", auto_tmpl, source_url,
+        ], 60)
+        return True
 
     @classmethod
-    def read_vtt_file(cls, path: Path) -> dict:
-        """Parse a .vtt written by `download()`. yt-dlp names manual and auto
-        subtitles identically, so 'auto' is inferred: ASR captions carry inline
-        `<c>` word-timing tags that hand-authored subtitles do not."""
-        raw = path.read_text(encoding="utf-8", errors="replace")
-        return {"auto": "<c>" in raw, "cues": cls._parse_vtt(raw)}
+    def parse_vtt_file(cls, path: Path) -> list[dict]:
+        """Read and parse a .vtt written by `download()` into timed cues."""
+        return cls._parse_vtt(path.read_text(encoding="utf-8", errors="replace"))
 
     @staticmethod
     def _parse_vtt(raw: str) -> list[dict]:

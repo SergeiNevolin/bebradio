@@ -7,7 +7,7 @@
 
 ---
 
-- [ ] **T1 — `storage.py`: аудио и субтитры не путаются**
+- [x] **T1 — `storage.py`: аудио и субтитры не путаются**
   - Acceptance:
     - `path(media_id)` / `is_ready(media_id)` учитывают только аудио-расширения
       (список из `_AUDIO_MIME` в `api.py` — вынести в общее место или продублировать),
@@ -26,7 +26,7 @@
   - Files: `media-service/storage.py`, `media-service/tests/test_storage.py`
     (опц. `media-service/api.py` если выносим список аудио-расширений).
 
-- [ ] **T2 — `download()`: `yt-dlp` пишет `.vtt` рядом с аудио**
+- [x] **T2 — `download()`: `yt-dlp` пишет `.vtt` рядом с аудио**
   - Acceptance:
     - `YouTubeProvider.download()` добавляет `--write-subs --write-auto-subs
       --sub-langs "ru.*,en.*" --sub-format vtt/best --convert-subs vtt`.
@@ -41,7 +41,7 @@
   - Files: `media-service/providers/youtube.py`,
     `media-service/tests/test_provider.py`.
 
-- [ ] **T3 — captions с диска + новый эндпоинт, удалить живой путь**
+- [x] **T3 — captions с диска + новый эндпоинт, удалить живой путь**
   - Acceptance:
     - `MediaService.captions_from_disk(media_id, lang)` читает `.vtt` через
       `storage.captions_path()`, парсит существующим `_parse_vtt`, возвращает
@@ -59,7 +59,7 @@
     `media-service/providers/youtube.py`, `media-service/tests/test_api.py`,
     `media-service/tests/test_provider.py`.
 
-- [ ] **T4 — backend: переименовать `Captions` → `MediaCaptions(mediaID, lang)` в цепочке клиента**
+- [x] **T4 — backend: переименовать `Captions` → `MediaCaptions(mediaID, lang)` в цепочке клиента**
   - Acceptance:
     - `repository.MediaClient`: `Captions(sourceURL, lang)` → `MediaCaptions(mediaID,
       lang string) (map[string]any, error)`.
@@ -78,7 +78,7 @@
     `backend/internal/usecase/media.go`,
     `backend/internal/domain/repository/mocks.go` (+ затронутые `*_test.go`).
 
-- [ ] **T5 — backend: `handleGetLyrics` берёт `track.MediaID`**
+- [x] **T5 — backend: `handleGetLyrics` берёт `track.MediaID`**
   - Acceptance:
     - Ветка «нет текста» при `track == nil || track.MediaID == ""` (сейчас проверка
       на `track.SourceURL == ""`).
@@ -91,7 +91,7 @@
   - Files: `backend/internal/delivery/http/room_handler.go`,
     `backend/internal/delivery/http/handler_test.go`.
 
-- [ ] **T6 — верификация end-to-end**
+- [x] **T6 — верификация end-to-end**
   - Acceptance: Success Criteria 1–7 из `SPEC.md` выполнены.
   - Verify:
     - `cd frontend && npm run build && npm run typecheck && npm test` — зелёно

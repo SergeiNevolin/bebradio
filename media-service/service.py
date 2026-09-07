@@ -32,15 +32,15 @@ class MediaService:
         if path is None:
             return empty
         try:
-            parsed = YouTubeProvider.read_vtt_file(path)
+            cues = YouTubeProvider.parse_vtt_file(path)
         except OSError:
             return empty
-        # media_<hash>.<lang>.vtt -> <lang>
+        # media_<hash>.<lang>.vtt  or  media_<hash>.auto.<lang>.vtt
         parts = path.name.split(".")
         return {
             "lang": parts[-2] if len(parts) >= 3 else "",
-            "auto": parsed["auto"],
-            "cues": parsed["cues"],
+            "auto": ".auto." in path.name,
+            "cues": cues,
         }
 
     async def ensure(self, source_url: str, media_id: str) -> bool:

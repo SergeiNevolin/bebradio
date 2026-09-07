@@ -102,6 +102,24 @@ async def test_media_captions_returns_cues_from_disk(media_app):
 
 
 @pytest.mark.asyncio
+async def test_media_captions_marks_auto_generated(media_app):
+    app, service = media_app
+    media_dir = service.storage.settings.media_dir
+    media_dir.mkdir(parents=True, exist_ok=True)
+    (media_dir / "media_song.auto.ru.vtt").write_text(
+        "WEBVTT\n\n00:00:00.500 --> 00:00:02.500\nстрочка\n"
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/media/media_song/captions")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["lang"] == "ru"
+    assert body["auto"] is True
+
+
+@pytest.mark.asyncio
 async def test_media_captions_empty_when_no_vtt(media_app):
     app, service = media_app
     service.storage.settings.media_dir.mkdir(parents=True, exist_ok=True)
