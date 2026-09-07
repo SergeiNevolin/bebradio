@@ -152,18 +152,18 @@ func (m *MockRoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, 
 }
 
 type MockMediaClient struct {
-	SearchFn    func(query string, limit int) ([]map[string]any, error)
-	ResolveFn   func(url string) (map[string]any, error)
-	EnsureFn    func(items []map[string]any) ([]string, error)
-	RelatedFn   func(sourceURL string, limit int) ([]string, error)
-	CaptionsFn  func(sourceURL, lang string) (map[string]any, error)
-	ContentFn   func(mediaID, rangeHeader string) (int64, string, []byte, error)
-	DownloadFn  func(sourceURL, mediaID string) (map[string]any, error)
-	UpdateRefsFn func(mediaIDs []string) error
-	UploadMashupFn func(mediaID, filename string, body io.Reader) error
+	SearchFn            func(query string, limit int) ([]map[string]any, error)
+	ResolveFn           func(url string) (map[string]any, error)
+	EnsureFn            func(items []map[string]any) ([]string, error)
+	RelatedFn           func(sourceURL string, limit int) ([]string, error)
+	MediaCaptionsFn     func(mediaID, lang string) (map[string]any, error)
+	ContentFn           func(mediaID, rangeHeader string) (int64, string, []byte, error)
+	DownloadFn          func(sourceURL, mediaID string) (map[string]any, error)
+	UpdateRefsFn        func(mediaIDs []string) error
+	UploadMashupFn      func(mediaID, filename string, body io.Reader) error
 	UploadMashupCoverFn func(mediaID, filename string, body io.Reader) error
-	MashupStatusFn func(mediaID string) (map[string]any, error)
-	DeleteMashupFn func(mediaID string) error
+	MashupStatusFn      func(mediaID string) (map[string]any, error)
+	DeleteMashupFn      func(mediaID string) error
 }
 
 func NewMockMediaClient() *MockMediaClient {
