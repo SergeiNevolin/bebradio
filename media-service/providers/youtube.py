@@ -126,8 +126,14 @@ class YouTubeProvider:
         return urls
 
     def download(self, source_url: str, output_path: Path) -> bool:
+        # Grab subtitles in the same pass and drop them next to the audio as
+        # media_<hash>.<lang>.vtt (yt-dlp derives that name from the -o template).
+        # Missing subtitles are a warning, not a download failure. No
+        # --convert-subs: ffmpeg is not in the image and YouTube serves vtt.
         result = self._run([
             *self._common_args, "-f", "bestaudio/best", "--no-playlist",
+            "--write-subs", "--write-auto-subs",
+            "--sub-langs", "ru.*,en.*", "--sub-format", "vtt/best",
             "-o", str(output_path.with_suffix(".%(ext)s")), source_url,
         ], 120)
         return bool(result)

@@ -1,5 +1,6 @@
 import json
 import urllib.error
+from pathlib import Path
 
 
 def test_provider_media_id_is_stable_and_opaque(settings):
@@ -56,6 +57,31 @@ def test_search_skips_invalid_json_and_empty_items(settings, monkeypatch):
     assert len(result) == 1
     assert result[0]["title"] == "Found"
     assert result[0]["media_id"].startswith("media_")
+
+
+def test_download_requests_subtitles_alongside_audio(settings, monkeypatch):
+    from providers.youtube import YouTubeProvider
+
+    provider = YouTubeProvider(settings)
+    captured = {}
+
+    class Result:
+        returncode = 0
+
+    def fake_run(args, timeout=60):
+        captured["args"] = args
+        return Result()
+
+    monkeypatch.setattr(provider, "_run", fake_run)
+
+    ok = provider.download("https://youtu.be/x", Path("/tmp/media_x.m4a"))
+
+    assert ok is True
+    args = captured["args"]
+    assert "--write-subs" in args
+    assert "--write-auto-subs" in args
+    assert args[args.index("--sub-langs") + 1] == "ru.*,en.*"
+    assert "--convert-subs" not in args  # ffmpeg is not in the media-service image
 
 
 def test_parse_vtt_removes_tags_and_decodes_entities(settings):
