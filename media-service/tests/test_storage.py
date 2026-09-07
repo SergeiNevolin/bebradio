@@ -81,3 +81,85 @@ async def test_cleanup_evicts_oldest_unreferenced_when_size_exceeded(settings):
 
     assert not oldest.exists()
     assert newest.exists()
+
+
+def test_path_prefers_audio_over_sibling_vtt(settings):
+    from storage import MediaStorage
+
+    settings.media_dir.mkdir(parents=True)
+    (settings.media_dir / "media_x.en.vtt").write_text("WEBVTT")
+    (settings.media_dir / "media_x.m4a").write_bytes(b"audio")
+
+    storage = MediaStorage(settings, lambda *_: True)
+
+    assert storage.path("media_x").name == "media_x.m4a"
+    assert storage.is_ready("media_x") is True
+
+
+def test_is_ready_false_when_only_vtt_on_disk(settings):
+    from storage import MediaStorage
+
+    settings.media_dir.mkdir(parents=True)
+    (settings.media_dir / "media_x.en.vtt").write_text("WEBVTT")
+
+    storage = MediaStorage(settings, lambda *_: True)
+
+    assert storage.is_ready("media_x") is False
+
+
+def test_captions_path_language_priority(settings):
+    from storage import MediaStorage
+
+    settings.media_dir.mkdir(parents=True)
+    (settings.media_dir / "media_x.en.vtt").write_text("WEBVTT")
+    (settings.media_dir / "media_x.ru.vtt").write_text("WEBVTT")
+
+    storage = MediaStorage(settings, lambda *_: True)
+
+    assert storage.captions_path("media_x", "en").name == "media_x.en.vtt"
+    assert storage.captions_path("media_x", "ru").name == "media_x.ru.vtt"
+    # No language requested: ru outranks en.
+    assert storage.captions_path("media_x").name == "media_x.ru.vtt"
+    assert storage.captions_path("media_missing") is None
+    assert storage.captions_path("../escape") is None
+
+
+@pytest.mark.asyncio
+async def test_cleanup_keeps_vtt_while_audio_referenced(settings):
+    from storage import MediaStorage
+
+    settings.media_dir.mkdir(parents=True)
+    audio = settings.media_dir / "media_ref.m4a"
+    subs = settings.media_dir / "media_ref.en.vtt"
+    audio.write_bytes(b"x")
+    subs.write_text("WEBVTT")
+    old_time = time.time() - settings.media_ttl - 1
+    os.utime(audio, (old_time, old_time))
+    os.utime(subs, (old_time, old_time))
+
+    storage = MediaStorage(settings, lambda *_: True)
+    storage.set_references(["media_ref"])
+    await storage.cleanup()
+
+    assert audio.exists()
+    assert subs.exists()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_removes_expired_vtt_with_its_audio(settings):
+    from storage import MediaStorage
+
+    settings.media_dir.mkdir(parents=True)
+    audio = settings.media_dir / "media_stale.m4a"
+    subs = settings.media_dir / "media_stale.en.vtt"
+    audio.write_bytes(b"x")
+    subs.write_text("WEBVTT")
+    old_time = time.time() - settings.media_ttl - 1
+    os.utime(audio, (old_time, old_time))
+    os.utime(subs, (old_time, old_time))
+
+    storage = MediaStorage(settings, lambda *_: True)
+    await storage.cleanup()
+
+    assert not audio.exists()
+    assert not subs.exists()

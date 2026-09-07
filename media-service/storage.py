@@ -3,12 +3,16 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from config import Settings
 
 log = logging.getLogger(__name__)
 _MEDIA_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+# Audio containers yt-dlp may produce for `bestaudio`. Used to tell the track's
+# audio file apart from sibling artefacts sharing its media_id prefix (e.g. the
+# `media_<hash>.<lang>.vtt` subtitle file written alongside it).
+_AUDIO_EXTS = frozenset({".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".webm"})
 
 
 class MediaStorage:
@@ -27,9 +31,37 @@ class MediaStorage:
     def valid_id(media_id: str) -> bool:
         return bool(media_id and _MEDIA_ID_RE.fullmatch(media_id))
 
+    @staticmethod
+    def _track_key(path: Path) -> str:
+        """`media_<hash>` for both `media_<hash>.m4a` and `media_<hash>.en.vtt`."""
+        return path.name.split(".", 1)[0]
+
     def path(self, media_id: str) -> Path:
-        matches = list(self.settings.media_dir.glob(f"{media_id}.*"))
-        return matches[0] if matches else self.settings.media_dir / f"{media_id}.m4a"
+        for match in sorted(self.settings.media_dir.glob(f"{media_id}.*")):
+            if match.suffix.lower() in _AUDIO_EXTS:
+                return match
+        return self.settings.media_dir / f"{media_id}.m4a"
+
+    def captions_path(self, media_id: str, lang: str = "") -> Optional[Path]:
+        """Subtitle file downloaded alongside the audio, or None. Prefers the
+        requested language, then ru, then en, then whatever exists."""
+        if not self.valid_id(media_id):
+            return None
+        vtts = [p for p in self.settings.media_dir.glob(f"{media_id}*.vtt") if p.is_file()]
+        if not vtts:
+            return None
+
+        def rank(path: Path) -> int:
+            name = path.name.lower()
+            if lang and f".{lang.lower()}." in name:
+                return 0
+            if ".ru" in name:
+                return 1
+            if ".en" in name:
+                return 2
+            return 3
+
+        return min(vtts, key=rank)
 
     def is_ready(self, media_id: str) -> bool:
         return self.path(media_id).is_file()
@@ -54,7 +86,7 @@ class MediaStorage:
     async def cleanup(self) -> None:
         now = time.time()
         for path in self.settings.media_dir.iterdir():
-            if not path.is_file() or path.suffix == ".part" or path.stem in self._referenced:
+            if not path.is_file() or path.suffix == ".part" or self._track_key(path) in self._referenced:
                 continue
             try:
                 if now - path.stat().st_mtime > self.settings.media_ttl:
@@ -71,7 +103,7 @@ class MediaStorage:
 
         candidates = []
         for path in files:
-            if path.stem in self._referenced:
+            if self._track_key(path) in self._referenced:
                 continue
             try:
                 stat = path.stat()
