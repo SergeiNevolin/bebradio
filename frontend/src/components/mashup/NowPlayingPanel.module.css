@@ -1,5 +1,5 @@
 .panel {
-  width: 320px;
+  width: 344px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -14,7 +14,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  height: 44px;
+  height: 48px;
   padding: 0 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -80,7 +80,7 @@
 
 .bigTitle {
   margin-top: 14px;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -88,7 +88,7 @@
 }
 
 .bigMeta {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -129,11 +129,11 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  padding: 5px 8px;
-  margin-left: -8px;
+  padding: 6px 9px;
+  margin-left: -9px;
   border-radius: 8px;
   cursor: pointer;
 }
@@ -142,19 +142,19 @@
 .likeBtnOn { color: var(--danger); }
 
 .heart {
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1;
 }
 
 .dur {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .queueHead {
   margin: 14px 0 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -162,7 +162,7 @@
 }
 
 .queueEmpty {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -175,6 +175,9 @@
   margin: 0 -6px;
   border: none;
   background: transparent;
+  /* A <button> does not inherit the page text colour, so .qtitle would
+     otherwise stay the UA default (black) in both themes. */
+  color: var(--text);
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
@@ -183,8 +186,8 @@
 .qrow:hover { background: var(--surface-hover); }
 
 .qart {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -194,7 +197,7 @@
   justify-content: center;
 }
 
-.qart .glyph { font-size: 15px; }
+.qart .glyph { font-size: 16px; }
 
 .qbody {
   min-width: 0;
@@ -203,7 +206,7 @@
 }
 
 .qtitle {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -211,7 +214,7 @@
 }
 
 .qmeta {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -224,13 +227,13 @@
 }
 
 .emptyTitle {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .emptySub {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 

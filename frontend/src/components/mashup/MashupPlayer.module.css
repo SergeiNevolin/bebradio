@@ -10,7 +10,7 @@
 }
 
 .inner {
-  height: 72px;
+  height: 80px;
   padding: 0 24px;
   display: grid;
   grid-template-columns: minmax(200px, 320px) 1fr minmax(200px, 320px);
@@ -27,8 +27,8 @@
 }
 
 .cover {
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   border-radius: 8px;
   flex-shrink: 0;
   object-fit: cover;
@@ -39,7 +39,7 @@
 }
 
 .glyph {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.92);
 }
@@ -50,7 +50,7 @@
 
 .title {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -58,7 +58,7 @@
 
 .artist {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -71,8 +71,8 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 6px;
   padding: 0;
   display: inline-flex;
@@ -83,8 +83,8 @@
 }
 
 .iconBtn svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .iconBtn:hover:not(:disabled) {
@@ -141,8 +141,8 @@
 
 .playBtn {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: none;
   background: var(--primary);
@@ -155,8 +155,8 @@
 }
 
 .playBtn svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .playBtn:hover {
@@ -184,14 +184,14 @@
 
 .qcount {
   display: inline-block;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  line-height: 18px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  line-height: 20px;
   border-radius: 999px;
   background: var(--surface-hover);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-align: center;
   font-variant-numeric: tabular-nums;

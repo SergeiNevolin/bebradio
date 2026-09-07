@@ -113,4 +113,58 @@ describe('useMashupPlayer', () => {
     act(() => p.current.next())
     expect(p.current.current?.id).toBe('c')
   })
+
+  // ── reload persistence ────────────────────────────────────────────
+  const KEY = 'mashup-player'
+
+  it('writes a snapshot to localStorage once something is playing', () => {
+    const p = setup()
+    act(() => p.current.setList([m('a'), m('b')]))
+    act(() => p.current.playAt(1))
+    const saved = JSON.parse(localStorage.getItem(KEY)!)
+    expect(saved.id).toBe('b')
+    expect(saved.repeat).toBe('off')
+    expect(saved.shuffle).toBe(false)
+  })
+
+  it('restores shuffle and repeat saved from a previous session', () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ id: 'x', position: 0, playing: false, shuffle: true, repeat: 'all' }),
+    )
+    const p = setup()
+    expect(p.current.shuffle).toBe(true)
+    expect(p.current.repeat).toBe('all')
+  })
+
+  it('restores the saved track and offset once the list arrives', () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ id: 'b', position: 33, playing: false, shuffle: false, repeat: 'off' }),
+    )
+    const p = setup()
+    expect(p.current.index).toBe(-1) // nothing to restore onto yet
+    expect(localStorage.getItem(KEY)).not.toBeNull() // and the snapshot survives the wait
+
+    act(() => p.current.setList([m('a'), m('b'), m('c')]))
+    expect(p.current.index).toBe(1)
+    expect(p.current.current?.id).toBe('b')
+
+    const el = p.current.audioRef.current!
+    act(() => el.dispatchEvent(new Event('loadedmetadata')))
+    expect(el.currentTime).toBe(33)
+    expect(p.current.isPlaying).toBe(false)
+  })
+
+  it('ignores a saved track that is no longer in the list', () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ id: 'gone', position: 10, playing: false, shuffle: false, repeat: 'off' }),
+    )
+    const p = setup()
+    act(() => p.current.setList([m('a'), m('b')]))
+    expect(p.current.index).toBe(-1)
+    act(() => p.current.playAt(0))
+    expect(p.current.current?.id).toBe('a')
+  })
 })
