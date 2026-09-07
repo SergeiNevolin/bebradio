@@ -310,7 +310,7 @@ func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	track := rm.CurrentTrack()
-	if track == nil || track.SourceURL == "" {
+	if track == nil || track.MediaID == "" {
 		s.writeJSON(w, 200, map[string]any{
 			"available": false,
 			"track_id":  nil,
@@ -319,7 +319,7 @@ func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subs, _ := s.media.FetchSubtitles(track.SourceURL, lang)
+	subs, _ := s.media.FetchSubtitles(track.MediaID, lang)
 	cues, _ := subs["cues"].([]any)
 	s.writeJSON(w, 200, map[string]any{
 		"available": len(cues) > 0,
