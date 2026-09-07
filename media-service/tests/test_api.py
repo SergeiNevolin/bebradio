@@ -82,6 +82,65 @@ async def test_media_endpoint_supports_range_and_rejects_invalid_id(media_app):
     assert missing.status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_media_captions_returns_cues_from_disk(media_app):
+    app, service = media_app
+    media_dir = service.storage.settings.media_dir
+    media_dir.mkdir(parents=True, exist_ok=True)
+    (media_dir / "media_song.en.vtt").write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nfirst line\n"
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/media/media_song/captions")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["lang"] == "en"
+    assert body["auto"] is False
+    assert body["cues"] == [{"start": 1.0, "dur": 2.0, "text": "first line"}]
+
+
+@pytest.mark.asyncio
+async def test_media_captions_marks_auto_generated(media_app):
+    app, service = media_app
+    media_dir = service.storage.settings.media_dir
+    media_dir.mkdir(parents=True, exist_ok=True)
+    (media_dir / "media_song.auto.ru.vtt").write_text(
+        "WEBVTT\n\n00:00:00.500 --> 00:00:02.500\nстрочка\n"
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/media/media_song/captions")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["lang"] == "ru"
+    assert body["auto"] is True
+
+
+@pytest.mark.asyncio
+async def test_media_captions_empty_when_no_vtt(media_app):
+    app, service = media_app
+    service.storage.settings.media_dir.mkdir(parents=True, exist_ok=True)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/media/media_nolyrics/captions")
+
+    assert response.status_code == 200
+    assert response.json() == {"lang": "", "auto": False, "cues": []}
+
+
+@pytest.mark.asyncio
+async def test_media_captions_rejects_invalid_id(media_app):
+    app, _ = media_app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/media/bad$id/captions")
+
+    assert response.status_code == 400
+
+
 def _resolve_result():
     return {
         "media_id": "media_test",
