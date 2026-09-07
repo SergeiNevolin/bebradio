@@ -14,14 +14,33 @@
   padding: 16px 40px;
 }
 
+.navbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+}
+
 .navbarBrand {
   font-size: 20px;
   font-weight: 700;
   color: var(--primary);
   text-decoration: none;
-  justify-self: start;
   padding: 8px 12px;
   margin: -8px -12px;
+}
+
+.navbarLink {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.navbarLink:hover {
+  color: var(--text);
 }
 
 .navbarRight {

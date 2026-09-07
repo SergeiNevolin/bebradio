@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"io"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
 )
@@ -151,14 +152,18 @@ func (m *MockRoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, 
 }
 
 type MockMediaClient struct {
-	SearchFn        func(query string, limit int) ([]map[string]any, error)
-	ResolveFn       func(url string) (map[string]any, error)
-	EnsureFn        func(items []map[string]any) ([]string, error)
-	RelatedFn       func(sourceURL string, limit int) ([]string, error)
-	MediaCaptionsFn func(mediaID, lang string) (map[string]any, error)
-	ContentFn       func(mediaID, rangeHeader string) (int64, string, []byte, error)
-	DownloadFn      func(sourceURL, mediaID string) (map[string]any, error)
-	UpdateRefsFn    func(mediaIDs []string) error
+	SearchFn    func(query string, limit int) ([]map[string]any, error)
+	ResolveFn   func(url string) (map[string]any, error)
+	EnsureFn    func(items []map[string]any) ([]string, error)
+	RelatedFn   func(sourceURL string, limit int) ([]string, error)
+	CaptionsFn  func(sourceURL, lang string) (map[string]any, error)
+	ContentFn   func(mediaID, rangeHeader string) (int64, string, []byte, error)
+	DownloadFn  func(sourceURL, mediaID string) (map[string]any, error)
+	UpdateRefsFn func(mediaIDs []string) error
+	UploadMashupFn func(mediaID, filename string, body io.Reader) error
+	UploadMashupCoverFn func(mediaID, filename string, body io.Reader) error
+	MashupStatusFn func(mediaID string) (map[string]any, error)
+	DeleteMashupFn func(mediaID string) error
 }
 
 func NewMockMediaClient() *MockMediaClient {
@@ -219,6 +224,184 @@ func (m *MockMediaClient) UpdateReferences(mediaIDs []string) error {
 		return m.UpdateRefsFn(mediaIDs)
 	}
 	return nil
+}
+
+func (m *MockMediaClient) UploadMashup(mediaID, filename string, body io.Reader) error {
+	if m.UploadMashupFn != nil {
+		return m.UploadMashupFn(mediaID, filename, body)
+	}
+	return nil
+}
+
+func (m *MockMediaClient) UploadMashupCover(mediaID, filename string, body io.Reader) error {
+	if m.UploadMashupCoverFn != nil {
+		return m.UploadMashupCoverFn(mediaID, filename, body)
+	}
+	return nil
+}
+
+func (m *MockMediaClient) MashupStatus(mediaID string) (map[string]any, error) {
+	if m.MashupStatusFn != nil {
+		return m.MashupStatusFn(mediaID)
+	}
+	return map[string]any{"status": "ready"}, nil
+}
+
+func (m *MockMediaClient) DeleteMashup(mediaID string) error {
+	if m.DeleteMashupFn != nil {
+		return m.DeleteMashupFn(mediaID)
+	}
+	return nil
+}
+
+type MockMashupRepo struct {
+	Items     map[string]*entity.Mashup
+	Likes     map[string]map[string]bool // mashupID -> set of userID
+	CoverSet  map[string]bool
+	CreateErr error
+}
+
+func NewMockMashupRepo() *MockMashupRepo {
+	return &MockMashupRepo{
+		Items:    make(map[string]*entity.Mashup),
+		Likes:    make(map[string]map[string]bool),
+		CoverSet: make(map[string]bool),
+	}
+}
+
+func (m *MockMashupRepo) liked(mashupID, viewerID string) bool {
+	return viewerID != "" && m.Likes[mashupID][viewerID]
+}
+
+func (m *MockMashupRepo) Create(mashup *entity.Mashup) error {
+	if m.CreateErr != nil {
+		return m.CreateErr
+	}
+	cp := *mashup
+	m.Items[mashup.ID] = &cp
+	return nil
+}
+
+func (m *MockMashupRepo) FindByID(id string) (*entity.Mashup, error) {
+	if v, ok := m.Items[id]; ok {
+		return v, nil
+	}
+	return nil, ErrNotFound
+}
+
+func (m *MockMashupRepo) Delete(id string) error {
+	delete(m.Items, id)
+	return nil
+}
+
+func (m *MockMashupRepo) UpdateStatus(id, status, errMsg string, duration int, sizeBytes int64, hasCover bool) error {
+	if v, ok := m.Items[id]; ok {
+		v.Status = status
+		v.Error = errMsg
+		v.Duration = duration
+		v.SizeBytes = sizeBytes
+		v.HasCover = hasCover
+	}
+	return nil
+}
+
+func (m *MockMashupRepo) Detail(id, viewerID string) (*entity.Mashup, error) {
+	v, ok := m.Items[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *v
+	cp.Liked = m.liked(id, viewerID)
+	return &cp, nil
+}
+
+func (m *MockMashupRepo) SetCoverUploaded(id string) error {
+	m.CoverSet[id] = true
+	if v, ok := m.Items[id]; ok {
+		v.HasCover = true
+	}
+	return nil
+}
+
+func (m *MockMashupRepo) List(query, sort string, limit, offset int, viewerID string) ([]*entity.Mashup, error) {
+	out := make([]*entity.Mashup, 0)
+	for id, v := range m.Items {
+		cp := *v
+		cp.Liked = m.liked(id, viewerID)
+		out = append(out, &cp)
+	}
+	return out, nil
+}
+
+func (m *MockMashupRepo) ListByOwner(ownerID string) ([]*entity.Mashup, error) {
+	out := make([]*entity.Mashup, 0)
+	for id, v := range m.Items {
+		if v.OwnerID == ownerID {
+			cp := *v
+			cp.Liked = m.liked(id, ownerID)
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
+func (m *MockMashupRepo) ListLikedByUser(userID string, limit, offset int) ([]*entity.Mashup, error) {
+	out := make([]*entity.Mashup, 0)
+	for id, v := range m.Items {
+		if m.Likes[id][userID] {
+			cp := *v
+			cp.Liked = true
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
+func (m *MockMashupRepo) Like(mashupID, userID string) (int, error) {
+	if _, ok := m.Items[mashupID]; !ok {
+		return 0, ErrNotFound
+	}
+	if m.Likes[mashupID] == nil {
+		m.Likes[mashupID] = make(map[string]bool)
+	}
+	m.Likes[mashupID][userID] = true
+	return m.recount(mashupID), nil
+}
+
+func (m *MockMashupRepo) Unlike(mashupID, userID string) (int, error) {
+	if _, ok := m.Items[mashupID]; !ok {
+		return 0, ErrNotFound
+	}
+	delete(m.Likes[mashupID], userID)
+	return m.recount(mashupID), nil
+}
+
+func (m *MockMashupRepo) recount(mashupID string) int {
+	n := len(m.Likes[mashupID])
+	if v, ok := m.Items[mashupID]; ok {
+		v.Likes = n
+	}
+	return n
+}
+
+func (m *MockMashupRepo) CountByOwner(ownerID string) (int, error) {
+	n := 0
+	for _, v := range m.Items {
+		if v.OwnerID == ownerID {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (m *MockMashupRepo) ListProcessing() ([]*entity.Mashup, error) {
+	out := make([]*entity.Mashup, 0)
+	for _, v := range m.Items {
+		if v.Status == "processing" {
+			out = append(out, v)
+		}
+	}
+	return out, nil
 }
 
 type MockAuthBridge struct {

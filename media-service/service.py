@@ -1,6 +1,7 @@
 import asyncio
 
 from config import Settings
+from mashups import MashupJobs, MashupStorage
 from providers.youtube import YouTubeProvider
 from storage import MediaStorage
 
@@ -10,9 +11,12 @@ class MediaService:
         self.settings = settings
         self.youtube = YouTubeProvider(settings)
         self.storage = MediaStorage(settings, self.youtube.download)
+        self.mashups = MashupStorage(settings)
+        self.mashup_jobs = MashupJobs(self.mashups, settings)
 
     def start(self) -> None:
         self.storage.init()
+        self.mashups.init()
 
     async def search(self, query: str, limit: int) -> list[dict]:
         return await asyncio.to_thread(self.youtube.search, query, limit)

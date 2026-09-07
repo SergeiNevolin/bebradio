@@ -28,6 +28,9 @@ services:
       - mediadata:/app/media
     environment:
       - MEDIA_DIR=/app/media/tracks
+      - MASHUP_DIR=/app/media/mashups
+      - MASHUP_MAX_SIZE=${MASHUP_MAX_SIZE:-62914560}
+      - MASHUP_COVER_MAX_SIZE=${MASHUP_COVER_MAX_SIZE:-5242880}
       - BGUTIL_BASE_URL=http://bgutil-provider:4416
     depends_on:
       bgutil-provider:
@@ -42,6 +45,9 @@ services:
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
       - MEDIA_SERVICE_URL=http://media-service:8100
+      - MASHUP_MAX_SIZE=${MASHUP_MAX_SIZE:-62914560}
+      - MASHUP_COVER_MAX_SIZE=${MASHUP_COVER_MAX_SIZE:-5242880}
+      - MASHUP_USER_QUOTA=${MASHUP_USER_QUOTA:-20}
     depends_on:
       postgres:
         condition: service_healthy

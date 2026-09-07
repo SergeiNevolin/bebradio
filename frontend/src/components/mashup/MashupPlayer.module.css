@@ -1,0 +1,271 @@
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.inner {
+  height: 80px;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: minmax(200px, 320px) 1fr minmax(200px, 320px);
+  align-items: center;
+  gap: 24px;
+}
+
+/* ── left: now-playing meta ─────────────────────────────────────────── */
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cover {
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: var(--surface-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.glyph {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.text {
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artist {
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── shared icon button ─────────────────────────────────────────────── */
+.iconBtn {
+  position: relative;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.iconBtn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.iconBtn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.iconBtn.on {
+  color: var(--primary);
+}
+
+.iconBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* accent dot under an active shuffle / repeat toggle */
+.dot {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.likeBtn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.likeBtnOn,
+.likeBtnOn:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+/* ── center: transport + seek ──────────────────────────────────────── */
+.center {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.playBtn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.playBtn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.playBtn:hover {
+  background: var(--primary-hover);
+  transform: scale(1.06);
+}
+
+.seek {
+  width: 100%;
+}
+
+/* ── right: queue + volume + expand ────────────────────────────────── */
+.right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.qwrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.qcount {
+  display: inline-block;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  line-height: 20px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  margin-left: -2px;
+}
+
+/* ── responsive ────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .inner {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    height: auto;
+    padding: 10px 14px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    gap: 8px 12px;
+  }
+
+  .meta {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 10px;
+  }
+
+  .cover {
+    width: 44px;
+    height: 44px;
+  }
+
+  .center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: none;
+  }
+
+  .right {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 2px;
+  }
+}
+
+/*
+ * Phones: the right-hand cluster keeps only queue + expand (the volume slider
+ * is already dropped to a mute toggle by VolumeControl's `bar` variant), and
+ * the transport gets a little more breathing room between tap targets.
+ */
+@media (max-width: 560px) {
+  .controls {
+    gap: 12px;
+  }
+
+  .meta .title {
+    font-size: 13px;
+  }
+
+  .meta .artist {
+    font-size: 12px;
+  }
+}
+
+/* Very tight bars drop the secondary toggles; transport + seek stay. */
+@media (max-width: 400px) {
+  .optional {
+    display: none;
+  }
+
+  .inner {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playBtn:hover {
+    transform: none;
+  }
+}

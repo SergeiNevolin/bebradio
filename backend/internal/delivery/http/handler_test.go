@@ -19,9 +19,10 @@ import (
 var testLog = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 type testDeps struct {
-	userRepo  *repository.MockUserRepo
-	roomRepo  *repository.MockRoomRepo
-	media     *repository.MockMediaClient
+	userRepo   *repository.MockUserRepo
+	roomRepo   *repository.MockRoomRepo
+	mashupRepo *repository.MockMashupRepo
+	media      *repository.MockMediaClient
 	auth      *usecase.AuthUsecase
 	authUC    *usecase.AuthUsecase
 	roomUC    *usecase.RoomUsecase
@@ -58,8 +59,12 @@ func setupTestServer(t *testing.T) *testDeps {
 	}
 
 	cfg := &config.Config{
-		MaxDuration: 3600,
-		CORSOrigins: []string{"http://localhost:3000"},
+		MaxDuration:     3600,
+		CORSOrigins:     []string{"http://localhost:3000"},
+		MashupUserQuota:    20,
+		MashupMaxSize:      60 * 1024 * 1024,
+		MashupCoverMaxSize: 5 * 1024 * 1024,
+		RateLimitUpload:    5,
 	}
 
 	authBridge := repository.NewMockAuthBridge()
@@ -74,14 +79,17 @@ func setupTestServer(t *testing.T) *testDeps {
 	userUC := usecase.NewUserUsecase(userRepo, testLog)
 	searchUC := usecase.NewSearchUsecase(mediaClient, cfg, testLog)
 	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, testLog)
+	mashupRepo := repository.NewMockMashupRepo()
+	mashupUC := usecase.NewMashupUsecase(mashupRepo, mediaClient, cfg, testLog)
 	playback := usecase.NewPlaybackUsecase()
 
-	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, ws.NewConnectionManager(testLog))
+	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, mashupUC, ws.NewConnectionManager(testLog))
 
 	return &testDeps{
-		userRepo: userRepo,
-		roomRepo: roomRepo,
-		media:    mediaClient,
+		userRepo:   userRepo,
+		roomRepo:   roomRepo,
+		mashupRepo: mashupRepo,
+		media:      mediaClient,
 		auth:     auth,
 		authUC:   auth,
 		roomUC:   roomUC,

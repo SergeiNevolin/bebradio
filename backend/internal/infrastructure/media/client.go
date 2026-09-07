@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -149,6 +150,123 @@ func (c *Client) UpdateReferences(mediaIDs []string) error {
 	body := fmt.Sprintf(`{"media_ids":%s}`, string(ids))
 	_, err := c.request("POST", "/v1/media/references", body, 10)
 	return err
+}
+
+// UploadMashup streams the file to media-service as multipart/form-data.
+// The body is piped through in a goroutine so a large upload never buffers in
+// memory here; the timeout is generous because transcoding starts server-side.
+func (c *Client) UploadMashup(mediaID, filename string, body io.Reader) error {
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		part, err := mw.CreateFormFile("file", filename)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		if _, err := io.Copy(part, body); err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		pw.CloseWithError(mw.Close())
+	}()
+
+	req, err := http.NewRequest("POST", c.baseURL+"/v1/mashups/"+mediaID, pr)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("media service unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+	}
+	return nil
+}
+
+// UploadMashupCover streams a cover image to media-service as multipart/form-data
+// (PUT, replaces any existing cover). Same io.Pipe trick as UploadMashup so the
+// image never buffers here.
+func (c *Client) UploadMashupCover(mediaID, filename string, body io.Reader) error {
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		part, err := mw.CreateFormFile("file", filename)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		if _, err := io.Copy(part, body); err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		pw.CloseWithError(mw.Close())
+	}()
+
+	req, err := http.NewRequest("PUT", c.baseURL+"/v1/mashups/"+mediaID+"/cover", pr)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+
+	client := &http.Client{Timeout: 2 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("media service unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+	}
+	return nil
+}
+
+func (c *Client) MashupStatus(mediaID string) (map[string]any, error) {
+	req, err := http.NewRequest("GET", c.baseURL+"/v1/mashups/"+mediaID+"/status", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("media service unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("mashup not found on media service")
+	}
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+	}
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteMashup(mediaID string) error {
+	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/mashups/"+mediaID, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("media service unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+	}
+	return nil
 }
 
 func (c *Client) request(method, path, body string, timeoutSec int) ([]byte, error) {

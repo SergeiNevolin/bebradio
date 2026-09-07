@@ -1,0 +1,347 @@
+.panel {
+  width: 90%;
+  max-width: 688px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px 26px 22px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.head h2 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.iconBtn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.iconBtn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.iconBtn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.glyph {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.body {
+  display: flex;
+  gap: 22px;
+  margin-top: 18px;
+}
+
+.art {
+  width: 232px;
+  height: 232px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.art .glyph {
+  font-size: 76px;
+}
+
+.info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.meta {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.owner {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.owner:hover {
+  color: var(--text);
+}
+
+.statline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.likeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 6px 10px;
+  margin-left: -10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.likeBtn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.likeBtnOn,
+.likeBtnOn:hover {
+  color: var(--danger);
+}
+
+.dur {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.seek {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 20px;
+}
+
+.tbtn {
+  position: relative;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.tbtn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.tbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.tbtnSm {
+  width: 36px;
+  height: 36px;
+  color: var(--text-muted);
+}
+
+.tbtn.on {
+  color: var(--primary);
+}
+
+.dot {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.playLg {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s, transform 0.1s;
+}
+
+.playLg:hover {
+  background: var(--primary-hover);
+  transform: scale(1.05);
+}
+
+.queueHead {
+  margin: 22px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.queueEmpty {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.qrow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  margin: 0 -8px;
+  border: none;
+  background: transparent;
+  /* A <button> does not inherit the page text colour, so .qtitle would
+     otherwise stay the UA default (black) in both themes. */
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.qrow:hover {
+  background: var(--surface-hover);
+}
+
+.qart {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qart .glyph {
+  font-size: 16px;
+}
+
+.qbody {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.qtitle {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.qsub {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.qdur {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .body {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .art {
+    width: 200px;
+    height: 200px;
+  }
+
+  .info {
+    width: 100%;
+  }
+
+  .statline {
+    justify-content: center;
+  }
+
+  .likeBtn {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playLg:hover {
+    transform: none;
+  }
+}

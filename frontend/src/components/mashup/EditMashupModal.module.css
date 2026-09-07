@@ -1,0 +1,86 @@
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cover {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.glyph {
+  font-size: 24px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.meta {
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artist {
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.section {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.dangerBox {
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.dangerBox .sectionTitle {
+  color: var(--danger);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
