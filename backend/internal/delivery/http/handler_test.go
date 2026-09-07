@@ -53,8 +53,8 @@ func setupTestServer(t *testing.T) *testDeps {
 		}
 		return ids, nil
 	}
-	mediaClient.CaptionsFn = func(s, l string) (map[string]any, error) {
-		return map[string]any{"lang": l, "auto": false, "cues": []any{}}, nil
+	mediaClient.MediaCaptionsFn = func(mediaID, lang string) (map[string]any, error) {
+		return map[string]any{"lang": lang, "auto": false, "cues": []any{}}, nil
 	}
 
 	cfg := &config.Config{

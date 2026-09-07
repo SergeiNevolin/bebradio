@@ -102,10 +102,10 @@ func (c *Client) Related(sourceURL string, limit int) ([]string, error) {
 	return result, nil
 }
 
-func (c *Client) Captions(sourceURL, lang string) (map[string]any, error) {
-	url := fmt.Sprintf("%s/v1/captions?source_url=%s", c.baseURL, sourceURL)
+func (c *Client) MediaCaptions(mediaID, lang string) (map[string]any, error) {
+	url := fmt.Sprintf("%s/v1/media/%s/captions", c.baseURL, mediaID)
 	if lang != "" {
-		url += "&lang=" + lang
+		url += "?lang=" + lang
 	}
 	resp, err := c.httpClient.Get(url)
 	if err != nil {

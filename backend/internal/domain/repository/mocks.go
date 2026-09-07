@@ -151,14 +151,14 @@ func (m *MockRoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, 
 }
 
 type MockMediaClient struct {
-	SearchFn    func(query string, limit int) ([]map[string]any, error)
-	ResolveFn   func(url string) (map[string]any, error)
-	EnsureFn    func(items []map[string]any) ([]string, error)
-	RelatedFn   func(sourceURL string, limit int) ([]string, error)
-	CaptionsFn  func(sourceURL, lang string) (map[string]any, error)
-	ContentFn   func(mediaID, rangeHeader string) (int64, string, []byte, error)
-	DownloadFn  func(sourceURL, mediaID string) (map[string]any, error)
-	UpdateRefsFn func(mediaIDs []string) error
+	SearchFn        func(query string, limit int) ([]map[string]any, error)
+	ResolveFn       func(url string) (map[string]any, error)
+	EnsureFn        func(items []map[string]any) ([]string, error)
+	RelatedFn       func(sourceURL string, limit int) ([]string, error)
+	MediaCaptionsFn func(mediaID, lang string) (map[string]any, error)
+	ContentFn       func(mediaID, rangeHeader string) (int64, string, []byte, error)
+	DownloadFn      func(sourceURL, mediaID string) (map[string]any, error)
+	UpdateRefsFn    func(mediaIDs []string) error
 }
 
 func NewMockMediaClient() *MockMediaClient {
@@ -193,9 +193,9 @@ func (m *MockMediaClient) Related(sourceURL string, limit int) ([]string, error)
 	return nil, nil
 }
 
-func (m *MockMediaClient) Captions(sourceURL, lang string) (map[string]any, error) {
-	if m.CaptionsFn != nil {
-		return m.CaptionsFn(sourceURL, lang)
+func (m *MockMediaClient) MediaCaptions(mediaID, lang string) (map[string]any, error) {
+	if m.MediaCaptionsFn != nil {
+		return m.MediaCaptionsFn(mediaID, lang)
 	}
 	return map[string]any{"lang": "", "auto": false, "cues": []any{}}, nil
 }

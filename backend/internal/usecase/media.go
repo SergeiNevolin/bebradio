@@ -98,8 +98,8 @@ func (uc *MediaUsecase) EnsureRoomMedia(rm *entity.Room) bool {
 	return changed
 }
 
-func (uc *MediaUsecase) FetchSubtitles(sourceURL, lang string) (map[string]any, error) {
-	return uc.mediaClient.Captions(sourceURL, lang)
+func (uc *MediaUsecase) FetchSubtitles(mediaID, lang string) (map[string]any, error) {
+	return uc.mediaClient.MediaCaptions(mediaID, lang)
 }
 
 func (uc *MediaUsecase) StreamContent(mediaID, rangeHeader string) (int64, string, []byte, error) {
