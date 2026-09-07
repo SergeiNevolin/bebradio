@@ -93,9 +93,11 @@ def create_app(service: MediaService) -> FastAPI:
         service.set_references(request.media_ids)
         return {"count": len(service.storage.referenced)}
 
-    @router.get("/captions")
-    async def captions(source_url: str, lang: str = ""):
-        return await service.captions(source_url, lang)
+    @router.get("/media/{media_id}/captions")
+    async def media_captions(media_id: str, lang: str = ""):
+        if not service.storage.valid_id(media_id):
+            raise HTTPException(status_code=400, detail="Invalid media ID")
+        return await service.captions_from_disk(media_id, lang)
 
     @router.get("/media/{media_id}")
     async def media(media_id: str, request: Request):

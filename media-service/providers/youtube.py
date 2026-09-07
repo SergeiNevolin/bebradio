@@ -4,8 +4,6 @@ import logging
 import re
 import subprocess
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -14,7 +12,6 @@ from config import Settings
 log = logging.getLogger(__name__)
 
 _VIDEO_ID_RE = re.compile(r"(?:v=|youtu\.be/|/shorts/|/embed/)([\w-]{11})")
-_LANGS = ["en", "en-US", "en-GB", "en-orig"]
 _VTT_TS = re.compile(
     r"(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*"
     r"(\d{2}):(\d{2}):(\d{2})[.,](\d{3})"
@@ -31,7 +28,6 @@ class YouTubeProvider:
             "--remote-components", "ejs:github",
             "--extractor-args", f"youtubepot-bgutilhttp:base_url={settings.bgutil_base_url}",
         ]
-        self._subtitle_cache: dict[str, dict] = {}
 
     @staticmethod
     def provider_item_id(url: str) -> str:
@@ -138,48 +134,13 @@ class YouTubeProvider:
         ], 120)
         return bool(result)
 
-    def captions(self, source_url: str, lang: str) -> dict:
-        provider_item_id = self.provider_item_id(source_url)
-        empty = {"lang": "", "auto": False, "cues": []}
-        if not provider_item_id:
-            return empty
-        cache_key = f"{provider_item_id}:{lang}"
-        if cache_key in self._subtitle_cache:
-            return self._subtitle_cache[cache_key]
-
-        result = empty
-        info = self._run([
-            *self._common_args, "--dump-json", "--no-download", "--no-playlist",
-            f"https://www.youtube.com/watch?v={provider_item_id}",
-        ])
-        if info:
-            try:
-                data = json.loads(info.stdout)
-                manual = data.get("subtitles") or {}
-                automatic = data.get("automatic_captions") or {}
-                tracks = manual or automatic
-                chosen = lang if lang in tracks else next((item for item in _LANGS if item in tracks), next(iter(tracks), ""))
-                entry = next((item for item in tracks.get(chosen, []) if item.get("ext") in ("vtt", "json3") and item.get("url")), None)
-                if entry:
-                    request = urllib.request.Request(entry["url"], headers={"User-Agent": "Mozilla/5.0"})
-                    with urllib.request.urlopen(request, timeout=15) as response:
-                        raw = response.read().decode("utf-8", "replace")
-                    cues = self._parse_vtt(raw) if entry.get("ext") == "vtt" else []
-                    result = {"lang": chosen, "auto": not bool(manual), "cues": cues}
-            except urllib.error.HTTPError as exc:
-                if exc.code == 429:
-                    log.warning("captions rate-limited by YouTube for %s", provider_item_id)
-                else:
-                    log.warning("captions request failed for %s: HTTP %s", provider_item_id, exc.code)
-            except urllib.error.URLError as exc:
-                log.warning("captions request failed for %s: %s", provider_item_id, exc.reason)
-            except Exception:
-                log.exception("caption lookup failed")
-
-        if len(self._subtitle_cache) >= 256:
-            self._subtitle_cache.pop(next(iter(self._subtitle_cache)))
-        self._subtitle_cache[cache_key] = result
-        return result
+    @classmethod
+    def read_vtt_file(cls, path: Path) -> dict:
+        """Parse a .vtt written by `download()`. yt-dlp names manual and auto
+        subtitles identically, so 'auto' is inferred: ASR captions carry inline
+        `<c>` word-timing tags that hand-authored subtitles do not."""
+        raw = path.read_text(encoding="utf-8", errors="replace")
+        return {"auto": "<c>" in raw, "cues": cls._parse_vtt(raw)}
 
     @staticmethod
     def _parse_vtt(raw: str) -> list[dict]:

@@ -1,5 +1,4 @@
 import json
-import urllib.error
 from pathlib import Path
 
 
@@ -94,24 +93,19 @@ def test_parse_vtt_removes_tags_and_decodes_entities(settings):
     assert cues == [{"start": 1.0, "dur": 2.5, "text": "Hello & welcome"}]
 
 
-def test_captions_rate_limit_returns_empty_result_without_raising(settings, monkeypatch):
+def test_read_vtt_file_flags_asr_captions_as_auto(settings, tmp_path):
     from providers.youtube import YouTubeProvider
 
-    provider = YouTubeProvider(settings)
+    manual = tmp_path / "media_x.en.vtt"
+    manual.write_text("WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello there\n")
+    asr = tmp_path / "media_x.ru.vtt"
+    asr.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:03.000 align:start position:0%\n"
+        "<00:00:01.240><c>Привет</c>\n"
+    )
 
-    class Result:
-        returncode = 0
-        stdout = json.dumps({
-            "id": "dQw4w9WgXcQ",
-            "subtitles": {"en": [{"ext": "vtt", "url": "https://captions.test/en.vtt"}]},
-        })
-
-    def fail_request(*args, **kwargs):
-        raise urllib.error.HTTPError("https://captions.test/en.vtt", 429, "Too Many Requests", {}, None)
-
-    monkeypatch.setattr(provider, "_run", lambda *args, **kwargs: Result())
-    monkeypatch.setattr(urllib.request, "urlopen", fail_request)
-
-    result = provider.captions("https://youtube.com/watch?v=dQw4w9WgXcQ", "")
-
-    assert result == {"lang": "", "auto": False, "cues": []}
+    assert YouTubeProvider.read_vtt_file(manual) == {
+        "auto": False,
+        "cues": [{"start": 1.0, "dur": 2.0, "text": "Hello there"}],
+    }
+    assert YouTubeProvider.read_vtt_file(asr)["auto"] is True
