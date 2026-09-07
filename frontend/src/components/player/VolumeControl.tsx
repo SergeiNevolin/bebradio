@@ -6,14 +6,26 @@ interface VolumeControlProps {
   muted: boolean
   onVolume: (v: number) => void
   onToggleMute: () => void
+  /**
+   * `bar` tunes the control for the fixed bottom mashup bar: on narrow screens
+   * the slider is dropped and only the mute toggle remains, so it never spills
+   * past the viewport edge.
+   */
+  variant?: 'default' | 'bar'
 }
 
-export default function VolumeControl({ volume, muted, onVolume, onToggleMute }: VolumeControlProps) {
+export default function VolumeControl({
+  volume,
+  muted,
+  onVolume,
+  onToggleMute,
+  variant = 'default',
+}: VolumeControlProps) {
   const silent = muted || volume === 0
   const effective = muted ? 0 : volume
 
   return (
-    <div className={styles.volumeControl}>
+    <div className={`${styles.volumeControl}${variant === 'bar' ? ` ${styles.bar}` : ''}`}>
       <button
         type="button"
         className={styles.volumeBtn}

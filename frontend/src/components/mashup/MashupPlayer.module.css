@@ -206,16 +206,49 @@
     height: auto;
     padding: 10px 14px;
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
-    gap: 8px 14px;
+    gap: 8px 12px;
+  }
+
+  .meta {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 10px;
+  }
+
+  .cover {
+    width: 44px;
+    height: 44px;
   }
 
   .center {
     grid-column: 1 / -1;
     grid-row: 2;
+    max-width: none;
   }
 
   .right {
+    grid-column: 2;
     grid-row: 1;
+    gap: 2px;
+  }
+}
+
+/*
+ * Phones: the right-hand cluster keeps only queue + expand (the volume slider
+ * is already dropped to a mute toggle by VolumeControl's `bar` variant), and
+ * the transport gets a little more breathing room between tap targets.
+ */
+@media (max-width: 560px) {
+  .controls {
+    gap: 12px;
+  }
+
+  .meta .title {
+    font-size: 13px;
+  }
+
+  .meta .artist {
+    font-size: 12px;
   }
 }
 
@@ -223,6 +256,11 @@
 @media (max-width: 400px) {
   .optional {
     display: none;
+  }
+
+  .inner {
+    padding-left: 10px;
+    padding-right: 10px;
   }
 }
 

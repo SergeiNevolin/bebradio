@@ -92,3 +92,21 @@
     width: auto;
   }
 }
+
+/*
+ * `bar` variant (fixed bottom mashup player). On phones the horizontal room in
+ * the bar's right-hand cluster runs out, so the slider is hidden and the control
+ * collapses to just the mute toggle. This also neutralises the `flex: 1 0 100%`
+ * rule above, which only makes sense inside a wrapping flex row.
+ */
+@media (max-width: 640px) {
+  .volumeControl.bar {
+    flex: 0 0 auto;
+    order: 0;
+    margin-bottom: 0;
+  }
+
+  .volumeControl.bar .volumeSlider {
+    display: none;
+  }
+}
