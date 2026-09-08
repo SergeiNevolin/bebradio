@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test.describe('Navigation', () => {
   test('home page shows hero section', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('heading', { name: 'Listen together' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Слушать музыку вместе с друзьями' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Create Room' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Join by Code' })).toBeVisible()
   })
@@ -19,7 +19,7 @@ test.describe('Navigation', () => {
     await page.goto('/nonexistent')
     await page.getByRole('link', { name: 'Go Home' }).click()
     await expect(page).toHaveURL('/')
-    await expect(page.getByRole('heading', { name: 'Listen together' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Слушать музыку вместе с друзьями' })).toBeVisible()
   })
 
   test('login page renders correctly', async ({ page }) => {
