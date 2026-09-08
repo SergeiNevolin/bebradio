@@ -1,5 +1,6 @@
 import type { Mashup } from '../../types'
 import { formatTime } from '../../lib/format'
+import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import styles from './MashupCard.module.css'
 
 interface MashupCardProps {
@@ -10,6 +11,8 @@ interface MashupCardProps {
   onPlay: () => void
   onToggleLike: () => void
   onEdit: () => void
+  /** Opens the given uploader's profile (in a modal, on the Mashups page). */
+  onOpenProfile?: (userId: string) => void
 }
 
 export default function MashupCard({
@@ -20,6 +23,7 @@ export default function MashupCard({
   onPlay,
   onToggleLike,
   onEdit,
+  onOpenProfile,
 }: MashupCardProps) {
   const ready = mashup.status === 'ready'
   const playing = active && isPlaying
@@ -32,6 +36,7 @@ export default function MashupCard({
       <button
         type="button"
         className={styles.art}
+        style={mashup.cover_url ? undefined : { background: tintForId(mashup.id) }}
         onClick={(e) => {
           e.stopPropagation()
           onPlay()
@@ -48,25 +53,49 @@ export default function MashupCard({
         {mashup.cover_url ? (
           <img className={styles.cover} src={mashup.cover_url} alt="" />
         ) : (
-          <span className={styles.coverFallback} aria-hidden="true">♪</span>
+          <span className={styles.glyph} aria-hidden="true">{monoGlyph(mashup.title)}</span>
         )}
+
+        {playing && (
+          <span className={styles.eq} aria-hidden="true">
+            <i /><i /><i />
+          </span>
+        )}
+
         {ready && (
-          <span className={styles.playIcon}>{playing ? '⏸' : '▶'}</span>
-        )}
-        {mashup.status === 'processing' && (
-          <span className={styles.badge}>processing…</span>
-        )}
-        {mashup.status === 'failed' && (
-          <span className={`${styles.badge} ${styles.badgeError}`}>failed</span>
+          <span className={styles.fab} aria-hidden="true">{playing ? '⏸' : '▶'}</span>
         )}
       </button>
 
       <div className={styles.body}>
         <div className={styles.title} title={mashup.title}>{mashup.title}</div>
-        <div className={styles.artist}>{mashup.artist || 'Unknown artist'}</div>
-        {mashup.owner_name && (
-          <div className={styles.owner}>by {mashup.owner_name}</div>
-        )}
+        <div
+          className={styles.meta}
+          title={
+            mashup.owner_name
+              ? `${mashup.artist || 'Unknown artist'} · by ${mashup.owner_name}`
+              : mashup.artist || 'Unknown artist'
+          }
+        >
+          {mashup.artist || 'Unknown artist'}
+          {mashup.owner_name && mashup.owner_id && onOpenProfile ? (
+            <>
+              {' · by '}
+              <button
+                type="button"
+                className={styles.ownerLink}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenProfile(mashup.owner_id)
+                }}
+              >
+                {mashup.owner_name}
+              </button>
+            </>
+          ) : mashup.owner_name ? (
+            ` · by ${mashup.owner_name}`
+          ) : null}
+        </div>
         <div className={styles.foot}>
           <button
             type="button"
@@ -81,10 +110,20 @@ export default function MashupCard({
             <span className={styles.likeIcon} aria-hidden="true">{mashup.liked ? '♥' : '♡'}</span>
             <span>{mashup.likes}</span>
           </button>
-          {ready && <span>{formatTime(mashup.duration)}</span>}
-          {mashup.status === 'failed' && mashup.error && (
-            <span className={styles.errText} title={mashup.error}>{mashup.error}</span>
+
+          {ready && <span className={styles.dur}>{formatTime(mashup.duration)}</span>}
+          {mashup.status === 'processing' && (
+            <span className={`${styles.badge} ${styles.badgeWarn}`}>processing…</span>
           )}
+          {mashup.status === 'failed' && (
+            <span
+              className={`${styles.badge} ${styles.badgeError}`}
+              title={mashup.error || 'failed'}
+            >
+              failed
+            </span>
+          )}
+
           {canEdit && (
             <button
               type="button"

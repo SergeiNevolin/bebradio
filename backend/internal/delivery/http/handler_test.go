@@ -54,8 +54,8 @@ func setupTestServer(t *testing.T) *testDeps {
 		}
 		return ids, nil
 	}
-	mediaClient.CaptionsFn = func(s, l string) (map[string]any, error) {
-		return map[string]any{"lang": l, "auto": false, "cues": []any{}}, nil
+	mediaClient.MediaCaptionsFn = func(mediaID, lang string) (map[string]any, error) {
+		return map[string]any{"lang": lang, "auto": false, "cues": []any{}}, nil
 	}
 
 	cfg := &config.Config{
@@ -754,5 +754,78 @@ func TestHandlePlayback(t *testing.T) {
 
 	if w2.Code != 200 {
 		t.Errorf("expected 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+}
+
+func TestHandleGetLyricsUsesMediaID(t *testing.T) {
+	d := setupTestServer(t)
+	token := registerUser(t, d, "lyr@test.com", "lyricuser", "pass123")
+
+	var gotMediaID, gotLang string
+	calls := 0
+	d.media.MediaCaptionsFn = func(mediaID, lang string) (map[string]any, error) {
+		calls++
+		gotMediaID, gotLang = mediaID, lang
+		return map[string]any{
+			"lang": "en",
+			"auto": false,
+			"cues": []any{map[string]any{"start": 1.0, "dur": 2.0, "text": "hi"}},
+		}, nil
+	}
+
+	body, _ := json.Marshal(map[string]string{"name": "Lyrics Room"})
+	req := httptest.NewRequest("POST", "/api/rooms/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(w, req)
+	var createResp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &createResp)
+	roomID := createResp["id"].(string)
+
+	// No current track: available=false, media client not called.
+	rw := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(rw, httptest.NewRequest("GET", "/api/rooms/"+roomID+"/lyrics", nil))
+	if rw.Code != 200 {
+		t.Fatalf("no-track lyrics: expected 200, got %d: %s", rw.Code, rw.Body.String())
+	}
+	var empty map[string]any
+	json.Unmarshal(rw.Body.Bytes(), &empty)
+	if empty["available"] != false {
+		t.Errorf("no-track lyrics: expected available=false, got %v", empty["available"])
+	}
+	if calls != 0 {
+		t.Errorf("no-track lyrics: media client called %d times, expected 0", calls)
+	}
+
+	// Add a track (mock Resolve gives media_id "m1"), then lyrics resolve by MediaID.
+	queueBody, _ := json.Marshal(map[string]string{"url": "https://youtu.be/x"})
+	qr := httptest.NewRequest("POST", "/api/rooms/"+roomID+"/queue", bytes.NewReader(queueBody))
+	qr.Header.Set("Content-Type", "application/json")
+	qr.Header.Set("Authorization", "Bearer "+token)
+	qw := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(qw, qr)
+	if qw.Code != 200 {
+		t.Fatalf("queue add: expected 200, got %d: %s", qw.Code, qw.Body.String())
+	}
+
+	w2 := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(w2, httptest.NewRequest("GET", "/api/rooms/"+roomID+"/lyrics?lang=en", nil))
+	if w2.Code != 200 {
+		t.Fatalf("lyrics: expected 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var got map[string]any
+	json.Unmarshal(w2.Body.Bytes(), &got)
+	if got["available"] != true {
+		t.Errorf("expected available=true, got %v", got["available"])
+	}
+	if gotMediaID != "m1" {
+		t.Errorf("expected media client called with mediaID \"m1\", got %q", gotMediaID)
+	}
+	if gotLang != "en" {
+		t.Errorf("expected lang \"en\", got %q", gotLang)
+	}
+	if _, ok := got["cues"].([]any); !ok {
+		t.Errorf("expected cues array, got %T", got["cues"])
 	}
 }

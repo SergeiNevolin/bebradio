@@ -6,8 +6,12 @@ import type { Mashup } from '../types'
 import { useMashupPlayer } from '../hooks/useMashupPlayer'
 import MashupCard from '../components/mashup/MashupCard'
 import MashupPlayer from '../components/mashup/MashupPlayer'
+import MashupSidebar from '../components/mashup/MashupSidebar'
+import NowPlayingPanel from '../components/mashup/NowPlayingPanel'
+import NowPlayingModal from '../components/mashup/NowPlayingModal'
 import UploadMashupModal from '../components/mashup/UploadMashupModal'
 import EditMashupModal from '../components/mashup/EditMashupModal'
+import ProfileModal from '../components/ProfileModal'
 import styles from './Mashups.module.css'
 
 const RECENT_LIMIT = 12
@@ -20,10 +24,33 @@ export default function Mashups() {
   const player = useMashupPlayer()
   const { setList } = player
 
+  useEffect(() => {
+    const previousTitle = document.title
+    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
+    const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
+    const previousDescription = description?.content
+    const previousCanonical = canonical?.href
+
+    document.title = 'Загружайте и слушайте мешапы — bebradio'
+    if (description) {
+      description.content = 'Слушайте лучшие мешапы онлайн на bebradio. Находите новые треки, добавляйте их в очередь и делитесь музыкой с друзьями.'
+    }
+    if (canonical) canonical.href = 'https://bebradio.ru/mashup'
+
+    return () => {
+      document.title = previousTitle
+      if (description && previousDescription !== undefined) description.content = previousDescription
+      if (canonical && previousCanonical !== undefined) canonical.href = previousCanonical
+    }
+  }, [])
+
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [showUpload, setShowUpload] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [profileUserId, setProfileUserId] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [queueOpen, setQueueOpen] = useState(true)
 
   const [recent, setRecent] = useState<Mashup[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
@@ -145,7 +172,7 @@ export default function Mashups() {
     }
   }, [user, loadLiked, loadMine])
 
-  // Search: a non-empty query collapses the page to one result grid.
+  // Search: a non-empty query collapses the shelves to one result grid.
   useEffect(() => {
     if (!debouncedQuery) {
       setSearchResults([])
@@ -169,10 +196,10 @@ export default function Mashups() {
     }
   }, [debouncedQuery, showToast])
 
-  // Infinite scroll for the "Top by likes" column. The observer's root is that
-  // column's own scroll box, since each section now scrolls independently.
+  // Infinite scroll for the "Top by likes" shelf. The observer's root is that
+  // rail's own horizontal scroll box.
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const topScrollRef = useRef<HTMLDivElement>(null)
+  const topRailRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (debouncedQuery || topDone) return
     const el = sentinelRef.current
@@ -181,20 +208,21 @@ export default function Mashups() {
       (entries) => {
         if (entries[0]?.isIntersecting) loadTopPage(false)
       },
-      { root: topScrollRef.current },
+      { root: topRailRef.current },
     )
     io.observe(el)
     return () => io.disconnect()
   }, [debouncedQuery, topDone, loadTopPage, top.length])
 
-  // Keep the player's walkable list in step with what is on screen.
+  // The player's walkable list is every mashup currently loaded, in a stable
+  // order. Search results are appended rather than swapped in, so starting a
+  // search never drops the playing track out of the list (which would stop it).
   const playerList = useMemo(() => {
-    const source = debouncedQuery
-      ? searchResults
-      : [...recent, ...top, ...liked, ...mine]
     const seen = new Set<string>()
-    return source.filter((m) => (seen.has(m.id) ? false : seen.add(m.id)))
-  }, [debouncedQuery, searchResults, recent, top, liked, mine])
+    return [...recent, ...top, ...liked, ...mine, ...searchResults].filter((m) =>
+      seen.has(m.id) ? false : seen.add(m.id),
+    )
+  }, [recent, top, liked, mine, searchResults])
 
   useEffect(() => {
     setList(playerList)
@@ -293,145 +321,192 @@ export default function Mashups() {
   const activeId = player.current?.id
 
   const renderCard = (m: Mashup) => (
-    <MashupCard
-      key={m.id}
-      mashup={m}
-      active={m.id === activeId}
-      isPlaying={player.isPlaying}
-      canEdit={!!user && user.id === m.owner_id}
-      onPlay={() => (m.id === activeId ? player.toggle() : player.play(m))}
-      onToggleLike={() => handleToggleLike(m)}
-      onEdit={() => setEditingId(m.id)}
-    />
+    <div key={m.id} className={styles.railItem}>
+      <MashupCard
+        mashup={m}
+        active={m.id === activeId}
+        isPlaying={player.isPlaying}
+        canEdit={!!user && user.id === m.owner_id}
+        onPlay={() => (m.id === activeId ? player.toggle() : player.play(m))}
+        onToggleLike={() => handleToggleLike(m)}
+        onEdit={() => setEditingId(m.id)}
+        onOpenProfile={setProfileUserId}
+      />
+    </div>
+  )
+
+  const skeletonRail = (
+    <div className={styles.rail}>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className={`${styles.railItem} ${styles.skeletonCard}`} />
+      ))}
+    </div>
   )
 
   const skeletonGrid = (
     <div className={styles.grid}>
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className={styles.skeleton} />
+        <div key={i} className={styles.skeletonCard} />
       ))}
     </div>
   )
 
-  const skeletonList = (
-    <div className={styles.list}>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className={styles.skeleton} />
-      ))}
-    </div>
+  const queue =
+    player.index >= 0 ? playerList.slice(player.index + 1, player.index + 4) : []
+
+  const hint = recentLoading
+    ? 'Loading mashups…'
+    : debouncedQuery
+      ? 'Showing what matches your search across every uploader.'
+      : 'Uploads from everyone on bebradio. Click a card to play it here.'
+
+  const renderShelf = (
+    title: string,
+    items: Mashup[],
+    loading: boolean,
+    opts: { emptyText: string; rail?: boolean },
+  ) => (
+    <section className={styles.shelf}>
+      <h2 className={styles.shelfTitle}>{title}</h2>
+      {loading ? (
+        skeletonRail
+      ) : items.length === 0 ? (
+        <p className={styles.empty}>{opts.emptyText}</p>
+      ) : (
+        <div className={styles.rail} ref={opts.rail ? topRailRef : undefined}>
+          {items.map(renderCard)}
+          {opts.rail && !topDone && <div ref={sentinelRef} className={styles.railSentinel} />}
+        </div>
+      )}
+    </section>
   )
 
   return (
     <div className={styles.page}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>Mashups</h1>
-        {user && (
-          <button className="btn" onClick={() => setShowUpload(true)}>
-            Upload
-          </button>
+      <div className={styles.shell}>
+        <MashupSidebar
+          items={playerList}
+          likedItems={liked}
+          mineItems={mine}
+          signedIn={!!user}
+          activeId={activeId}
+          isPlaying={player.isPlaying}
+          loading={recentLoading}
+          onPlay={(m) => (m.id === activeId ? player.toggle() : player.play(m))}
+        />
+
+        <div className={styles.main}>
+          <div className={styles.mainScroll}>
+            <div className={styles.maintop}>
+              <div className={styles.searchWrap}>
+                <svg
+                  className={styles.searchIcon}
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  aria-hidden="true"
+                >
+                  <circle cx="7" cy="7" r="4.5" />
+                  <path d="M10.5 10.5 14 14" strokeLinecap="round" />
+                </svg>
+                <input
+                  className={styles.search}
+                  type="search"
+                  placeholder="Search mashups by title or artist"
+                  aria-label="Search mashups"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+              <span className={styles.spacer} />
+              {user && (
+                <button className="btn" onClick={() => setShowUpload(true)}>
+                  Upload
+                </button>
+              )}
+            </div>
+
+            <div className={styles.content}>
+              <div className={styles.pagehead}>
+                <h1 className={styles.title}>Загружайте и слушайте мешапы</h1>
+                {!recentLoading && (
+                  <span className={styles.counter}>{playerList.length}</span>
+                )}
+              </div>
+              <p className={styles.sub}>
+                Слушайте мешапы онлайн, находите новые треки и собирайте свою очередь музыки.
+                {hint && ` ${hint}`}
+              </p>
+
+              {debouncedQuery ? (
+                <section className={styles.shelf}>
+                  <h2 className={styles.shelfTitle}>Search results</h2>
+                  {searchLoading ? (
+                    skeletonGrid
+                  ) : searchResults.length === 0 ? (
+                    <div className={styles.blank}>
+                      <div className={styles.blankTitle}>No mashups found</div>
+                      <div className={styles.blankSub}>Nothing matches this query. Try a shorter one.</div>
+                    </div>
+                  ) : (
+                    <div className={styles.grid}>{searchResults.map(renderCard)}</div>
+                  )}
+                </section>
+              ) : (
+                <>
+                  {renderShelf('Latest', recent, recentLoading, {
+                    emptyText: user ? 'No mashups yet — hit Upload.' : 'No mashups yet.',
+                  })}
+                  {renderShelf('Top by likes', top, topLoading && top.length === 0, {
+                    emptyText: 'No mashups yet.',
+                    rail: true,
+                  })}
+                  {user &&
+                    renderShelf('Liked', liked, likedLoading, {
+                      emptyText: 'You haven’t liked any mashups yet.',
+                    })}
+                  {user &&
+                    renderShelf('My mashups', mine, mineLoading, {
+                      emptyText: 'You have not uploaded any mashups yet.',
+                    })}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {queueOpen && (
+          <NowPlayingPanel
+            current={player.current}
+            queue={queue}
+            loading={recentLoading && !player.current}
+            onPlayFromQueue={(m) => player.play(m)}
+            onToggleLike={handleToggleLike}
+            onOpenProfile={setProfileUserId}
+          />
         )}
       </div>
 
-      <div className={styles.toolbar}>
-        <input
-          className={styles.search}
-          type="search"
-          placeholder="Search mashups…"
-          aria-label="Search mashups"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+      <MashupPlayer
+        player={player}
+        onToggleLike={handleToggleLike}
+        onExpand={() => setExpanded(true)}
+        queueOpen={queueOpen}
+        onToggleQueue={() => setQueueOpen((v) => !v)}
+      />
+
+      {expanded && player.current && (
+        <NowPlayingModal
+          player={player}
+          queue={queue}
+          onToggleLike={handleToggleLike}
+          onOpenProfile={setProfileUserId}
+          onClose={() => setExpanded(false)}
         />
-      </div>
-
-      {debouncedQuery ? (
-        <section className={styles.searchColumn}>
-          <h2 className={styles.columnTitle}>Search results</h2>
-          <div className={styles.searchScroll}>
-            {searchLoading ? (
-              skeletonGrid
-            ) : searchResults.length === 0 ? (
-              <div className={styles.empty}>
-                <p>No mashups found.</p>
-              </div>
-            ) : (
-              <div className={styles.grid}>{searchResults.map(renderCard)}</div>
-            )}
-          </div>
-        </section>
-      ) : (
-        <div className={styles.board}>
-          <section className={styles.column}>
-            <h2 className={styles.columnTitle}>Latest</h2>
-            <div className={styles.columnScroll}>
-              {recentLoading ? (
-                skeletonList
-              ) : recent.length === 0 ? (
-                <div className={styles.empty}>
-                  <p>No mashups yet.</p>
-                  {user && <p className={styles.emptySub}>Be the first — hit Upload.</p>}
-                </div>
-              ) : (
-                <div className={styles.list}>{recent.map(renderCard)}</div>
-              )}
-            </div>
-          </section>
-
-          <section className={styles.column}>
-            <h2 className={styles.columnTitle}>Top by likes</h2>
-            <div className={styles.columnScroll} ref={topScrollRef}>
-              {topLoading && top.length === 0 ? (
-                skeletonList
-              ) : top.length === 0 ? (
-                <div className={styles.empty}>
-                  <p>No mashups yet.</p>
-                </div>
-              ) : (
-                <div className={styles.list}>
-                  {top.map(renderCard)}
-                  {!topDone && <div ref={sentinelRef} className={styles.sentinel} />}
-                  {topLoading && <div className={styles.loadingMore}>Loading…</div>}
-                </div>
-              )}
-            </div>
-          </section>
-
-          {user && (
-            <section className={styles.column}>
-              <h2 className={styles.columnTitle}>Liked</h2>
-              <div className={styles.columnScroll}>
-                {likedLoading ? (
-                  skeletonList
-                ) : liked.length === 0 ? (
-                  <div className={styles.empty}>
-                    <p>You haven’t liked any mashups yet.</p>
-                  </div>
-                ) : (
-                  <div className={styles.list}>{liked.map(renderCard)}</div>
-                )}
-              </div>
-            </section>
-          )}
-
-          {user && (
-            <section className={styles.column}>
-              <h2 className={styles.columnTitle}>My mashups</h2>
-              <div className={styles.columnScroll}>
-                {mineLoading ? (
-                  skeletonList
-                ) : mine.length === 0 ? (
-                  <div className={styles.empty}>
-                    <p>You have not uploaded any mashups yet.</p>
-                  </div>
-                ) : (
-                  <div className={styles.list}>{mine.map(renderCard)}</div>
-                )}
-              </div>
-            </section>
-          )}
-        </div>
       )}
-
-      <MashupPlayer player={player} />
 
       {showUpload && (
         <UploadMashupModal
@@ -449,6 +524,10 @@ export default function Mashups() {
           onDelete={() => handleDelete(editing)}
           onClose={() => setEditingId(null)}
         />
+      )}
+
+      {profileUserId && (
+        <ProfileModal userId={profileUserId} onClose={() => setProfileUserId(null)} />
       )}
     </div>
   )

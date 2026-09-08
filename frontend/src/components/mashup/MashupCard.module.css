@@ -1,17 +1,18 @@
 .card {
   position: relative;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 11px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  transition: border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .card:hover {
-  border-color: var(--text-muted);
+  background: var(--surface);
+  border-color: var(--border);
 }
 
 .cardReady {
@@ -24,14 +25,14 @@
 
 .art {
   position: relative;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 0;
   width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  background: var(--border);
+  background: var(--surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -47,44 +48,63 @@
   object-fit: cover;
 }
 
-.coverFallback {
-  font-size: 40px;
-  color: var(--text-muted);
+.glyph {
+  font-size: 34px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
 }
 
-.playIcon {
+/* Play / pause affordance, bottom-right, revealed on hover or when active. */
+.fab {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 15px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+
+.card:hover .fab,
+.cardActive .fab {
+  opacity: 1;
+  transform: none;
+}
+
+/* Animated equaliser shown over the art of the playing card. */
+.eq {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.32);
-  opacity: 0;
-  transition: opacity 0.15s ease;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.45);
 }
 
-.art:hover .playIcon,
-.cardActive .playIcon {
-  opacity: 1;
+.eq i {
+  width: 3px;
+  border-radius: 1px;
+  background: #fff;
+  animation: eq 900ms ease-in-out infinite;
 }
 
-.badge {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text-muted);
-}
+.eq i:nth-child(1) { height: 9px; animation-delay: 0ms; }
+.eq i:nth-child(2) { height: 18px; animation-delay: 150ms; }
+.eq i:nth-child(3) { height: 12px; animation-delay: 300ms; }
 
-.badgeError {
-  color: #fff;
-  background: var(--danger, #d94040);
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
 }
 
 .body {
@@ -93,38 +113,48 @@
 
 .title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.artist {
+.meta {
   color: var(--text-muted);
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.owner {
-  color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin-top: 2px;
 }
 
+.ownerLink {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: transparent;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.ownerLink:hover {
+  color: var(--text);
+  text-decoration-color: currentColor;
+}
+
 .foot {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  min-height: 16px;
+  min-height: 34px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .likeBtn {
@@ -137,30 +167,53 @@
   font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  padding: 6px 10px;
-  margin: -4px -6px;
-  border-radius: 999px;
+  padding: 5px 8px;
+  margin-left: -8px;
+  border-radius: 8px;
   line-height: 1;
   cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease;
 }
 
-.likeBtn:hover:not(:disabled) {
+.likeBtn:hover {
   color: var(--text);
   background: var(--surface-hover);
 }
 
-.likeBtn:disabled {
-  cursor: default;
-}
-
 .likeBtnOn {
-  color: var(--danger, #d94040);
+  color: var(--danger);
 }
 
 .likeIcon {
-  font-size: 20px;
+  font-size: 24px;
   line-height: 1;
+}
+
+.dur {
+  color: var(--text-muted);
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 7px;
+  height: 18px;
+  line-height: 16px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badgeWarn {
+  color: #d29922;
+  border-color: rgba(210, 153, 34, 0.5);
+  background: rgba(210, 153, 34, 0.12);
+}
+
+.badgeError {
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.5);
+  background: rgba(220, 38, 38, 0.1);
 }
 
 .editBtn {
@@ -170,7 +223,7 @@
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
-  padding: 5px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
   line-height: 1;
   cursor: pointer;
@@ -181,11 +234,4 @@
   color: var(--text);
   border-color: var(--text-muted);
   background: var(--surface-hover);
-}
-
-.errText {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: block;
 }

@@ -78,7 +78,7 @@ describe('Mashups page', () => {
 
   it('renders the three browse sections', async () => {
     renderPage()
-    expect(screen.getByRole('heading', { name: 'Mashups' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Загружайте и слушайте мешапы' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Latest' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Top by likes' })).toBeInTheDocument()
     expect(await screen.findAllByText('Top Bootleg')).not.toHaveLength(0)
@@ -92,8 +92,9 @@ describe('Mashups page', () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Liked' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'My mashups' })).toBeInTheDocument()
-    expect(await screen.findByText('Liked Bootleg')).toBeInTheDocument()
-    expect(await screen.findByText('My Only Mix')).toBeInTheDocument()
+    // Titles now show in both the centre shelves and the left library rail.
+    expect((await screen.findAllByText('Liked Bootleg')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('My Only Mix')).length).toBeGreaterThan(0)
   })
 
   it('hides the upload button and personal sections for anonymous visitors', async () => {
@@ -135,5 +136,43 @@ describe('Mashups page', () => {
     fireEvent.click(within(top).getByRole('button', { name: 'Like Top Bootleg' }))
     expect(showToast).toHaveBeenCalledWith('Sign in to like mashups', 'error')
     expect(likeMashup).not.toHaveBeenCalled()
+  })
+
+  it('shows the reworked player transport once a track is playing', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Latest' })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play Alpha Bootleg' })[0])
+
+    expect(await screen.findByRole('button', { name: 'Expand player' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Repeat off' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Queue' })).toBeInTheDocument()
+  })
+
+  it('opens the expanded Now Playing overlay from the expand button', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Latest' })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play Alpha Bootleg' })[0])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand player' }))
+    expect(screen.getByRole('dialog', { name: 'Now playing' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse player' }))
+    expect(screen.queryByRole('dialog', { name: 'Now playing' })).not.toBeInTheDocument()
+  })
+
+  it('hides and restores the Now Playing side panel from the queue button', async () => {
+    const { container } = renderPage()
+    await screen.findByRole('heading', { name: 'Latest' })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play Alpha Bootleg' })[0])
+
+    const panel = () => container.querySelectorAll('aside[aria-label="Now playing"]')
+    expect(panel()).toHaveLength(1)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Queue' }))
+    expect(panel()).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue' }))
+    expect(panel()).toHaveLength(1)
   })
 })
