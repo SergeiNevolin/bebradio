@@ -82,7 +82,7 @@ jobs:
 
   e2e-tests:
     name: End-to-end Tests
-    runs-on: ubuntu-latest
+    runs-on: prod-runner
     needs: [backend-tests, frontend-tests, media-service-tests]
 
     steps:
@@ -124,7 +124,7 @@ jobs:
   deploy:
     name: Deploy to Production
     runs-on: prod-runner
-    needs: [backend-tests, frontend-tests, media-service-tests, e2e-tests]
+    needs: [e2e-tests]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
   
     steps:
@@ -149,10 +149,10 @@ jobs:
           printf '%s\n' "$SSL_CERTIFICATE" > frontend/ssl/server.crt
   
       - name: Build new images
-        run: docker compose -f docker-compose.prod.yml build
+        run: docker compose -p bebradio -f docker-compose.prod.yml build
       
       - name: Start new containers
-        run: docker compose -f docker-compose.prod.yml up -d
+        run: docker compose -p bebradio -f docker-compose.prod.yml up -d
   
       - name: Clean up unused images
         run: |
