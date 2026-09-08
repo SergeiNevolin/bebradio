@@ -82,7 +82,7 @@ jobs:
 
   e2e-tests:
     name: End-to-end Tests
-    runs-on: prod-runner
+    runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests, media-service-tests]
 
     steps:
