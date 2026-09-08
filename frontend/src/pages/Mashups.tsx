@@ -24,6 +24,26 @@ export default function Mashups() {
   const player = useMashupPlayer()
   const { setList } = player
 
+  useEffect(() => {
+    const previousTitle = document.title
+    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
+    const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
+    const previousDescription = description?.content
+    const previousCanonical = canonical?.href
+
+    document.title = 'Загружайте и слушайте мешапы — bebradio'
+    if (description) {
+      description.content = 'Слушайте лучшие мешапы онлайн на bebradio. Находите новые треки, добавляйте их в очередь и делитесь музыкой с друзьями.'
+    }
+    if (canonical) canonical.href = 'https://bebradio.ru/mashup'
+
+    return () => {
+      document.title = previousTitle
+      if (description && previousDescription !== undefined) description.content = previousDescription
+      if (canonical && previousCanonical !== undefined) canonical.href = previousCanonical
+    }
+  }, [])
+
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [showUpload, setShowUpload] = useState(false)
@@ -411,12 +431,15 @@ export default function Mashups() {
 
             <div className={styles.content}>
               <div className={styles.pagehead}>
-                <h1 className={styles.title}>Mashups</h1>
+                <h1 className={styles.title}>Загружайте и слушайте мешапы</h1>
                 {!recentLoading && (
                   <span className={styles.counter}>{playerList.length}</span>
                 )}
               </div>
-              <p className={styles.sub}>{hint}</p>
+              <p className={styles.sub}>
+                Слушайте мешапы онлайн, находите новые треки и собирайте свою очередь музыки.
+                {hint && ` ${hint}`}
+              </p>
 
               {debouncedQuery ? (
                 <section className={styles.shelf}>
