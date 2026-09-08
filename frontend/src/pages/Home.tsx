@@ -138,8 +138,8 @@ export default function Home() {
       {/* Hero */}
       <div className={styles.homeHero}>
         <div className={styles.homeHeroContent}>
-          <h1 className={styles.homeHeroTitle}>Listen together</h1>
-          <p className={styles.homeHeroSub}>Create a room or join one to start listening with friends</p>
+          <h1 className={styles.homeHeroTitle}>Слушать музыку вместе с друзьями</h1>
+          <p className={styles.homeHeroSub}>Создайте музыкальную комнату и слушайте треки вместе онлайн в синхронном режиме.</p>
           <div className={styles.homeHeroActions}>
             <button className={`btn ${styles.btnHero}`} onClick={() => setShowCreate(true)} disabled={loading}>
               Create Room

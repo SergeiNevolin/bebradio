@@ -78,7 +78,7 @@ describe('Mashups page', () => {
 
   it('renders the three browse sections', async () => {
     renderPage()
-    expect(screen.getByRole('heading', { name: 'Mashups' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Загружайте и слушайте мешапы' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Latest' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Top by likes' })).toBeInTheDocument()
     expect(await screen.findAllByText('Top Bootleg')).not.toHaveLength(0)
