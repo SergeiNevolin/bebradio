@@ -52,8 +52,8 @@ export default function Room() {
       setLoading(true)
       const fresh = await fetchRoom()
       if (fresh) connectWs()
-    } catch {
-      setError('Could not join room')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not join room')
     } finally {
       setUnlocking(false)
     }

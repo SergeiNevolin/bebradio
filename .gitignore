@@ -33,6 +33,7 @@ Desktop.ini
 .pytest_cache/
 .coverage
 htmlcov/
+test-results/
 
 # Environment
 .env

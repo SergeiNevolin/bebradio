@@ -1,0 +1,27 @@
+services:
+  postgres:
+    ports: !reset []
+    volumes: !reset []
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  media-service:
+    ports: !reset []
+    volumes: !reset []
+
+  backend:
+    ports: !reset []
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8000/api/rooms >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  frontend:
+    volumes: !reset []
+    ports: !override
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
