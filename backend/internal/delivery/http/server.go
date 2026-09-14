@@ -24,7 +24,7 @@ type Server struct {
 	search        *usecase.SearchUsecase
 	media         *usecase.MediaUsecase
 	playback      *usecase.PlaybackUsecase
-	mashup        *usecase.MashupUsecase
+	tracks        *usecase.TrackUsecase
 	manager       *ws.ConnectionManager
 	uploadLimiter *ratelimit.SlidingWindowLimiter
 }
@@ -38,7 +38,7 @@ func NewServer(
 	search *usecase.SearchUsecase,
 	media *usecase.MediaUsecase,
 	playback *usecase.PlaybackUsecase,
-	mashup *usecase.MashupUsecase,
+	tracks *usecase.TrackUsecase,
 	manager *ws.ConnectionManager,
 ) *Server {
 	uploadLimit := config.RateLimitUpload
@@ -55,7 +55,7 @@ func NewServer(
 		search:        search,
 		media:         media,
 		playback:      playback,
-		mashup:        mashup,
+		tracks:        tracks,
 		manager:       manager,
 		uploadLimiter: ratelimit.New(uploadLimit, 3600),
 	}
@@ -92,18 +92,18 @@ func (s *Server) setupRoutes() {
 		r.Post("/search", s.handleSearch)
 		r.Get("/music/{trackID}", s.handleStream)
 
-		r.Route("/mashups", func(r chi.Router) {
-			r.Get("/", s.handleListMashups)                        // ?q=&sort=recent|top&limit=&offset=  (optional auth -> liked)
-			r.Post("/", s.handleUploadMashup)                      // auth, multipart: file (+ optional cover)
-			r.Get("/mine", s.handleMyMashups)                      // auth
-			r.Get("/liked", s.handleLikedMashups)                  // auth
-			r.Get("/music/{mediaID}", s.handleStreamMashup)        // dev fallback, prod goes through nginx
-			r.Get("/music/{mediaID}/cover", s.handleStreamMashupCover) // dev fallback
-			r.Get("/{mashupID}", s.handleGetMashup)                // optional auth -> liked
-			r.Delete("/{mashupID}", s.handleDeleteMashup)          // auth + owner
-			r.Post("/{mashupID}/like", s.handleLikeMashup)         // auth
-			r.Delete("/{mashupID}/like", s.handleUnlikeMashup)     // auth
-			r.Put("/{mashupID}/cover", s.handleUploadMashupCover)  // auth + owner, multipart: file
+		r.Route("/tracks", func(r chi.Router) {
+			r.Get("/", s.handleListTracks)                      // ?q=&sort=recent|top&limit=&offset=  (optional auth -> liked)
+			r.Post("/", s.handleUploadTrack)                    // auth, multipart: file (+ optional cover)
+			r.Get("/mine", s.handleMyTracks)                    // auth
+			r.Get("/liked", s.handleLikedTracks)                // auth
+			r.Get("/{trackID}", s.handleGetTrack)               // optional auth -> liked
+			r.Get("/{trackID}/audio", s.handleStreamTrack)      // streams music-service, Range-aware
+			r.Get("/{trackID}/cover", s.handleStreamTrackCover) // cover image
+			r.Delete("/{trackID}", s.handleDeleteTrack)         // auth + owner
+			r.Post("/{trackID}/like", s.handleLikeTrack)        // auth
+			r.Delete("/{trackID}/like", s.handleUnlikeTrack)    // auth
+			r.Put("/{trackID}/cover", s.handleUploadTrackCover) // auth + owner, multipart: file
 		})
 
 		r.Route("/users", func(r chi.Router) {

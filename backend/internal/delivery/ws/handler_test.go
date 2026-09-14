@@ -69,6 +69,7 @@ func TestBackgroundRefillAddsTracks(t *testing.T) {
 			"duration":   200,
 			"source_url": url,
 			"media_id":   "media_" + url,
+			"id":         "row_" + url,
 		}, nil
 	}
 
@@ -117,6 +118,7 @@ func TestBackgroundRefillDoesNotPreSetRadioFilling(t *testing.T) {
 			"duration": 200,
 			"source_url": url,
 			"media_id": "m1",
+			"id":       "row_1",
 		}, nil
 	}
 
@@ -225,6 +227,7 @@ func TestBackgroundRefillRespectsMaxDuration(t *testing.T) {
 			"duration":   duration,
 			"source_url": url,
 			"media_id":   "media_" + url,
+			"id":         "row_" + url,
 		}, nil
 	}
 
@@ -268,6 +271,7 @@ func TestBackgroundRefillSetsIsPlaying(t *testing.T) {
 			"duration": 200,
 			"source_url": url,
 			"media_id": "m1",
+			"id":       "row_1",
 		}, nil
 	}
 

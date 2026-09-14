@@ -1,22 +1,24 @@
 import asyncio
 
 from config import Settings
-from mashups import MashupJobs, MashupStorage
+from uploads import UploadJobs, UploadStorage
 from providers.youtube import YouTubeProvider
+from s3store import S3Store
 from storage import MediaStorage
 
 
 class MediaService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, s3: S3Store | None = None) -> None:
         self.settings = settings
         self.youtube = YouTubeProvider(settings)
-        self.storage = MediaStorage(settings, self.youtube.download)
-        self.mashups = MashupStorage(settings)
-        self.mashup_jobs = MashupJobs(self.mashups, settings)
+        store = s3 if s3 is not None else S3Store.from_settings(settings)
+        self.storage = MediaStorage(settings, self.youtube.download, store)
+        self.uploads = UploadStorage(settings, store)
+        self.upload_jobs = UploadJobs(self.uploads, settings)
 
     def start(self) -> None:
         self.storage.init()
-        self.mashups.init()
+        self.uploads.init()
 
     async def search(self, query: str, limit: int) -> list[dict]:
         return await asyncio.to_thread(self.youtube.search, query, limit)
@@ -32,18 +34,19 @@ class MediaService:
 
     def _read_captions(self, media_id: str, lang: str) -> dict:
         empty = {"lang": "", "auto": False, "cues": []}
-        path = self.storage.captions_path(media_id, lang)
-        if path is None:
+        found = self.storage.captions_data(media_id, lang)
+        if found is None:
             return empty
+        name, text = found
         try:
-            cues = YouTubeProvider.parse_vtt_file(path)
+            cues = YouTubeProvider.parse_vtt_text(text)
         except OSError:
             return empty
         # media_<hash>.<lang>.vtt  or  media_<hash>.auto.<lang>.vtt
-        parts = path.name.split(".")
+        parts = name.split(".")
         return {
             "lang": parts[-2] if len(parts) >= 3 else "",
-            "auto": ".auto." in path.name,
+            "auto": ".auto." in name,
             "cues": cues,
         }
 
@@ -52,3 +55,4 @@ class MediaService:
 
     def set_references(self, media_ids: list[str]) -> None:
         self.storage.set_references(media_ids)
+

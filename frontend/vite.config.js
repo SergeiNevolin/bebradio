@@ -10,12 +10,8 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      // Order matters: most specific key first. Mashup audio/covers and room
-      // music both live under /v1/... on music-service, not /api/....
-      '/api/mashups/music': {
-        target: musicUrl,
-        rewrite: (path) => path.replace(/^\/api\/mashups\/music/, '/v1/mashups'),
-      },
+      // Room music lives under /v1/... on music-service, not /api/....
+      // Upload audio/covers are served by the backend (/api/tracks/:id/...).
       '/api/music': {
         target: musicUrl,
         rewrite: (path) => path.replace(/^\/api\/music/, '/v1/music'),

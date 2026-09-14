@@ -3,10 +3,24 @@ import { describe, it, expect } from 'vitest'
 import Queue from '../components/Queue'
 import type { Track } from '../types'
 
+const base = {
+  source: 'youtube' as const,
+  thumbnail: '',
+  url: '',
+  duration: 0,
+  added_by: '',
+  owner_id: '',
+  size_bytes: 0,
+  status: 'ready' as const,
+  has_cover: false,
+  plays: 0,
+  likes: 0,
+  created_at: '',
+}
 const tracks: Track[] = [
-  { id: '1', title: 'Song A', artist: 'Artist A', thumbnail: '', url: '', duration: 0, added_by: '' },
-  { id: '2', title: 'Song B', artist: 'Artist B', thumbnail: '', url: '', duration: 0, added_by: '' },
-  { id: '3', title: 'Song C', artist: 'Artist C', thumbnail: '', url: '', duration: 0, added_by: '' },
+  { id: '1', title: 'Song A', artist: 'Artist A', ...base },
+  { id: '2', title: 'Song B', artist: 'Artist B', ...base },
+  { id: '3', title: 'Song C', artist: 'Artist C', ...base },
 ]
 
 describe('Queue', () => {

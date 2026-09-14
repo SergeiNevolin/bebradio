@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
-	"github.com/bebradio/backend-go/internal/pkg/id"
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 )
@@ -229,24 +228,12 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		URL      string `json:"url"`
-		AddedBy  string `json:"added_by"`
+		URL     string `json:"url"`
+		TrackID string `json:"track_id"`
+		AddedBy string `json:"added_by"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.writeError(w, 400, "Invalid request body")
-		return
-	}
-
-	info, err := s.media.FetchTrack(req.URL)
-	if err != nil {
-		s.log.Error("fetch track failed", "error", err, "url", req.URL)
-		s.writeError(w, 400, "Could not fetch video info")
-		return
-	}
-
-	duration, _ := info["duration"].(float64)
-	if int(duration) > s.config.MaxDuration {
-		s.writeError(w, 400, "Video too long")
 		return
 	}
 
@@ -262,10 +249,52 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	track := entity.TrackFromYouTube(info, addedBy)
-	track.ID = id.NewHex(8)
-	if track.SourceURL == "" {
-		track.SourceURL = req.URL
+	// Identity arrives with the data: uploads carry the id minted at upload
+	// time, YouTube entries — the id minted per resolve call.
+	var track *entity.Track
+	if req.TrackID != "" {
+		// A track is a track: snapshot a ready library upload into the queue
+		// under its own id (votes are scoped per room, so sharing is safe).
+		// Re-adding is idempotent: return the entry already queued.
+		lib, err := s.tracks.Get(req.TrackID, userID)
+		if err != nil || lib.Source != entity.TrackSourceUpload || lib.Status != entity.TrackStatusReady {
+			s.writeError(w, 400, "Track not available")
+			return
+		}
+		rm.Mu.RLock()
+		for _, t := range rm.Queue {
+			if t.ID == lib.ID {
+				existing := t.ToDict()
+				rm.Mu.RUnlock()
+				s.writeJSON(w, 200, existing)
+				return
+			}
+		}
+		rm.Mu.RUnlock()
+		track = entity.QueueCopyFromUpload(lib, addedBy)
+	} else {
+		info, err := s.media.FetchTrack(req.URL)
+		if err != nil {
+			s.log.Error("fetch track failed", "error", err, "url", req.URL)
+			s.writeError(w, 400, "Could not fetch video info")
+			return
+		}
+
+		duration, _ := info["duration"].(float64)
+		if int(duration) > s.config.MaxDuration {
+			s.writeError(w, 400, "Video too long")
+			return
+		}
+
+		track = entity.TrackFromYouTube(info, addedBy)
+		if track.ID == "" {
+			s.log.Error("resolve returned no track id", "url", req.URL)
+			s.writeError(w, 502, "Music service unavailable, try again")
+			return
+		}
+		if track.SourceURL == "" {
+			track.SourceURL = req.URL
+		}
 	}
 
 	rm.Mu.Lock()

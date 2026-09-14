@@ -13,14 +13,14 @@ import {
   RepeatOneIcon,
   ShuffleIcon,
 } from '../player/icons'
-import type { Mashup } from '../../types'
+import type { Track } from '../../types'
 import type { MashupPlayer as MashupPlayerState } from '../../hooks/useMashupPlayer'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import styles from './MashupPlayer.module.css'
 
 interface MashupPlayerProps {
   player: MashupPlayerState
-  onToggleLike?: (m: Mashup) => void
+  onToggleLike?: (m: Track) => void
   /** Open the expanded "Now playing" overlay. */
   onExpand: () => void
   /** Whether the side "Now playing" panel is currently shown. */
@@ -75,8 +75,8 @@ export default function MashupPlayer({
         <div className={styles.inner}>
           {/* ── left: now-playing meta ─────────────────────────────── */}
           <div className={styles.meta}>
-            {current.cover_url ? (
-              <img className={styles.cover} src={current.cover_url} alt="" />
+            {current.thumbnail ? (
+              <img className={styles.cover} src={current.thumbnail} alt="" />
             ) : (
               <div className={styles.cover} style={{ background: tintForId(current.id) }}>
                 <span className={styles.glyph} aria-hidden="true">{monoGlyph(current.title)}</span>
@@ -196,3 +196,4 @@ export default function MashupPlayer({
     </div>
   )
 }
+

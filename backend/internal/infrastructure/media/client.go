@@ -152,10 +152,12 @@ func (c *Client) UpdateReferences(mediaIDs []string) error {
 	return err
 }
 
-// UploadMashup streams the file to music-service as multipart/form-data.
-// The body is piped through in a goroutine so a large upload never buffers in
-// memory here; the timeout is generous because transcoding starts server-side.
-func (c *Client) UploadMashup(mediaID, filename string, body io.Reader) error {
+// UploadTrack streams the file to music-service as multipart/form-data.
+// Identity arrives with the data: music-service mints the track id and the
+// media id and returns both. The body is piped through in a goroutine so a
+// large upload never buffers in memory here; the timeout is generous because
+// transcoding starts server-side.
+func (c *Client) UploadTrack(filename string, body io.Reader) (map[string]any, error) {
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
@@ -171,29 +173,39 @@ func (c *Client) UploadMashup(mediaID, filename string, body io.Reader) error {
 		pw.CloseWithError(mw.Close())
 	}()
 
-	req, err := http.NewRequest("POST", c.baseURL+"/v1/mashups/"+mediaID, pr)
+	req, err := http.NewRequest("POST", c.baseURL+"/v1/uploads", pr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 
 	client := &http.Client{Timeout: 10 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("music service unavailable: %w", err)
+		return nil, fmt.Errorf("music service unavailable: %w", err)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("music service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+		return nil, fmt.Errorf("music service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
 	}
-	return nil
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	if _, ok := result["id"]; !ok {
+		return nil, fmt.Errorf("no track id in response")
+	}
+	if _, ok := result["media_id"]; !ok {
+		return nil, fmt.Errorf("no media_id in response")
+	}
+	return result, nil
 }
 
-// UploadMashupCover streams a cover image to music-service as multipart/form-data
-// (PUT, replaces any existing cover). Same io.Pipe trick as UploadMashup so the
+// UploadTrackCover streams a cover image to music-service as multipart/form-data
+// (PUT, replaces any existing cover). Same io.Pipe trick as UploadTrack so the
 // image never buffers here.
-func (c *Client) UploadMashupCover(mediaID, filename string, body io.Reader) error {
+func (c *Client) UploadTrackCover(mediaID, filename string, body io.Reader) error {
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
@@ -209,7 +221,7 @@ func (c *Client) UploadMashupCover(mediaID, filename string, body io.Reader) err
 		pw.CloseWithError(mw.Close())
 	}()
 
-	req, err := http.NewRequest("PUT", c.baseURL+"/v1/mashups/"+mediaID+"/cover", pr)
+	req, err := http.NewRequest("PUT", c.baseURL+"/v1/uploads/"+mediaID+"/cover", pr)
 	if err != nil {
 		return err
 	}
@@ -228,8 +240,8 @@ func (c *Client) UploadMashupCover(mediaID, filename string, body io.Reader) err
 	return nil
 }
 
-func (c *Client) MashupStatus(mediaID string) (map[string]any, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/v1/mashups/"+mediaID+"/status", nil)
+func (c *Client) TrackUploadStatus(mediaID string) (map[string]any, error) {
+	req, err := http.NewRequest("GET", c.baseURL+"/v1/uploads/"+mediaID+"/status", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +251,7 @@ func (c *Client) MashupStatus(mediaID string) (map[string]any, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("mashup not found on music service")
+		return nil, fmt.Errorf("track not found on music service")
 	}
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
@@ -252,8 +264,8 @@ func (c *Client) MashupStatus(mediaID string) (map[string]any, error) {
 	return result, nil
 }
 
-func (c *Client) DeleteMashup(mediaID string) error {
-	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/mashups/"+mediaID, nil)
+func (c *Client) DeleteTrack(mediaID string) error {
+	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/uploads/"+mediaID, nil)
 	if err != nil {
 		return err
 	}
@@ -302,5 +314,7 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+
 
 

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { Mashup } from '../../types'
+import type { Track } from '../../types'
 import type { MashupPlayer } from '../../hooks/useMashupPlayer'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
@@ -20,17 +20,17 @@ import styles from './NowPlayingModal.module.css'
 
 interface NowPlayingModalProps {
   player: MashupPlayer
-  queue: Mashup[]
-  onToggleLike: (m: Mashup) => void
+  queue: Track[]
+  onToggleLike: (m: Track) => void
   onOpenProfile?: (userId: string) => void
   onClose: () => void
 }
 
 const REPEAT_LABEL = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' } as const
 
-function Art({ mashup, className }: { mashup: Mashup; className: string }) {
-  if (mashup.cover_url) {
-    return <img className={className} src={mashup.cover_url} alt="" />
+function Art({ mashup, className }: { mashup: Track; className: string }) {
+  if (mashup.thumbnail) {
+    return <img className={className} src={mashup.thumbnail} alt="" />
   }
   return (
     <div className={className} style={{ background: tintForId(mashup.id) }}>
@@ -207,3 +207,4 @@ export default function NowPlayingModal({
     </div>
   )
 }
+

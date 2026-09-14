@@ -2,11 +2,12 @@ import { createElement } from 'react'
 import { render, act } from '@testing-library/react'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useMashupPlayer, type MashupPlayer } from '../hooks/useMashupPlayer'
-import type { Mashup } from '../types'
+import type { Track } from '../types'
 
-function m(id: string): Mashup {
+function m(id: string): Track {
   return {
     id,
+    source: 'upload',
     owner_id: 'o1',
     title: `Track ${id}`,
     artist: 'DJ Test',
@@ -17,7 +18,9 @@ function m(id: string): Mashup {
     plays: 0,
     likes: 0,
     created_at: '2026-01-01T00:00:00Z',
-    stream_url: `/api/mashups/music/${id}`,
+    thumbnail: '',
+    added_by: '',
+    url: `/api/tracks/${id}/audio`,
   }
 }
 
@@ -168,4 +171,5 @@ describe('useMashupPlayer', () => {
     expect(p.current.current?.id).toBe('a')
   })
 })
+
 

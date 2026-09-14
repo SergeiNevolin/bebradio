@@ -48,7 +48,7 @@ func main() {
 
 	userRepo := postgres.NewUserRepo(db.Pool)
 	roomRepo := postgres.NewRoomRepo(db.Pool)
-	mashupRepo := postgres.NewMashupRepo(db.Pool)
+	trackRepo := postgres.NewTrackRepo(db.Pool)
 
 	var mediaClient repository.MediaClient = mediaSvc
 
@@ -57,18 +57,18 @@ func main() {
 	userUC := usecase.NewUserUsecase(userRepo, log)
 	searchUC := usecase.NewSearchUsecase(mediaClient, cfg, log)
 	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, log)
-	mashupUC := usecase.NewMashupUsecase(mashupRepo, mediaClient, cfg, log)
+	trackUC := usecase.NewTrackUsecase(trackRepo, mediaClient, cfg, log)
 	playbackUC := usecase.NewPlaybackUsecase()
 	chatUC := usecase.NewChatUsecase(roomRepo, log)
 	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, log)
 
-	// Re-poll any mashup left "processing" by a previous run.
-	go mashupUC.ResumeProcessing()
+	// Re-poll any track left "processing" by a previous run.
+	go trackUC.ResumeProcessing()
 
 	connManager := ws.NewConnectionManager(log)
 	wsHandler := ws.NewHandler(connManager, roomUC, playbackUC, chatUC, radioUC, mediaUC, cfg, log)
 
-	httpServer := httpDeliv.NewServer(cfg, log, authUC, roomUC, userUC, searchUC, mediaUC, playbackUC, mashupUC, connManager)
+	httpServer := httpDeliv.NewServer(cfg, log, authUC, roomUC, userUC, searchUC, mediaUC, playbackUC, trackUC, connManager)
 
 	// Add WebSocket endpoint to the HTTP server's router
 	upgrader := websocket.Upgrader{
@@ -129,3 +129,4 @@ func main() {
 
 	log.Info("server stopped")
 }
+

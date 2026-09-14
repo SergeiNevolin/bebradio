@@ -1,10 +1,10 @@
-import type { Mashup } from '../../types'
+import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import styles from './MashupCard.module.css'
 
 interface MashupCardProps {
-  mashup: Mashup
+  mashup: Track
   active: boolean
   isPlaying: boolean
   canEdit: boolean
@@ -36,7 +36,7 @@ export default function MashupCard({
       <button
         type="button"
         className={styles.art}
-        style={mashup.cover_url ? undefined : { background: tintForId(mashup.id) }}
+        style={mashup.thumbnail ? undefined : { background: tintForId(mashup.id) }}
         onClick={(e) => {
           e.stopPropagation()
           onPlay()
@@ -50,8 +50,8 @@ export default function MashupCard({
               : `Play ${mashup.title}`
         }
       >
-        {mashup.cover_url ? (
-          <img className={styles.cover} src={mashup.cover_url} alt="" />
+        {mashup.thumbnail ? (
+          <img className={styles.cover} src={mashup.thumbnail} alt="" />
         ) : (
           <span className={styles.glyph} aria-hidden="true">{monoGlyph(mashup.title)}</span>
         )}
@@ -142,3 +142,4 @@ export default function MashupCard({
     </div>
   )
 }
+

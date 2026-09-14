@@ -7,7 +7,9 @@ services:
 
   music-service:
     ports: !reset []
-    volumes: !reset []
+
+  minio:
+    ports: !reset []
 
   backend:
     ports: !reset []

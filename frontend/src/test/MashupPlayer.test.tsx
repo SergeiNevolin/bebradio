@@ -3,9 +3,9 @@ import { describe, it, expect, vi } from 'vitest'
 import { createRef } from 'react'
 import MashupPlayer from '../components/mashup/MashupPlayer'
 import type { MashupPlayer as MashupPlayerState } from '../hooks/useMashupPlayer'
-import type { Mashup } from '../types'
+import type { Track } from '../types'
 
-function makeMashup(over: Partial<Mashup> = {}): Mashup {
+function makeMashup(over: Partial<Track> = {}): Track {
   return {
     id: 'm1',
     owner_id: 'o1',
@@ -18,7 +18,10 @@ function makeMashup(over: Partial<Mashup> = {}): Mashup {
     plays: 0,
     likes: 0,
     created_at: '2026-01-01T00:00:00Z',
-    stream_url: '/api/mashups/music/abc',
+    source: 'upload',
+    thumbnail: '',
+    added_by: '',
+    url: '/api/tracks/m1/audio',
     ...over,
   }
 }
@@ -139,4 +142,7 @@ describe('MashupPlayer', () => {
     expect(screen.getByText('2')).toBeInTheDocument()
   })
 })
+
+
+
 

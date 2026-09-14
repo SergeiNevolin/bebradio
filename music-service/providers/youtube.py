@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import re
+import secrets
 import subprocess
 import time
 from pathlib import Path
@@ -64,6 +65,9 @@ class YouTubeProvider:
         if not provider_item_id:
             return None
         return {
+            # Fresh row id minted per call: identity travels with the data,
+            # callers never invent track ids themselves.
+            "id": secrets.token_hex(4),
             "media_id": self.media_id(provider_item_id),
             "title": data.get("title", "Unknown"),
             "artist": data.get("uploader", data.get("channel", "Unknown")),
@@ -155,6 +159,11 @@ class YouTubeProvider:
     def parse_vtt_file(cls, path: Path) -> list[dict]:
         """Read and parse a .vtt written by `download()` into timed cues."""
         return cls._parse_vtt(path.read_text(encoding="utf-8", errors="replace"))
+
+    @classmethod
+    def parse_vtt_text(cls, raw: str) -> list[dict]:
+        """Parse .vtt content fetched from object storage into timed cues."""
+        return cls._parse_vtt(raw)
 
     @staticmethod
     def _parse_vtt(raw: str) -> list[dict]:

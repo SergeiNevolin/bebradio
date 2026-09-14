@@ -22,19 +22,37 @@ services:
     networks:
       - app-net
 
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address ":9001"
+    volumes:
+      - miniodata:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-net
+
   music-service:
     build: ./music-service
-    volumes:
-      - musicdata:/app/music
     environment:
-      - MUSIC_DIR=/app/music/tracks
-      - MASHUP_DIR=/app/music/mashups
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-music}
       - MASHUP_MAX_SIZE=${MASHUP_MAX_SIZE:-62914560}
       - MASHUP_COVER_MAX_SIZE=${MASHUP_COVER_MAX_SIZE:-5242880}
       - BGUTIL_BASE_URL=http://bgutil-provider:4416
     depends_on:
       bgutil-provider:
         condition: service_started
+      minio:
+        condition: service_healthy
     networks:
       - app-net
 
@@ -76,4 +94,4 @@ networks:
 
 volumes:
   pgdata:
-  musicdata:
+  miniodata:

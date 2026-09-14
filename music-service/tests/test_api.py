@@ -3,11 +3,11 @@ from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture
-def media_app(settings):
+def media_app(settings, fake_s3):
     from api import create_app
     from service import MediaService
 
-    service = MediaService(settings)
+    service = MediaService(settings, fake_s3)
     service.start()
     return create_app(service), service
 
@@ -65,10 +65,9 @@ async def test_ensure_endpoint_returns_only_ready_ids(media_app, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_media_endpoint_supports_range_and_rejects_invalid_id(media_app):
+async def test_media_endpoint_supports_range_and_rejects_invalid_id(media_app, fake_s3):
     app, service = media_app
-    service.storage.settings.media_dir.mkdir(parents=True, exist_ok=True)
-    (service.storage.settings.media_dir / "media_audio.m4a").write_bytes(b"0123456789")
+    fake_s3.put_bytes("tracks/media_audio.m4a", b"0123456789")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ranged = await client.get("/v1/music/media_audio", headers={"Range": "bytes=2-5"})
@@ -83,12 +82,11 @@ async def test_media_endpoint_supports_range_and_rejects_invalid_id(media_app):
 
 
 @pytest.mark.asyncio
-async def test_media_captions_returns_cues_from_disk(media_app):
+async def test_media_captions_returns_cues_from_disk(media_app, fake_s3):
     app, service = media_app
-    media_dir = service.storage.settings.media_dir
-    media_dir.mkdir(parents=True, exist_ok=True)
-    (media_dir / "media_song.en.vtt").write_text(
-        "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nfirst line\n"
+    fake_s3.put_bytes(
+        "tracks/media_song.en.vtt",
+        b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nfirst line\n",
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -102,12 +100,11 @@ async def test_media_captions_returns_cues_from_disk(media_app):
 
 
 @pytest.mark.asyncio
-async def test_media_captions_marks_auto_generated(media_app):
+async def test_media_captions_marks_auto_generated(media_app, fake_s3):
     app, service = media_app
-    media_dir = service.storage.settings.media_dir
-    media_dir.mkdir(parents=True, exist_ok=True)
-    (media_dir / "media_song.auto.ru.vtt").write_text(
-        "WEBVTT\n\n00:00:00.500 --> 00:00:02.500\nстрочка\n"
+    fake_s3.put_bytes(
+        "tracks/media_song.auto.ru.vtt",
+        "WEBVTT\n\n00:00:00.500 --> 00:00:02.500\nстрочка\n".encode(),
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -122,7 +119,6 @@ async def test_media_captions_marks_auto_generated(media_app):
 @pytest.mark.asyncio
 async def test_media_captions_empty_when_no_vtt(media_app):
     app, service = media_app
-    service.storage.settings.media_dir.mkdir(parents=True, exist_ok=True)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/v1/music/media_nolyrics/captions")
@@ -141,6 +137,22 @@ async def test_media_captions_rejects_invalid_id(media_app):
     assert response.status_code == 400
 
 
+@pytest.mark.asyncio
+async def test_upload_mints_ids_with_the_data(media_app):
+    app, _ = media_app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.post("/v1/uploads", files={"file": ("a.mp3", b"audio-1")})
+        second = await client.post("/v1/uploads", files={"file": ("b.mp3", b"audio-2")})
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    one, two = first.json(), second.json()
+    assert one["status"] == "processing"
+    assert len(one["id"]) == 8 and len(one["media_id"]) == 16
+    assert one["id"] != two["id"] and one["media_id"] != two["media_id"]
+
+
 def _resolve_result():
     return {
         "media_id": "media_test",
@@ -150,4 +162,3 @@ def _resolve_result():
         "duration": 10,
         "source_url": "https://example.test/song",
     }
-

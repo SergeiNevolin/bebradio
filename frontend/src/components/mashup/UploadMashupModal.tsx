@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import { api } from '../../lib/api'
 import { useToast } from '../../context/ToastContext'
-import type { Mashup } from '../../types'
+import type { Track } from '../../types'
 import styles from './UploadMashupModal.module.css'
 
 interface UploadMashupModalProps {
   onClose: () => void
-  onUploaded: (mashup: Mashup) => void
+  onUploaded: (mashup: Track) => void
 }
 
 export default function UploadMashupModal({ onClose, onUploaded }: UploadMashupModalProps) {
@@ -37,7 +37,7 @@ export default function UploadMashupModal({ onClose, onUploaded }: UploadMashupM
     setProgress(0)
     setError('')
     try {
-      const mashup = await api.uploadMashup(
+      const mashup = await api.uploadTrack(
         { file, title: title.trim(), artist: artist.trim(), cover },
         (pct) => setProgress(pct),
       )
@@ -122,3 +122,4 @@ export default function UploadMashupModal({ onClose, onUploaded }: UploadMashupM
     </div>
   )
 }
+
