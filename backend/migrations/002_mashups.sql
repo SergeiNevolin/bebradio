@@ -1,4 +1,4 @@
--- Standalone /mashup section: user-uploaded audio, transcoded on media-service,
+-- Standalone /mashup section: user-uploaded audio, transcoded on music-service,
 -- metadata (source of truth for state) kept here.
 CREATE TABLE IF NOT EXISTS mashups (
     id         VARCHAR(8) PRIMARY KEY,
@@ -16,3 +16,4 @@ CREATE TABLE IF NOT EXISTS mashups (
 );
 CREATE INDEX IF NOT EXISTS idx_mashups_created ON mashups (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mashups_owner   ON mashups (owner_id);
+

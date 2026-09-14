@@ -50,7 +50,7 @@ function mashup(over: Partial<Mashup> = {}): Mashup {
     likes: 3,
     liked: false,
     created_at: '2026-01-01T00:00:00Z',
-    stream_url: '/api/mashups/media/aaa',
+    stream_url: '/api/mashups/music/aaa',
     ...over,
   }
 }
@@ -176,3 +176,4 @@ describe('Mashups page', () => {
     expect(panel()).toHaveLength(1)
   })
 })
+

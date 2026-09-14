@@ -40,7 +40,7 @@ func (uc *MediaUsecase) EnsureTrackReady(track *entity.Track) bool {
 		if id == track.MediaID {
 			if track.URL == "" {
 				track.LocalPath = track.MediaID + ".m4a"
-				track.URL = "/api/media/" + track.MediaID
+				track.URL = "/api/music/" + track.MediaID
 				return true
 			}
 			return false
@@ -92,7 +92,7 @@ func (uc *MediaUsecase) EnsureRoomMedia(rm *entity.Room) bool {
 				changed = true
 			}
 			t.LocalPath = t.MediaID + ".m4a"
-			t.URL = "/api/media/" + t.MediaID
+			t.URL = "/api/music/" + t.MediaID
 		}
 	}
 	return changed

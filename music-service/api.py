@@ -46,7 +46,7 @@ def create_app(service: MediaService) -> FastAPI:
             except asyncio.CancelledError:
                 pass
 
-    app = FastAPI(title="bebradio media service", lifespan=lifespan)
+    app = FastAPI(title="bebradio music service", lifespan=lifespan)
     router = APIRouter(prefix="/v1")
 
     @router.post("/search")
@@ -60,7 +60,7 @@ def create_app(service: MediaService) -> FastAPI:
             raise HTTPException(status_code=400, detail="Could not resolve media URL")
         return result
 
-    @router.post("/media/download")
+    @router.post("/music/download")
     async def download(request: DownloadRequest):
         if not service.storage.valid_id(request.media_id):
             raise HTTPException(status_code=400, detail="Invalid media ID")
@@ -73,7 +73,7 @@ def create_app(service: MediaService) -> FastAPI:
             "status": "ready",
         }
 
-    @router.post("/media/ensure")
+    @router.post("/music/ensure")
     async def ensure(request: EnsureRequest):
         async def prepare(item) -> str | None:
             if not service.storage.valid_id(item.media_id):
@@ -89,18 +89,18 @@ def create_app(service: MediaService) -> FastAPI:
     async def related(request: RelatedRequest):
         return await service.related(request.source_url, request.limit)
 
-    @router.post("/media/references")
+    @router.post("/music/references")
     async def references(request: ReferencesRequest):
         service.set_references(request.media_ids)
         return {"count": len(service.storage.referenced)}
 
-    @router.get("/media/{media_id}/captions")
+    @router.get("/music/{media_id}/captions")
     async def media_captions(media_id: str, lang: str = ""):
         if not service.storage.valid_id(media_id):
             raise HTTPException(status_code=400, detail="Invalid media ID")
         return await service.captions_from_disk(media_id, lang)
 
-    @router.get("/media/{media_id}")
+    @router.get("/music/{media_id}")
     async def media(media_id: str, request: Request):
         if not service.storage.valid_id(media_id):
             raise HTTPException(status_code=400, detail="Invalid media ID")

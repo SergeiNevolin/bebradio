@@ -12,9 +12,10 @@ type MediaClient interface {
 	Content(mediaID, rangeHeader string) (int64, string, []byte, error)
 	UpdateReferences(mediaIDs []string) error
 
-	// Mashups: persistent user uploads, transcoded with ffmpeg on media-service.
+	// Mashups: persistent user uploads, transcoded with ffmpeg on music-service.
 	UploadMashup(mediaID, filename string, body io.Reader) error
 	UploadMashupCover(mediaID, filename string, body io.Reader) error
 	MashupStatus(mediaID string) (map[string]any, error)
 	DeleteMashup(mediaID string) error
 }
+

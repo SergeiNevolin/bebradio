@@ -283,7 +283,7 @@ func TestHandleUploadMashupWithCover(t *testing.T) {
 		t.Fatalf("expected 202, got %d: %s", w.Code, w.Body.String())
 	}
 	if !coverCalled {
-		t.Error("expected the cover to be forwarded to media-service")
+		t.Error("expected the cover to be forwarded to music-service")
 	}
 }
 
@@ -307,3 +307,4 @@ func TestHandleGetMashup(t *testing.T) {
 		t.Error("processing mashup should not have stream_url yet")
 	}
 }
+

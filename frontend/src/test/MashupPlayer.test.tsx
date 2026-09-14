@@ -18,7 +18,7 @@ function makeMashup(over: Partial<Mashup> = {}): Mashup {
     plays: 0,
     likes: 0,
     created_at: '2026-01-01T00:00:00Z',
-    stream_url: '/api/mashups/media/abc',
+    stream_url: '/api/mashups/music/abc',
     ...over,
   }
 }
@@ -139,3 +139,4 @@ describe('MashupPlayer', () => {
     expect(screen.getByText('2')).toBeInTheDocument()
   })
 })
+

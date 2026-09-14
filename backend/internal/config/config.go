@@ -9,7 +9,7 @@ import (
 type Config struct {
 	DatabaseURL   string
 	SecretKey     string
-	MediaServiceURL string
+	MusicServiceURL string
 	CORSOrigins   []string
 
 	JWTExpireHours int
@@ -39,7 +39,7 @@ func Load() *Config {
 	return &Config{
 		DatabaseURL:    getEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/bebradio"),
 		SecretKey:      getEnv("SECRET_KEY", "bebradio-secret-key-change-in-production"),
-		MediaServiceURL: getEnv("MEDIA_SERVICE_URL", "http://127.0.0.1:8100"),
+		MusicServiceURL: getEnvWithFallback("MUSIC_SERVICE_URL", "MEDIA_SERVICE_URL", "http://127.0.0.1:8100"),
 		CORSOrigins:    strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000"), ","),
 
 		JWTExpireHours:  getEnvInt("JWT_EXPIRE_HOURS", 72),
@@ -68,6 +68,16 @@ func Load() *Config {
 
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func getEnvWithFallback(key, fallbackKey, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	if v := os.Getenv(fallbackKey); v != "" {
 		return v
 	}
 	return fallback

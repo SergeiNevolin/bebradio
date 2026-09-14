@@ -55,7 +55,7 @@ func (c *Client) Resolve(url string) (map[string]any, error) {
 
 func (c *Client) Download(sourceURL, mediaID string) (map[string]any, error) {
 	body := fmt.Sprintf(`{"url":"%s","media_id":"%s"}`, sourceURL, mediaID)
-	resp, err := c.request("POST", "/v1/media/download", body, 150)
+	resp, err := c.request("POST", "/v1/music/download", body, 150)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (c *Client) Ensure(items []map[string]any) ([]string, error) {
 		return nil, fmt.Errorf("marshal items: %w", err)
 	}
 	body := fmt.Sprintf(`{"items":%s}`, string(itemsJSON))
-	resp, err := c.request("POST", "/v1/media/ensure", body, 150)
+	resp, err := c.request("POST", "/v1/music/ensure", body, 150)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (c *Client) Related(sourceURL string, limit int) ([]string, error) {
 }
 
 func (c *Client) MediaCaptions(mediaID, lang string) (map[string]any, error) {
-	url := fmt.Sprintf("%s/v1/media/%s/captions", c.baseURL, mediaID)
+	url := fmt.Sprintf("%s/v1/music/%s/captions", c.baseURL, mediaID)
 	if lang != "" {
 		url += "?lang=" + lang
 	}
@@ -124,7 +124,7 @@ func (c *Client) MediaCaptions(mediaID, lang string) (map[string]any, error) {
 }
 
 func (c *Client) Content(mediaID, rangeHeader string) (int64, string, []byte, error) {
-	url := fmt.Sprintf("%s/v1/media/%s", c.baseURL, mediaID)
+	url := fmt.Sprintf("%s/v1/music/%s", c.baseURL, mediaID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return 0, "", nil, err
@@ -148,11 +148,11 @@ func (c *Client) Content(mediaID, rangeHeader string) (int64, string, []byte, er
 func (c *Client) UpdateReferences(mediaIDs []string) error {
 	ids, _ := json.Marshal(mediaIDs)
 	body := fmt.Sprintf(`{"media_ids":%s}`, string(ids))
-	_, err := c.request("POST", "/v1/media/references", body, 10)
+	_, err := c.request("POST", "/v1/music/references", body, 10)
 	return err
 }
 
-// UploadMashup streams the file to media-service as multipart/form-data.
+// UploadMashup streams the file to music-service as multipart/form-data.
 // The body is piped through in a goroutine so a large upload never buffers in
 // memory here; the timeout is generous because transcoding starts server-side.
 func (c *Client) UploadMashup(mediaID, filename string, body io.Reader) error {
@@ -180,17 +180,17 @@ func (c *Client) UploadMashup(mediaID, filename string, body io.Reader) error {
 	client := &http.Client{Timeout: 10 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("media service unavailable: %w", err)
+		return fmt.Errorf("music service unavailable: %w", err)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+		return fmt.Errorf("music service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
 	}
 	return nil
 }
 
-// UploadMashupCover streams a cover image to media-service as multipart/form-data
+// UploadMashupCover streams a cover image to music-service as multipart/form-data
 // (PUT, replaces any existing cover). Same io.Pipe trick as UploadMashup so the
 // image never buffers here.
 func (c *Client) UploadMashupCover(mediaID, filename string, body io.Reader) error {
@@ -218,12 +218,12 @@ func (c *Client) UploadMashupCover(mediaID, filename string, body io.Reader) err
 	client := &http.Client{Timeout: 2 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("media service unavailable: %w", err)
+		return fmt.Errorf("music service unavailable: %w", err)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+		return fmt.Errorf("music service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
 	}
 	return nil
 }
@@ -235,15 +235,15 @@ func (c *Client) MashupStatus(mediaID string) (map[string]any, error) {
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("media service unavailable: %w", err)
+		return nil, fmt.Errorf("music service unavailable: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("mashup not found on media service")
+		return nil, fmt.Errorf("mashup not found on music service")
 	}
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+		return nil, fmt.Errorf("music service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
 	}
 	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
@@ -259,12 +259,12 @@ func (c *Client) DeleteMashup(mediaID string) error {
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("media service unavailable: %w", err)
+		return fmt.Errorf("music service unavailable: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("media service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
+		return fmt.Errorf("music service error (%d): %s", resp.StatusCode, string(data[:min(len(data), 500)]))
 	}
 	return nil
 }
@@ -282,7 +282,7 @@ func (c *Client) request(method, path, body string, timeoutSec int) ([]byte, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("media service unavailable: %w", err)
+		return nil, fmt.Errorf("music service unavailable: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -291,7 +291,7 @@ func (c *Client) request(method, path, body string, timeoutSec int) ([]byte, err
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("media service error: %s", string(data[:min(len(data), 500)]))
+		return nil, fmt.Errorf("music service error: %s", string(data[:min(len(data), 500)]))
 	}
 	return data, nil
 }
@@ -302,3 +302,5 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+

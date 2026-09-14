@@ -44,7 +44,7 @@ func main() {
 	}
 
 	authService := auth.New(cfg.SecretKey, cfg.JWTExpireHours)
-	mediaSvc := media.NewClient(cfg.MediaServiceURL)
+	mediaSvc := media.NewClient(cfg.MusicServiceURL)
 
 	userRepo := postgres.NewUserRepo(db.Pool)
 	roomRepo := postgres.NewRoomRepo(db.Pool)

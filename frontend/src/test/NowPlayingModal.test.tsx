@@ -20,7 +20,7 @@ function makeMashup(over: Partial<Mashup> = {}): Mashup {
     likes: 12,
     liked: false,
     created_at: '2026-01-01T00:00:00Z',
-    stream_url: '/api/mashups/media/abc',
+    stream_url: '/api/mashups/music/abc',
     ...over,
   }
 }
@@ -104,3 +104,4 @@ describe('NowPlayingModal', () => {
     expect(player.cycleRepeat).toHaveBeenCalled()
   })
 })
+

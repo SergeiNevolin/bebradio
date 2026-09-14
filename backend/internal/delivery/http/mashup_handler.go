@@ -106,7 +106,7 @@ func (s *Server) handleGetMashup(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, m.ToDict())
 }
 
-// handleUploadMashupCover streams a cover image straight through to media-service.
+// handleUploadMashupCover streams a cover image straight through to music-service.
 // Owner-only; the server-wide ReadTimeout is lifted and the body is capped.
 func (s *Server) handleUploadMashupCover(w http.ResponseWriter, r *http.Request) {
 	userID, ok := s.getUserRequired(r)
@@ -176,7 +176,7 @@ func (s *Server) handleDeleteMashup(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, map[string]any{"ok": true})
 }
 
-// handleUploadMashup streams a multipart upload straight through to media-service.
+// handleUploadMashup streams a multipart upload straight through to music-service.
 // The server-wide ReadTimeout (15s) is lifted for this one request, the body is
 // capped with MaxBytesReader, and only authorized users may reach it.
 func (s *Server) handleUploadMashup(w http.ResponseWriter, r *http.Request) {
@@ -259,22 +259,22 @@ func (s *Server) handleUploadMashup(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 202, created.ToDict())
 }
 
-// handleStreamMashup is a dev-only fallback (prod serves /api/mashups/media/ via
-// nginx). It streams the media-service response through with io.Copy rather than
+// handleStreamMashup is a dev-only fallback (prod serves /api/mashups/music/ via
+// nginx). It streams the music-service response through with io.Copy rather than
 // buffering it, unlike handleStream for room tracks.
 func (s *Server) handleStreamMashup(w http.ResponseWriter, r *http.Request) {
 	s.proxyMashupMedia(w, r, "")
 }
 
 // handleStreamMashupCover is the dev-only fallback for cover images (prod serves
-// /api/mashups/media/ via nginx).
+// /api/mashups/music/ via nginx).
 func (s *Server) handleStreamMashupCover(w http.ResponseWriter, r *http.Request) {
 	s.proxyMashupMedia(w, r, "/cover")
 }
 
 func (s *Server) proxyMashupMedia(w http.ResponseWriter, r *http.Request, suffix string) {
 	mediaID := chi.URLParam(r, "mediaID")
-	upstream := strings.TrimRight(s.config.MediaServiceURL, "/") + "/v1/mashups/" + mediaID + suffix
+	upstream := strings.TrimRight(s.config.MusicServiceURL, "/") + "/v1/mashups/" + mediaID + suffix
 
 	req, err := http.NewRequestWithContext(r.Context(), "GET", upstream, nil)
 	if err != nil {
@@ -288,7 +288,7 @@ func (s *Server) proxyMashupMedia(w http.ResponseWriter, r *http.Request, suffix
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.log.Error("stream mashup failed", "error", err, "media_id", mediaID)
-		s.writeError(w, 502, "Media service unavailable")
+		s.writeError(w, 502, "Music service unavailable")
 		return
 	}
 	defer resp.Body.Close()
@@ -311,3 +311,4 @@ func parseIntDefault(s string, def int) int {
 	}
 	return def
 }
+

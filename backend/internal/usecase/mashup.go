@@ -17,9 +17,9 @@ var (
 	ErrMashupQuota      = &BusinessError{Code: 409, Message: "Upload quota reached, delete an old mashup first"}
 	ErrMashupNotFound   = &BusinessError{Code: 404, Message: "Mashup not found"}
 	ErrMashupNotOwner   = &BusinessError{Code: 403, Message: "You can only modify your own mashups"}
-	ErrMashupUploadFail = &BusinessError{Code: 502, Message: "Media service could not accept the upload"}
-	ErrMashupMediaDown  = &BusinessError{Code: 502, Message: "Media service unavailable, mashup not deleted"}
-	ErrMashupCoverFail  = &BusinessError{Code: 502, Message: "Media service could not accept the cover"}
+	ErrMashupUploadFail = &BusinessError{Code: 502, Message: "music service could not accept the upload"}
+	ErrMashupMediaDown  = &BusinessError{Code: 502, Message: "music service unavailable, mashup not deleted"}
+	ErrMashupCoverFail  = &BusinessError{Code: 502, Message: "music service could not accept the cover"}
 )
 
 // vars, not consts, so tests can shrink them.
@@ -99,7 +99,7 @@ func (uc *MashupUsecase) Unlike(mashupID, userID string) (map[string]any, error)
 	return map[string]any{"likes": n, "liked": false}, nil
 }
 
-// SetCover streams a cover image through media-service (owner only) and flips
+// SetCover streams a cover image through music-service (owner only) and flips
 // has_cover / cover_updated_at on the row.
 func (uc *MashupUsecase) SetCover(mashupID, userID, filename string, body io.Reader) error {
 	m, err := uc.repo.FindByID(mashupID)
@@ -110,14 +110,14 @@ func (uc *MashupUsecase) SetCover(mashupID, userID, filename string, body io.Rea
 		return ErrMashupNotOwner
 	}
 	if err := uc.mediaClient.UploadMashupCover(m.MediaID, filename, body); err != nil {
-		uc.log.Error("mashup cover upload to media service failed", "mashup_id", mashupID, "error", err)
+		uc.log.Error("mashup cover upload to music service failed", "mashup_id", mashupID, "error", err)
 		return ErrMashupCoverFail
 	}
 	return uc.repo.SetCoverUploaded(mashupID)
 }
 
 // Create enforces the per-user quota, inserts a processing row, streams the file
-// to media-service and starts a poller that flips the row to ready/failed.
+// to music-service and starts a poller that flips the row to ready/failed.
 func (uc *MashupUsecase) Create(ownerID, title, artist, filename string, body io.Reader) (*entity.Mashup, error) {
 	count, err := uc.repo.CountByOwner(ownerID)
 	if err != nil {
@@ -141,7 +141,7 @@ func (uc *MashupUsecase) Create(ownerID, title, artist, filename string, body io
 	}
 
 	if err := uc.mediaClient.UploadMashup(m.MediaID, filename, body); err != nil {
-		uc.log.Error("mashup upload to media service failed", "mashup_id", m.ID, "error", err)
+		uc.log.Error("mashup upload to music service failed", "mashup_id", m.ID, "error", err)
 		_ = uc.repo.UpdateStatus(m.ID, "failed", "upload failed", 0, 0, false)
 		m.Status = "failed"
 		m.Error = "upload failed"
@@ -161,7 +161,7 @@ func (uc *MashupUsecase) Delete(mashupID, userID string) error {
 		return ErrMashupNotOwner
 	}
 	if err := uc.mediaClient.DeleteMashup(m.MediaID); err != nil {
-		uc.log.Error("mashup delete on media service failed", "mashup_id", mashupID, "error", err)
+		uc.log.Error("mashup delete on music service failed", "mashup_id", mashupID, "error", err)
 		return ErrMashupMediaDown
 	}
 	return uc.repo.Delete(mashupID)
@@ -254,3 +254,4 @@ func toFloat(v any) float64 {
 	}
 	return 0
 }
+

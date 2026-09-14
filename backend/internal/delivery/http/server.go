@@ -90,15 +90,15 @@ func (s *Server) setupRoutes() {
 		})
 
 		r.Post("/search", s.handleSearch)
-		r.Get("/media/{trackID}", s.handleStream)
+		r.Get("/music/{trackID}", s.handleStream)
 
 		r.Route("/mashups", func(r chi.Router) {
 			r.Get("/", s.handleListMashups)                        // ?q=&sort=recent|top&limit=&offset=  (optional auth -> liked)
 			r.Post("/", s.handleUploadMashup)                      // auth, multipart: file (+ optional cover)
 			r.Get("/mine", s.handleMyMashups)                      // auth
 			r.Get("/liked", s.handleLikedMashups)                  // auth
-			r.Get("/media/{mediaID}", s.handleStreamMashup)        // dev fallback, prod goes through nginx
-			r.Get("/media/{mediaID}/cover", s.handleStreamMashupCover) // dev fallback
+			r.Get("/music/{mediaID}", s.handleStreamMashup)        // dev fallback, prod goes through nginx
+			r.Get("/music/{mediaID}/cover", s.handleStreamMashupCover) // dev fallback
 			r.Get("/{mashupID}", s.handleGetMashup)                // optional auth -> liked
 			r.Delete("/{mashupID}", s.handleDeleteMashup)          // auth + owner
 			r.Post("/{mashupID}/like", s.handleLikeMashup)         // auth

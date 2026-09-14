@@ -6,7 +6,7 @@ import (
 )
 
 // Mashup is a user-uploaded audio track shown in the standalone /mashup section.
-// The audio file lives on media-service; this row is the source of truth for
+// The audio file lives on music-service; this row is the source of truth for
 // its processing state.
 type Mashup struct {
 	ID        string    `json:"id"`
@@ -48,7 +48,7 @@ func (m *Mashup) ToDict() map[string]any {
 		"created_at": m.CreatedAt,
 	}
 	if m.Status == "ready" {
-		out["stream_url"] = "/api/mashups/media/" + m.MediaID
+		out["stream_url"] = "/api/mashups/music/" + m.MediaID
 	}
 	if m.HasCover {
 		// ?v= busts client/CDN caches after the owner replaces the cover.
@@ -56,7 +56,7 @@ func (m *Mashup) ToDict() map[string]any {
 		if m.CoverUpdatedAt != nil {
 			ver = m.CoverUpdatedAt.Unix()
 		}
-		out["cover_url"] = "/api/mashups/media/" + m.MediaID + "/cover?v=" + strconv.FormatInt(ver, 10)
+		out["cover_url"] = "/api/mashups/music/" + m.MediaID + "/cover?v=" + strconv.FormatInt(ver, 10)
 	}
 	if m.Status == "failed" && m.Error != "" {
 		out["error"] = m.Error

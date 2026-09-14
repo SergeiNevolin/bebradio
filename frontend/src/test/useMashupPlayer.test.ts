@@ -17,7 +17,7 @@ function m(id: string): Mashup {
     plays: 0,
     likes: 0,
     created_at: '2026-01-01T00:00:00Z',
-    stream_url: `/api/mashups/media/${id}`,
+    stream_url: `/api/mashups/music/${id}`,
   }
 }
 
@@ -168,3 +168,4 @@ describe('useMashupPlayer', () => {
     expect(p.current.current?.id).toBe('a')
   })
 })
+
