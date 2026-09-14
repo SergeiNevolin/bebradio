@@ -2,7 +2,9 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"sync/atomic"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
 )
@@ -160,14 +162,28 @@ type MockMediaClient struct {
 	ContentFn           func(mediaID, rangeHeader string) (int64, string, []byte, error)
 	DownloadFn          func(sourceURL, mediaID string) (map[string]any, error)
 	UpdateRefsFn        func(mediaIDs []string) error
-	UploadMashupFn      func(mediaID, filename string, body io.Reader) error
-	UploadMashupCoverFn func(mediaID, filename string, body io.Reader) error
-	MashupStatusFn      func(mediaID string) (map[string]any, error)
-	DeleteMashupFn      func(mediaID string) error
+	UploadTrackFn       func(filename string, body io.Reader) (map[string]any, error)
+	UploadTrackCoverFn  func(mediaID, filename string, body io.Reader) error
+	TrackUploadStatusFn func(mediaID string) (map[string]any, error)
+	DeleteTrackFn       func(mediaID string) error
 }
 
 func NewMockMediaClient() *MockMediaClient {
 	return &MockMediaClient{}
+}
+
+var mockUploadCounter int64
+
+func (m *MockMediaClient) UploadTrack(filename string, body io.Reader) (map[string]any, error) {
+	if m.UploadTrackFn != nil {
+		return m.UploadTrackFn(filename, body)
+	}
+	n := atomic.AddInt64(&mockUploadCounter, 1)
+	return map[string]any{
+		"id":       fmt.Sprintf("mockid%02d", n),
+		"media_id": fmt.Sprintf("mockmedia%02d", n),
+		"status":   "processing",
+	}, nil
 }
 
 func (m *MockMediaClient) Search(query string, limit int) ([]map[string]any, error) {
@@ -226,75 +242,68 @@ func (m *MockMediaClient) UpdateReferences(mediaIDs []string) error {
 	return nil
 }
 
-func (m *MockMediaClient) UploadMashup(mediaID, filename string, body io.Reader) error {
-	if m.UploadMashupFn != nil {
-		return m.UploadMashupFn(mediaID, filename, body)
+func (m *MockMediaClient) UploadTrackCover(mediaID, filename string, body io.Reader) error {
+	if m.UploadTrackCoverFn != nil {
+		return m.UploadTrackCoverFn(mediaID, filename, body)
 	}
 	return nil
 }
 
-func (m *MockMediaClient) UploadMashupCover(mediaID, filename string, body io.Reader) error {
-	if m.UploadMashupCoverFn != nil {
-		return m.UploadMashupCoverFn(mediaID, filename, body)
-	}
-	return nil
-}
-
-func (m *MockMediaClient) MashupStatus(mediaID string) (map[string]any, error) {
-	if m.MashupStatusFn != nil {
-		return m.MashupStatusFn(mediaID)
+func (m *MockMediaClient) TrackUploadStatus(mediaID string) (map[string]any, error) {
+	if m.TrackUploadStatusFn != nil {
+		return m.TrackUploadStatusFn(mediaID)
 	}
 	return map[string]any{"status": "ready"}, nil
 }
 
-func (m *MockMediaClient) DeleteMashup(mediaID string) error {
-	if m.DeleteMashupFn != nil {
-		return m.DeleteMashupFn(mediaID)
+func (m *MockMediaClient) DeleteTrack(mediaID string) error {
+	if m.DeleteTrackFn != nil {
+		return m.DeleteTrackFn(mediaID)
 	}
 	return nil
 }
 
-type MockMashupRepo struct {
-	Items     map[string]*entity.Mashup
-	Likes     map[string]map[string]bool // mashupID -> set of userID
+type MockTrackRepo struct {
+	Items     map[string]*entity.Track
+	Likes     map[string]map[string]bool // trackID -> set of userID
 	CoverSet  map[string]bool
 	CreateErr error
 }
 
-func NewMockMashupRepo() *MockMashupRepo {
-	return &MockMashupRepo{
-		Items:    make(map[string]*entity.Mashup),
+func NewMockTrackRepo() *MockTrackRepo {
+	return &MockTrackRepo{
+		Items:    make(map[string]*entity.Track),
 		Likes:    make(map[string]map[string]bool),
 		CoverSet: make(map[string]bool),
 	}
 }
 
-func (m *MockMashupRepo) liked(mashupID, viewerID string) bool {
-	return viewerID != "" && m.Likes[mashupID][viewerID]
+func (m *MockTrackRepo) liked(trackID, viewerID string) bool {
+	return viewerID != "" && m.Likes[trackID][viewerID]
 }
 
-func (m *MockMashupRepo) Create(mashup *entity.Mashup) error {
+func (m *MockTrackRepo) Create(track *entity.Track) error {
 	if m.CreateErr != nil {
 		return m.CreateErr
 	}
-	cp := *mashup
-	m.Items[mashup.ID] = &cp
+	cp := *track
+	m.Items[track.ID] = &cp
 	return nil
 }
 
-func (m *MockMashupRepo) FindByID(id string) (*entity.Mashup, error) {
+func (m *MockTrackRepo) FindByID(id string) (*entity.Track, error) {
 	if v, ok := m.Items[id]; ok {
 		return v, nil
 	}
 	return nil, ErrNotFound
 }
 
-func (m *MockMashupRepo) Delete(id string) error {
+func (m *MockTrackRepo) Delete(id string) error {
 	delete(m.Items, id)
 	return nil
 }
 
-func (m *MockMashupRepo) UpdateStatus(id, status, errMsg string, duration int, sizeBytes int64, hasCover bool) error {
+func (m *MockTrackRepo) UpdateStatus(id, status, errMsg string, duration int, sizeBytes int64, hasCover bool) error {
 	if v, ok := m.Items[id]; ok {
 		v.Status = status
 		v.Error = errMsg
@@ -305,7 +314,7 @@ func (m *MockMashupRepo) UpdateStatus(id, status, errMsg string, duration int, s
 	return nil
 }
 
-func (m *MockMashupRepo) Detail(id, viewerID string) (*entity.Mashup, error) {
+func (m *MockTrackRepo) Detail(id, viewerID string) (*entity.Track, error) {
 	v, ok := m.Items[id]
 	if !ok {
 		return nil, ErrNotFound
@@ -315,7 +324,7 @@ func (m *MockMashupRepo) Detail(id, viewerID string) (*entity.Mashup, error) {
 	return &cp, nil
 }
 
-func (m *MockMashupRepo) SetCoverUploaded(id string) error {
+func (m *MockTrackRepo) SetCoverUploaded(id string) error {
 	m.CoverSet[id] = true
 	if v, ok := m.Items[id]; ok {
 		v.HasCover = true
@@ -323,8 +332,8 @@ func (m *MockMashupRepo) SetCoverUploaded(id string) error {
 	return nil
 }
 
-func (m *MockMashupRepo) List(query, sort string, limit, offset int, viewerID string) ([]*entity.Mashup, error) {
-	out := make([]*entity.Mashup, 0)
+func (m *MockTrackRepo) List(query, sort string, limit, offset int, viewerID string) ([]*entity.Track, error) {
+	out := make([]*entity.Track, 0)
 	for id, v := range m.Items {
 		cp := *v
 		cp.Liked = m.liked(id, viewerID)
@@ -333,8 +342,8 @@ func (m *MockMashupRepo) List(query, sort string, limit, offset int, viewerID st
 	return out, nil
 }
 
-func (m *MockMashupRepo) ListByOwner(ownerID string) ([]*entity.Mashup, error) {
-	out := make([]*entity.Mashup, 0)
+func (m *MockTrackRepo) ListByOwner(ownerID string) ([]*entity.Track, error) {
+	out := make([]*entity.Track, 0)
 	for id, v := range m.Items {
 		if v.OwnerID == ownerID {
 			cp := *v
@@ -345,8 +354,8 @@ func (m *MockMashupRepo) ListByOwner(ownerID string) ([]*entity.Mashup, error) {
 	return out, nil
 }
 
-func (m *MockMashupRepo) ListLikedByUser(userID string, limit, offset int) ([]*entity.Mashup, error) {
-	out := make([]*entity.Mashup, 0)
+func (m *MockTrackRepo) ListLikedByUser(userID string, limit, offset int) ([]*entity.Track, error) {
+	out := make([]*entity.Track, 0)
 	for id, v := range m.Items {
 		if m.Likes[id][userID] {
 			cp := *v
@@ -357,34 +366,34 @@ func (m *MockMashupRepo) ListLikedByUser(userID string, limit, offset int) ([]*e
 	return out, nil
 }
 
-func (m *MockMashupRepo) Like(mashupID, userID string) (int, error) {
-	if _, ok := m.Items[mashupID]; !ok {
+func (m *MockTrackRepo) Like(trackID, userID string) (int, error) {
+	if _, ok := m.Items[trackID]; !ok {
 		return 0, ErrNotFound
 	}
-	if m.Likes[mashupID] == nil {
-		m.Likes[mashupID] = make(map[string]bool)
+	if m.Likes[trackID] == nil {
+		m.Likes[trackID] = make(map[string]bool)
 	}
-	m.Likes[mashupID][userID] = true
-	return m.recount(mashupID), nil
+	m.Likes[trackID][userID] = true
+	return m.recount(trackID), nil
 }
 
-func (m *MockMashupRepo) Unlike(mashupID, userID string) (int, error) {
-	if _, ok := m.Items[mashupID]; !ok {
+func (m *MockTrackRepo) Unlike(trackID, userID string) (int, error) {
+	if _, ok := m.Items[trackID]; !ok {
 		return 0, ErrNotFound
 	}
-	delete(m.Likes[mashupID], userID)
-	return m.recount(mashupID), nil
+	delete(m.Likes[trackID], userID)
+	return m.recount(trackID), nil
 }
 
-func (m *MockMashupRepo) recount(mashupID string) int {
-	n := len(m.Likes[mashupID])
-	if v, ok := m.Items[mashupID]; ok {
+func (m *MockTrackRepo) recount(trackID string) int {
+	n := len(m.Likes[trackID])
+	if v, ok := m.Items[trackID]; ok {
 		v.Likes = n
 	}
 	return n
 }
 
-func (m *MockMashupRepo) CountByOwner(ownerID string) (int, error) {
+func (m *MockTrackRepo) CountByOwner(ownerID string) (int, error) {
 	n := 0
 	for _, v := range m.Items {
 		if v.OwnerID == ownerID {
@@ -394,8 +403,8 @@ func (m *MockMashupRepo) CountByOwner(ownerID string) (int, error) {
 	return n, nil
 }
 
-func (m *MockMashupRepo) ListProcessing() ([]*entity.Mashup, error) {
-	out := make([]*entity.Mashup, 0)
+func (m *MockTrackRepo) ListProcessing() ([]*entity.Track, error) {
+	out := make([]*entity.Track, 0)
 	for _, v := range m.Items {
 		if v.Status == "processing" {
 			out = append(out, v)
@@ -465,3 +474,4 @@ func (m *MockAuthBridge) VerifyRoomToken(token string, roomID string) bool {
 	}
 	return false
 }
+

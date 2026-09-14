@@ -102,6 +102,7 @@ func TestRefillAppendsTracks(t *testing.T) {
 			"duration":   200,
 			"source_url": url,
 			"media_id":   "media_" + url,
+			"id":         "row_" + url,
 		}, nil
 	}
 
@@ -142,6 +143,7 @@ func TestRefillSkipsTooLong(t *testing.T) {
 			"duration":   duration,
 			"source_url": url,
 			"media_id":   "media_" + url,
+			"id":         "row_" + url,
 		}, nil
 	}
 
@@ -195,6 +197,7 @@ func TestRefillResetsFillingOnComplete(t *testing.T) {
 			"duration":   200,
 			"source_url": url,
 			"media_id":   "media_1",
+			"id":         "row_1",
 		}, nil
 	}
 
@@ -245,6 +248,7 @@ func TestRefillDeduplicates(t *testing.T) {
 			"duration":   200,
 			"source_url": url,
 			"media_id":   "media_1",
+			"id":         "row_1",
 		}, nil
 	}
 
@@ -273,6 +277,7 @@ func TestRefillSetsAndClearsFilling(t *testing.T) {
 			"duration": 200,
 			"source_url": url,
 			"media_id": "m1",
+			"id":       "row_1",
 		}, nil
 	}
 
@@ -338,6 +343,7 @@ func TestRefillCalledAfterNeedsRefill(t *testing.T) {
 			"duration": 180,
 			"source_url": url,
 			"media_id": "radio_m1",
+			"id":       "row_r1",
 		}, nil
 	}
 

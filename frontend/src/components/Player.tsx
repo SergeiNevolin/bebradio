@@ -80,10 +80,9 @@ function Player({
 
       if (e.code === 'Space') {
         e.preventDefault()
-        onPlayback(
-          isPlaying ? 'sync' : 'next',
-          isPlaying ? { position: localPos } : {},
-        )
+        // Never skip room-wide from a local keypress: resync when playing,
+        // and a positionless sync (server no-op) when paused.
+        onPlayback('sync', isPlaying ? { position: localPos } : {})
       } else if (e.code === 'ArrowUp') {
         e.preventDefault()
         setVolume(volume + 0.1)

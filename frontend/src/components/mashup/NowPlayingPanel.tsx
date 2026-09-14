@@ -1,20 +1,20 @@
-import type { Mashup } from '../../types'
+import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import styles from './NowPlayingPanel.module.css'
 
 interface NowPlayingPanelProps {
-  current: Mashup | null
-  queue: Mashup[]
+  current: Track | null
+  queue: Track[]
   loading: boolean
-  onPlayFromQueue: (m: Mashup) => void
-  onToggleLike: (m: Mashup) => void
+  onPlayFromQueue: (m: Track) => void
+  onToggleLike: (m: Track) => void
   onOpenProfile?: (userId: string) => void
 }
 
-function Art({ mashup, className }: { mashup: Mashup; className: string }) {
-  if (mashup.cover_url) {
-    return <img className={className} src={mashup.cover_url} alt="" />
+function Art({ mashup, className }: { mashup: Track; className: string }) {
+  if (mashup.thumbnail) {
+    return <img className={className} src={mashup.thumbnail} alt="" />
   }
   return (
     <div className={className} style={{ background: tintForId(mashup.id) }}>
@@ -116,3 +116,4 @@ export default function NowPlayingPanel({
     </aside>
   )
 }
+

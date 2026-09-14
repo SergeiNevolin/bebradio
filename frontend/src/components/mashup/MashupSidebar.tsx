@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Mashup } from '../../types'
+import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import styles from './MashupSidebar.module.css'
@@ -7,14 +7,14 @@ import styles from './MashupSidebar.module.css'
 type Filter = 'all' | 'liked' | 'mine'
 
 interface MashupSidebarProps {
-  items: Mashup[]
-  likedItems: Mashup[]
-  mineItems: Mashup[]
+  items: Track[]
+  likedItems: Track[]
+  mineItems: Track[]
   signedIn: boolean
   activeId?: string
   isPlaying: boolean
   loading: boolean
-  onPlay: (m: Mashup) => void
+  onPlay: (m: Track) => void
 }
 
 export default function MashupSidebar({
@@ -102,8 +102,8 @@ export default function MashupSidebar({
                   onClick={() => onPlay(m)}
                   disabled={!ready}
                 >
-                  {m.cover_url ? (
-                    <img className={styles.rowArt} src={m.cover_url} alt="" />
+                  {m.thumbnail ? (
+                    <img className={styles.rowArt} src={m.thumbnail} alt="" />
                   ) : (
                     <span className={styles.rowArt} style={{ background: tintForId(m.id) }}>
                       <span className={styles.glyph} aria-hidden="true">{monoGlyph(m.title)}</span>
@@ -114,7 +114,7 @@ export default function MashupSidebar({
                   )}
                   <span className={styles.rowBody}>
                     <span className={styles.rowTitle} title={m.title}>{m.title}</span>
-                    <span className={styles.rowMeta}>Mashup · {m.owner_name || 'unknown'}</span>
+                    <span className={styles.rowMeta}>Track · {m.owner_name || 'unknown'}</span>
                   </span>
                   {ready && <span className={styles.rowDur}>{formatTime(m.duration)}</span>}
                 </button>
@@ -126,3 +126,4 @@ export default function MashupSidebar({
     </div>
   )
 }
+

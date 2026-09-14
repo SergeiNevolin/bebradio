@@ -1,5 +1,5 @@
 import { getRoomAccess } from './roomAccess'
-import type { Mashup } from '../types'
+import type { Track } from '../types'
 
 let authToken: string | null = null
 
@@ -108,11 +108,19 @@ export const api = {
     }).catch(() => {}),
 
   // POST /api/rooms/:roomID/queue?access= → track.ToDict()
+  // A track is a track: pass either a YouTube { url } or a library { track_id }.
   addTrack: (roomId: string, url: string) => {
     const access = getRoomAccess(roomId)
     const query = access ? `?access=${encodeURIComponent(access)}` : ''
     return request<{ id: string }>(
       `/api/rooms/${roomId}/queue${query}`, { method: 'POST', body: JSON.stringify({ url }) }
+    )
+  },
+  addTrackById: (roomId: string, track_id: string) => {
+    const access = getRoomAccess(roomId)
+    const query = access ? `?access=${encodeURIComponent(access)}` : ''
+    return request<Track>(
+      `/api/rooms/${roomId}/queue${query}`, { method: 'POST', body: JSON.stringify({ track_id }) }
     )
   },
 
@@ -162,39 +170,39 @@ export const api = {
   getUser: (userId: string) =>
     request<{ user: UserProfile }>(`/api/users/${userId}`),
 
-  // ── Mashups ─────────────────────────────────────────────────────────
-  // GET /api/mashups?q=&sort=recent|top&limit=&offset= → []Mashup.ToDict()
-  listMashups: (q = '', sort: 'recent' | 'top' = 'recent', limit = 30, offset = 0) => {
+  // ── Tracks (uploads library) ──────────────────────────────────────────
+  // GET /api/tracks?q=&sort=recent|top&limit=&offset= → []Track.ToDict()
+  listTracks: (q = '', sort: 'recent' | 'top' = 'recent', limit = 30, offset = 0) => {
     const params = new URLSearchParams({
       sort,
       limit: String(limit),
       offset: String(offset),
     })
     if (q) params.set('q', q)
-    return request<Mashup[]>(`/api/mashups/?${params.toString()}`)
+    return request<Track[]>(`/api/tracks/?${params.toString()}`)
   },
 
-  // GET /api/mashups/mine → []Mashup.ToDict()  (auth)
-  myMashups: () => request<Mashup[]>('/api/mashups/mine'),
+  // GET /api/tracks/mine → []Track.ToDict()  (auth)
+  myTracks: () => request<Track[]>('/api/tracks/mine'),
 
-  // GET /api/mashups/liked?limit=&offset= → []Mashup.ToDict()  (auth)
-  likedMashups: (limit = 30, offset = 0) =>
-    request<Mashup[]>(`/api/mashups/liked?limit=${limit}&offset=${offset}`),
+  // GET /api/tracks/liked?limit=&offset= → []Track.ToDict()  (auth)
+  likedTracks: (limit = 30, offset = 0) =>
+    request<Track[]>(`/api/tracks/liked?limit=${limit}&offset=${offset}`),
 
-  // GET /api/mashups/:id → Mashup.ToDict()
-  getMashup: (id: string) => request<Mashup>(`/api/mashups/${id}`),
+  // GET /api/tracks/:id → Track.ToDict()
+  getTrack: (id: string) => request<Track>(`/api/tracks/${id}`),
 
-  // POST/DELETE /api/mashups/:id/like → { likes, liked }  (auth)
-  likeMashup: (id: string) =>
-    request<{ likes: number; liked: boolean }>(`/api/mashups/${id}/like`, { method: 'POST' }),
-  unlikeMashup: (id: string) =>
-    request<{ likes: number; liked: boolean }>(`/api/mashups/${id}/like`, { method: 'DELETE' }),
+  // POST/DELETE /api/tracks/:id/like → { likes, liked }  (auth)
+  likeTrack: (id: string) =>
+    request<{ likes: number; liked: boolean }>(`/api/tracks/${id}/like`, { method: 'POST' }),
+  unlikeTrack: (id: string) =>
+    request<{ likes: number; liked: boolean }>(`/api/tracks/${id}/like`, { method: 'DELETE' }),
 
-  // PUT /api/mashups/:id/cover (multipart) → { ok: true }  (auth + owner)
-  uploadMashupCover: (id: string, cover: File) => {
+  // PUT /api/tracks/:id/cover (multipart) → { ok: true }  (auth + owner)
+  uploadTrackCover: (id: string, cover: File) => {
     const form = new FormData()
     form.append('file', cover)
-    return fetch(`/api/mashups/${id}/cover`, {
+    return fetch(`/api/tracks/${id}/cover`, {
       method: 'PUT',
       headers: authHeaders(),
       body: form,
@@ -206,30 +214,30 @@ export const api = {
     })
   },
 
-  // DELETE /api/mashups/:id → { ok: true }  (auth + owner)
-  deleteMashup: (id: string) =>
-    fetch(`/api/mashups/${id}`, { method: 'DELETE', headers: authHeaders() }).then(async (res) => {
+  // DELETE /api/tracks/:id → { ok: true }  (auth + owner)
+  deleteTrack: (id: string) =>
+    fetch(`/api/tracks/${id}`, { method: 'DELETE', headers: authHeaders() }).then(async (res) => {
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: string }
-        throw new ApiError(res.status, body.error || 'Failed to delete mashup')
+        throw new ApiError(res.status, body.error || 'Failed to delete track')
       }
     }),
 
-  // POST /api/mashups (multipart) → 202 Mashup.ToDict()
+  // POST /api/tracks (multipart) → 202 Track.ToDict()
   // XHR rather than fetch so the upload exposes progress; the browser sets the
   // multipart boundary, so we must NOT force a Content-Type here.
-  uploadMashup: (
+  uploadTrack: (
     data: { file: File; title: string; artist: string; cover?: File | null },
     onProgress?: (pct: number) => void,
   ) =>
-    new Promise<Mashup>((resolve, reject) => {
+    new Promise<Track>((resolve, reject) => {
       const form = new FormData()
       form.append('title', data.title)
       form.append('artist', data.artist)
       if (data.cover) form.append('cover', data.cover)
       form.append('file', data.file) // file LAST: the Go handler reads title/artist/cover before it
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', '/api/mashups/')
+      xhr.open('POST', '/api/tracks/')
       const headers = authHeaders()
       if (headers.Authorization) xhr.setRequestHeader('Authorization', headers.Authorization)
       xhr.upload.onprogress = (e) => {
@@ -238,7 +246,7 @@ export const api = {
       xhr.onload = () => {
         if (xhr.status === 202 || xhr.status === 200) {
           try {
-            resolve(JSON.parse(xhr.responseText) as Mashup)
+            resolve(JSON.parse(xhr.responseText) as Track)
           } catch {
             reject(new ApiError(xhr.status, 'Malformed server response'))
           }
@@ -256,3 +264,4 @@ export const api = {
       xhr.send(form)
     }),
 }
+

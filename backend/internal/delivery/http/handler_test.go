@@ -21,7 +21,7 @@ var testLog = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level
 type testDeps struct {
 	userRepo   *repository.MockUserRepo
 	roomRepo   *repository.MockRoomRepo
-	mashupRepo *repository.MockMashupRepo
+	trackRepo *repository.MockTrackRepo
 	media      *repository.MockMediaClient
 	auth      *usecase.AuthUsecase
 	authUC    *usecase.AuthUsecase
@@ -43,7 +43,7 @@ func setupTestServer(t *testing.T) *testDeps {
 		return []map[string]any{{"title": "Test Video", "media_id": "m1"}}, nil
 	}
 	mediaClient.ResolveFn = func(url string) (map[string]any, error) {
-		return map[string]any{"media_id": "m1", "title": "Test Video", "duration": float64(180)}, nil
+		return map[string]any{"id": "t1", "media_id": "m1", "title": "Test Video", "duration": float64(180)}, nil
 	}
 	mediaClient.EnsureFn = func(items []map[string]any) ([]string, error) {
 		var ids []string
@@ -79,16 +79,16 @@ func setupTestServer(t *testing.T) *testDeps {
 	userUC := usecase.NewUserUsecase(userRepo, testLog)
 	searchUC := usecase.NewSearchUsecase(mediaClient, cfg, testLog)
 	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, testLog)
-	mashupRepo := repository.NewMockMashupRepo()
-	mashupUC := usecase.NewMashupUsecase(mashupRepo, mediaClient, cfg, testLog)
+	trackRepo := repository.NewMockTrackRepo()
+	trackUC := usecase.NewTrackUsecase(trackRepo, mediaClient, cfg, testLog)
 	playback := usecase.NewPlaybackUsecase()
 
-	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, mashupUC, ws.NewConnectionManager(testLog))
+	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, trackUC, ws.NewConnectionManager(testLog))
 
 	return &testDeps{
 		userRepo:   userRepo,
 		roomRepo:   roomRepo,
-		mashupRepo: mashupRepo,
+		trackRepo:  trackRepo,
 		media:      mediaClient,
 		auth:     auth,
 		authUC:   auth,

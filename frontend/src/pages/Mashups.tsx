@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { api } from '../lib/api'
-import type { Mashup } from '../types'
+import type { Track } from '../types'
 import { useMashupPlayer } from '../hooks/useMashupPlayer'
 import MashupCard from '../components/mashup/MashupCard'
 import MashupPlayer from '../components/mashup/MashupPlayer'
@@ -52,20 +52,20 @@ export default function Mashups() {
   const [expanded, setExpanded] = useState(false)
   const [queueOpen, setQueueOpen] = useState(true)
 
-  const [recent, setRecent] = useState<Mashup[]>([])
+  const [recent, setRecent] = useState<Track[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
 
-  const [top, setTop] = useState<Mashup[]>([])
+  const [top, setTop] = useState<Track[]>([])
   const [topLoading, setTopLoading] = useState(true)
   const [topDone, setTopDone] = useState(false)
 
-  const [liked, setLiked] = useState<Mashup[]>([])
+  const [liked, setLiked] = useState<Track[]>([])
   const [likedLoading, setLikedLoading] = useState(false)
 
-  const [mine, setMine] = useState<Mashup[]>([])
+  const [mine, setMine] = useState<Track[]>([])
   const [mineLoading, setMineLoading] = useState(false)
 
-  const [searchResults, setSearchResults] = useState<Mashup[]>([])
+  const [searchResults, setSearchResults] = useState<Track[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
 
   // Debounce the search box (~300ms) before it becomes a request.
@@ -75,8 +75,8 @@ export default function Mashups() {
   }, [query])
 
   // Apply an update to a single mashup across every list it may appear in.
-  const patchAll = useCallback((id: string, updater: (m: Mashup) => Mashup) => {
-    const apply = (arr: Mashup[]) => arr.map((m) => (m.id === id ? updater(m) : m))
+  const patchAll = useCallback((id: string, updater: (m: Track) => Track) => {
+    const apply = (arr: Track[]) => arr.map((m) => (m.id === id ? updater(m) : m))
     setRecent(apply)
     setTop(apply)
     setLiked(apply)
@@ -85,7 +85,7 @@ export default function Mashups() {
   }, [])
 
   const removeEverywhere = useCallback((id: string) => {
-    const drop = (arr: Mashup[]) => arr.filter((m) => m.id !== id)
+    const drop = (arr: Track[]) => arr.filter((m) => m.id !== id)
     setRecent(drop)
     setTop(drop)
     setLiked(drop)
@@ -97,7 +97,7 @@ export default function Mashups() {
   const loadRecent = useCallback(async () => {
     setRecentLoading(true)
     try {
-      setRecent(await api.listMashups('', 'recent', RECENT_LIMIT))
+      setRecent(await api.listTracks('', 'recent', RECENT_LIMIT))
     } catch {
       showToast('Could not load mashups', 'error')
     } finally {
@@ -105,7 +105,7 @@ export default function Mashups() {
     }
   }, [showToast])
 
-  const topRef = useRef<Mashup[]>([])
+  const topRef = useRef<Track[]>([])
   topRef.current = top
   const topBusyRef = useRef(false)
 
@@ -116,7 +116,7 @@ export default function Mashups() {
       setTopLoading(true)
       const offset = reset ? 0 : topRef.current.length
       try {
-        const page = await api.listMashups('', 'top', TOP_PAGE, offset)
+        const page = await api.listTracks('', 'top', TOP_PAGE, offset)
         setTop((prev) => {
           const base = reset ? [] : prev
           const seen = new Set(base.map((m) => m.id))
@@ -136,7 +136,7 @@ export default function Mashups() {
   const loadLiked = useCallback(async () => {
     setLikedLoading(true)
     try {
-      setLiked(await api.likedMashups())
+      setLiked(await api.likedTracks())
     } catch {
       showToast('Could not load liked mashups', 'error')
     } finally {
@@ -147,7 +147,7 @@ export default function Mashups() {
   const loadMine = useCallback(async () => {
     setMineLoading(true)
     try {
-      setMine(await api.myMashups())
+      setMine(await api.myTracks())
     } catch {
       showToast('Could not load your mashups', 'error')
     } finally {
@@ -181,7 +181,7 @@ export default function Mashups() {
     let cancelled = false
     setSearchLoading(true)
     api
-      .listMashups(debouncedQuery, 'recent', SEARCH_LIMIT)
+      .listTracks(debouncedQuery, 'recent', SEARCH_LIMIT)
       .then((r) => {
         if (!cancelled) setSearchResults(r)
       })
@@ -246,7 +246,7 @@ export default function Mashups() {
     const timer = setInterval(async () => {
       const ids = pollRef.current
       if (ids.length === 0) return
-      const updated = await Promise.all(ids.map((id) => api.getMashup(id).catch(() => null)))
+      const updated = await Promise.all(ids.map((id) => api.getTrack(id).catch(() => null)))
       updated.forEach((fresh) => {
         if (fresh) patchAll(fresh.id, () => fresh)
       })
@@ -255,28 +255,28 @@ export default function Mashups() {
   }, [processingKey, patchAll])
 
   // ── Actions ──────────────────────────────────────────────────────
-  const handleDelete = async (m: Mashup) => {
+  const handleDelete = async (m: Track) => {
     try {
-      await api.deleteMashup(m.id)
+      await api.deleteTrack(m.id)
       removeEverywhere(m.id)
-      showToast('Mashup deleted', 'success')
+      showToast('Track deleted', 'success')
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Delete failed', 'error')
     }
   }
 
-  const handleUploaded = (m: Mashup) => {
+  const handleUploaded = (m: Track) => {
     setRecent((prev) => [m, ...prev.filter((x) => x.id !== m.id)])
     setMine((prev) => [m, ...prev.filter((x) => x.id !== m.id)])
   }
 
-  const handleToggleLike = async (m: Mashup) => {
+  const handleToggleLike = async (m: Track) => {
     if (!user) {
       showToast('Sign in to like mashups', 'error')
       return
     }
     const nextLiked = !m.liked
-    const optimistic = (x: Mashup): Mashup => ({
+    const optimistic = (x: Track): Track => ({
       ...x,
       liked: nextLiked,
       likes: Math.max(0, x.likes + (nextLiked ? 1 : -1)),
@@ -289,12 +289,12 @@ export default function Mashups() {
       return prev.filter((x) => x.id !== m.id)
     })
     try {
-      const res = nextLiked ? await api.likeMashup(m.id) : await api.unlikeMashup(m.id)
-      const settle = (x: Mashup): Mashup => ({ ...x, liked: res.liked, likes: res.likes })
+      const res = nextLiked ? await api.likeTrack(m.id) : await api.unlikeTrack(m.id)
+      const settle = (x: Track): Track => ({ ...x, liked: res.liked, likes: res.likes })
       patchAll(m.id, settle)
       setLiked((prev) => prev.map((x) => (x.id === m.id ? settle(x) : x)))
     } catch (err) {
-      const revert = (x: Mashup): Mashup => ({ ...x, liked: m.liked, likes: m.likes })
+      const revert = (x: Track): Track => ({ ...x, liked: m.liked, likes: m.likes })
       patchAll(m.id, revert)
       setLiked((prev) =>
         m.liked
@@ -307,10 +307,10 @@ export default function Mashups() {
     }
   }
 
-  const handleChangeCover = async (m: Mashup, file: File) => {
+  const handleChangeCover = async (m: Track, file: File) => {
     try {
-      await api.uploadMashupCover(m.id, file)
-      const fresh = await api.getMashup(m.id)
+      await api.uploadTrackCover(m.id, file)
+      const fresh = await api.getTrack(m.id)
       patchAll(m.id, () => fresh)
       showToast('Cover updated', 'success')
     } catch (err) {
@@ -320,7 +320,7 @@ export default function Mashups() {
 
   const activeId = player.current?.id
 
-  const renderCard = (m: Mashup) => (
+  const renderCard = (m: Track) => (
     <div key={m.id} className={styles.railItem}>
       <MashupCard
         mashup={m}
@@ -362,7 +362,7 @@ export default function Mashups() {
 
   const renderShelf = (
     title: string,
-    items: Mashup[],
+    items: Track[],
     loading: boolean,
     opts: { emptyText: string; rail?: boolean },
   ) => (
@@ -532,3 +532,4 @@ export default function Mashups() {
     </div>
   )
 }
+

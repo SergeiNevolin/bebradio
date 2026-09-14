@@ -2,29 +2,29 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import Mashups from '../pages/Mashups'
-import type { Mashup } from '../types'
+import type { Track } from '../types'
 
 const {
-  listMashups,
-  myMashups,
-  likedMashups,
-  getMashup,
-  deleteMashup,
-  likeMashup,
-  unlikeMashup,
-  uploadMashupCover,
+  listTracks,
+  myTracks,
+  likedTracks,
+  getTrack,
+  deleteTrack,
+  likeTrack,
+  unlikeTrack,
+  uploadTrackCover,
 } = vi.hoisted(() => ({
-  listMashups: vi.fn(),
-  myMashups: vi.fn(),
-  likedMashups: vi.fn(),
-  getMashup: vi.fn(),
-  deleteMashup: vi.fn(),
-  likeMashup: vi.fn(),
-  unlikeMashup: vi.fn(),
-  uploadMashupCover: vi.fn(),
+  listTracks: vi.fn(),
+  myTracks: vi.fn(),
+  likedTracks: vi.fn(),
+  getTrack: vi.fn(),
+  deleteTrack: vi.fn(),
+  likeTrack: vi.fn(),
+  unlikeTrack: vi.fn(),
+  uploadTrackCover: vi.fn(),
 }))
 vi.mock('../lib/api', () => ({
-  api: { listMashups, myMashups, likedMashups, getMashup, deleteMashup, likeMashup, unlikeMashup, uploadMashupCover },
+  api: { listTracks, myTracks, likedTracks, getTrack, deleteTrack, likeTrack, unlikeTrack, uploadTrackCover },
 }))
 
 let mockUser: { id: string; username: string } | null = null
@@ -35,7 +35,7 @@ vi.mock('../context/AuthContext', () => ({
 const showToast = vi.fn()
 vi.mock('../context/ToastContext', () => ({ useToast: () => ({ showToast }) }))
 
-function mashup(over: Partial<Mashup> = {}): Mashup {
+function mashup(over: Partial<Track> = {}): Track {
   return {
     id: 'm1',
     owner_id: 'owner1',
@@ -50,7 +50,10 @@ function mashup(over: Partial<Mashup> = {}): Mashup {
     likes: 3,
     liked: false,
     created_at: '2026-01-01T00:00:00Z',
-    stream_url: '/api/mashups/media/aaa',
+    source: 'upload',
+    thumbnail: '',
+    added_by: '',
+    url: '/api/tracks/m1/audio',
     ...over,
   }
 }
@@ -63,17 +66,17 @@ describe('Mashups page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUser = null
-    listMashups.mockImplementation((_q: string, sort: 'recent' | 'top') =>
+    listTracks.mockImplementation((_q: string, sort: 'recent' | 'top') =>
       Promise.resolve(
         sort === 'top'
           ? [mashup({ id: 't1', title: 'Top Bootleg', likes: 9 })]
           : [mashup(), mashup({ id: 'm2', title: 'Beta Bootleg' })],
       ),
     )
-    myMashups.mockResolvedValue([mashup({ id: 'm9', title: 'My Only Mix', owner_id: 'owner1' })])
-    likedMashups.mockResolvedValue([mashup({ id: 'l1', title: 'Liked Bootleg', liked: true, likes: 5 })])
-    likeMashup.mockResolvedValue({ likes: 4, liked: true })
-    unlikeMashup.mockResolvedValue({ likes: 3, liked: false })
+    myTracks.mockResolvedValue([mashup({ id: 'm9', title: 'My Only Mix', owner_id: 'owner1' })])
+    likedTracks.mockResolvedValue([mashup({ id: 'l1', title: 'Liked Bootleg', liked: true, likes: 5 })])
+    likeTrack.mockResolvedValue({ likes: 4, liked: true })
+    unlikeTrack.mockResolvedValue({ likes: 3, liked: false })
   })
 
   it('renders the three browse sections', async () => {
@@ -83,8 +86,8 @@ describe('Mashups page', () => {
     expect(screen.getByRole('heading', { name: 'Top by likes' })).toBeInTheDocument()
     expect(await screen.findAllByText('Top Bootleg')).not.toHaveLength(0)
     // recent + top requested with their sorts
-    expect(listMashups).toHaveBeenCalledWith('', 'recent', 12)
-    expect(listMashups).toHaveBeenCalledWith('', 'top', 24, 0)
+    expect(listTracks).toHaveBeenCalledWith('', 'recent', 12)
+    expect(listTracks).toHaveBeenCalledWith('', 'top', 24, 0)
   })
 
   it('adds the Liked and My mashups sections for a signed-in user', async () => {
@@ -111,7 +114,7 @@ describe('Mashups page', () => {
 
     fireEvent.change(screen.getByLabelText('Search mashups'), { target: { value: 'beta' } })
 
-    await waitFor(() => expect(listMashups).toHaveBeenCalledWith('beta', 'recent', 50))
+    await waitFor(() => expect(listTracks).toHaveBeenCalledWith('beta', 'recent', 50))
     expect(await screen.findByRole('heading', { name: 'Search results' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Latest' })).not.toBeInTheDocument()
   })
@@ -124,7 +127,7 @@ describe('Mashups page', () => {
 
     fireEvent.click(likeBtn)
 
-    await waitFor(() => expect(likeMashup).toHaveBeenCalledWith('t1'))
+    await waitFor(() => expect(likeTrack).toHaveBeenCalledWith('t1'))
     await waitFor(() =>
       expect(within(top).getByRole('button', { name: 'Unlike Top Bootleg' })).toBeInTheDocument(),
     )
@@ -135,7 +138,7 @@ describe('Mashups page', () => {
     const top = (await screen.findByRole('heading', { name: 'Top by likes' })).parentElement as HTMLElement
     fireEvent.click(within(top).getByRole('button', { name: 'Like Top Bootleg' }))
     expect(showToast).toHaveBeenCalledWith('Sign in to like mashups', 'error')
-    expect(likeMashup).not.toHaveBeenCalled()
+    expect(likeTrack).not.toHaveBeenCalled()
   })
 
   it('shows the reworked player transport once a track is playing', async () => {
@@ -176,3 +179,7 @@ describe('Mashups page', () => {
     expect(panel()).toHaveLength(1)
   })
 })
+
+
+
+

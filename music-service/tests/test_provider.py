@@ -37,7 +37,11 @@ def test_resolve_returns_media_service_contract(settings, monkeypatch):
 
     assert result["media_id"] == provider.media_id("dQw4w9WgXcQ")
     assert result["title"] == "Song"
-    assert "id" not in result
+    # Identity travels with the data: a fresh row id per call.
+    assert len(result["id"]) == 8
+    again = provider.resolve("https://youtu.be/dQw4w9WgXcQ")
+    assert again["id"] != result["id"]
+    assert again["media_id"] == result["media_id"]
 
 
 def test_search_skips_invalid_json_and_empty_items(settings, monkeypatch):

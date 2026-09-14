@@ -22,19 +22,37 @@ services:
     networks:
       - app-net
 
-  media-service:
-    build: ./media-service
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address ":9001"
     volumes:
-      - mediadata:/app/media
+      - miniodata:/data
     environment:
-      - MEDIA_DIR=/app/media/tracks
-      - MASHUP_DIR=/app/media/mashups
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-net
+
+  music-service:
+    build: ./music-service
+    environment:
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-music}
       - MASHUP_MAX_SIZE=${MASHUP_MAX_SIZE:-62914560}
       - MASHUP_COVER_MAX_SIZE=${MASHUP_COVER_MAX_SIZE:-5242880}
       - BGUTIL_BASE_URL=http://bgutil-provider:4416
     depends_on:
       bgutil-provider:
         condition: service_started
+      minio:
+        condition: service_healthy
     networks:
       - app-net
 
@@ -44,14 +62,14 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/bebradio
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-      - MEDIA_SERVICE_URL=http://media-service:8100
+      - MUSIC_SERVICE_URL=http://music-service:8100
       - MASHUP_MAX_SIZE=${MASHUP_MAX_SIZE:-62914560}
       - MASHUP_COVER_MAX_SIZE=${MASHUP_COVER_MAX_SIZE:-5242880}
       - MASHUP_USER_QUOTA=${MASHUP_USER_QUOTA:-20}
     depends_on:
       postgres:
         condition: service_healthy
-      media-service:
+      music-service:
         condition: service_started
     networks:
       - app-net
@@ -76,4 +94,4 @@ networks:
 
 volumes:
   pgdata:
-  mediadata:
+  miniodata:

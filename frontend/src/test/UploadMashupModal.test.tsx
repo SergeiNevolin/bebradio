@@ -2,8 +2,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import UploadMashupModal from '../components/mashup/UploadMashupModal'
 
-const { uploadMashup } = vi.hoisted(() => ({ uploadMashup: vi.fn() }))
-vi.mock('../lib/api', () => ({ api: { uploadMashup } }))
+const { uploadTrack } = vi.hoisted(() => ({ uploadTrack: vi.fn() }))
+vi.mock('../lib/api', () => ({ api: { uploadTrack } }))
 
 const showToast = vi.fn()
 vi.mock('../context/ToastContext', () => ({ useToast: () => ({ showToast }) }))
@@ -27,7 +27,7 @@ describe('UploadMashupModal', () => {
   })
 
   it('uploads the file with title and artist, then closes', async () => {
-    uploadMashup.mockResolvedValue({ id: 'm1', status: 'processing' })
+    uploadTrack.mockResolvedValue({ id: 'm1', status: 'processing' })
     const onClose = vi.fn()
     const onUploaded = vi.fn()
     render(<UploadMashupModal onClose={onClose} onUploaded={onUploaded} />)
@@ -37,14 +37,14 @@ describe('UploadMashupModal', () => {
     fireEvent.change(screen.getByLabelText('Artist'), { target: { value: 'Me' } })
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }))
 
-    await waitFor(() => expect(uploadMashup).toHaveBeenCalled())
-    expect(uploadMashup.mock.calls[0][0]).toEqual({ file, title: 'My Mix', artist: 'Me', cover: null })
+    await waitFor(() => expect(uploadTrack).toHaveBeenCalled())
+    expect(uploadTrack.mock.calls[0][0]).toEqual({ file, title: 'My Mix', artist: 'Me', cover: null })
     await waitFor(() => expect(onUploaded).toHaveBeenCalledWith({ id: 'm1', status: 'processing' }))
     expect(onClose).toHaveBeenCalled()
   })
 
   it('passes a chosen cover image through to the upload', async () => {
-    uploadMashup.mockResolvedValue({ id: 'm1', status: 'processing' })
+    uploadTrack.mockResolvedValue({ id: 'm1', status: 'processing' })
     render(<UploadMashupModal onClose={vi.fn()} onUploaded={vi.fn()} />)
 
     const file = selectFile()
@@ -52,12 +52,12 @@ describe('UploadMashupModal', () => {
     fireEvent.change(screen.getByLabelText('Cover (optional)'), { target: { files: [cover] } })
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }))
 
-    await waitFor(() => expect(uploadMashup).toHaveBeenCalled())
-    expect(uploadMashup.mock.calls[0][0]).toMatchObject({ file, cover })
+    await waitFor(() => expect(uploadTrack).toHaveBeenCalled())
+    expect(uploadTrack.mock.calls[0][0]).toMatchObject({ file, cover })
   })
 
   it('shows an error and stays open when the upload fails', async () => {
-    uploadMashup.mockRejectedValue(new Error('Upload quota reached'))
+    uploadTrack.mockRejectedValue(new Error('Upload quota reached'))
     const onClose = vi.fn()
     render(<UploadMashupModal onClose={onClose} onUploaded={vi.fn()} />)
 
@@ -73,3 +73,4 @@ describe('UploadMashupModal', () => {
     expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled()
   })
 })
+

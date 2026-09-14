@@ -1,11 +1,11 @@
 import { useRef } from 'react'
-import type { Mashup } from '../../types'
+import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import styles from './EditMashupModal.module.css'
 
 interface EditMashupModalProps {
-  mashup: Mashup
+  mashup: Track
   canManageCover: boolean
   canDelete: boolean
   onChangeCover: (file: File) => void
@@ -40,13 +40,13 @@ export default function EditMashupModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Mashup settings</h3>
+          <h3>Track settings</h3>
           <button className="btn-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="modal-body">
           <div className={styles.summary}>
-            {mashup.cover_url ? (
-              <img className={styles.cover} src={mashup.cover_url} alt="" />
+            {mashup.thumbnail ? (
+              <img className={styles.cover} src={mashup.thumbnail} alt="" />
             ) : (
               <div className={styles.cover} style={{ background: tintForId(mashup.id) }}>
                 <span className={styles.glyph} aria-hidden="true">{monoGlyph(mashup.title)}</span>
@@ -73,7 +73,7 @@ export default function EditMashupModal({
                 className="btn btn-secondary"
                 onClick={() => coverInputRef.current?.click()}
               >
-                {mashup.cover_url ? 'Replace cover' : 'Upload cover'}
+                {mashup.thumbnail ? 'Replace cover' : 'Upload cover'}
               </button>
               <input
                 ref={coverInputRef}
@@ -117,3 +117,4 @@ export default function EditMashupModal({
     </div>
   )
 }
+

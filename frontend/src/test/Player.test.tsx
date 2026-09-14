@@ -5,12 +5,20 @@ import type { Track } from '../types'
 
 const mockTrack: Track = {
   id: 'abc123',
+  source: 'youtube',
   title: 'Test Song',
   artist: 'Test Artist',
   url: 'https://example.com/audio.mp3',
   thumbnail: 'https://example.com/thumb.jpg',
   duration: 210,
   added_by: 'Alice',
+  owner_id: '',
+  size_bytes: 0,
+  status: 'ready',
+  has_cover: false,
+  plays: 0,
+  likes: 0,
+  created_at: '',
 }
 
 const defaultPlayerProps = {
@@ -408,12 +416,20 @@ describe('Player seeking', () => {
 
 const nextTrack: Track = {
   id: 'next99',
+  source: 'youtube',
   title: 'Next Song',
   artist: 'Next Artist',
   url: 'https://example.com/next.mp3',
   thumbnail: '',
   duration: 180,
   added_by: 'Bob',
+  owner_id: '',
+  size_bytes: 0,
+  status: 'ready',
+  has_cover: false,
+  plays: 0,
+  likes: 0,
+  created_at: '',
 }
 
 describe('Player gapless playback', () => {

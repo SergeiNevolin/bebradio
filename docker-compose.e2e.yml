@@ -5,9 +5,11 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
 
-  media-service:
+  music-service:
     ports: !reset []
-    volumes: !reset []
+
+  minio:
+    ports: !reset []
 
   backend:
     ports: !reset []

@@ -70,6 +70,7 @@ func TestTrackToDictMinimal(t *testing.T) {
 
 func TestTrackFromYouTube(t *testing.T) {
 	info := map[string]any{
+		"id":         "t42",
 		"title":      "Test Video",
 		"artist":     "Test Channel",
 		"thumbnail":  "http://example.com/thumb.jpg",
@@ -79,6 +80,10 @@ func TestTrackFromYouTube(t *testing.T) {
 	}
 
 	track := TrackFromYouTube(info, "Bob")
+
+	if track.ID != "t42" {
+		t.Errorf("expected id from resolve data 't42', got '%s'", track.ID)
+	}
 
 	if track.Title != "Test Video" {
 		t.Errorf("expected title 'Test Video', got '%s'", track.Title)

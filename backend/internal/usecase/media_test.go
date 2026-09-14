@@ -43,8 +43,8 @@ func TestEnsureTrackReadySuccess(t *testing.T) {
 	if !result {
 		t.Error("expected true when track becomes ready")
 	}
-	if track.URL != "/api/media/media123" {
-		t.Errorf("expected URL '/api/media/media123', got '%s'", track.URL)
+	if track.URL != "/api/music/media123" {
+		t.Errorf("expected URL '/api/music/media123', got '%s'", track.URL)
 	}
 	if track.LocalPath != "media123.m4a" {
 		t.Errorf("expected local_path 'media123.m4a', got '%s'", track.LocalPath)
@@ -59,7 +59,7 @@ func TestEnsureTrackReadyAlreadyHasURL(t *testing.T) {
 	cfg := &config.Config{}
 	uc := NewMediaUsecase(mediaClient, cfg, testLog2)
 
-	track := &entity.Track{ID: "t1", MediaID: "media123", URL: "/api/media/media123"}
+	track := &entity.Track{ID: "t1", MediaID: "media123", URL: "/api/music/media123"}
 	result := uc.EnsureTrackReady(track)
 
 	if result {
@@ -101,7 +101,7 @@ func TestEnsureRoomMediaAllReady(t *testing.T) {
 
 	rm := entity.NewRoom("X", "R", "O")
 	rm.Queue = []*entity.Track{
-		{ID: "t1", MediaID: "m1", URL: "/api/media/m1"},
+		{ID: "t1", MediaID: "m1", URL: "/api/music/m1"},
 	}
 	rm.CurrentIndex = 0
 
@@ -129,7 +129,7 @@ func TestEnsureRoomMediaDownloadsPending(t *testing.T) {
 	if !changed {
 		t.Error("expected true when tracks become ready")
 	}
-	if rm.Queue[0].URL != "/api/media/m1" {
+	if rm.Queue[0].URL != "/api/music/m1" {
 		t.Errorf("expected URL for track 1, got '%s'", rm.Queue[0].URL)
 	}
 }
@@ -153,7 +153,7 @@ func TestEnsureRoomMediaPartialReady(t *testing.T) {
 	if !changed {
 		t.Error("expected true when at least one track becomes ready")
 	}
-	if rm.Queue[0].URL != "/api/media/m1" {
+	if rm.Queue[0].URL != "/api/music/m1" {
 		t.Error("expected track 1 to have URL")
 	}
 	if rm.Queue[1].URL != "" {
@@ -177,3 +177,4 @@ func TestFetchTrack(t *testing.T) {
 		t.Errorf("expected media_id 'm1', got '%v'", result["media_id"])
 	}
 }
+

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Mashup } from '../types'
+import type { Track } from '../types'
 import { useVolume } from './useVolume'
 
 /**
@@ -75,7 +75,7 @@ export function useMashupPlayer() {
   const audioRef = useRef<HTMLAudioElement>(null)
   // Read the saved snapshot once, on mount.
   const [boot] = useState(loadPersisted)
-  const [list, setList] = useState<Mashup[]>([])
+  const [list, setList] = useState<Track[]>([])
   const [index, setIndex] = useState(-1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [position, setPosition] = useState(boot?.position ?? 0)
@@ -156,7 +156,7 @@ export function useMashupPlayer() {
   )
 
   const play = useCallback(
-    (m: Mashup) => {
+    (m: Track) => {
       const i = list.findIndex((x) => x.id === m.id)
       if (i >= 0) setIndex(i)
     },
@@ -206,7 +206,7 @@ export function useMashupPlayer() {
     const el = audioRef.current
     if (!el) return
     setBuffered(0)
-    if (!current || !current.stream_url) {
+    if (!current || !current.url) {
       el.pause()
       el.removeAttribute('src')
       el.load()
@@ -224,7 +224,7 @@ export function useMashupPlayer() {
     restorePosRef.current = null
     restorePlayRef.current = false
 
-    el.src = current.stream_url
+    el.src = current.url
     el.load()
     el.volume = muted ? 0 : volume
 
@@ -248,8 +248,10 @@ export function useMashupPlayer() {
     }
 
     el.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false))
+    // NOTE: url is a dep, not just id — a processing track keeps its id while
+    // polling swaps in the ready url, and without this the audio stays silent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id])
+  }, [current?.id, current?.url])
 
   // Wire element events -> state.
   useEffect(() => {
@@ -376,3 +378,4 @@ export function useMashupPlayer() {
 }
 
 export type MashupPlayer = ReturnType<typeof useMashupPlayer>
+

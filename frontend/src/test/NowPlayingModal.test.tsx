@@ -3,9 +3,9 @@ import { describe, it, expect, vi } from 'vitest'
 import { createRef } from 'react'
 import NowPlayingModal from '../components/mashup/NowPlayingModal'
 import type { MashupPlayer as MashupPlayerState } from '../hooks/useMashupPlayer'
-import type { Mashup } from '../types'
+import type { Track } from '../types'
 
-function makeMashup(over: Partial<Mashup> = {}): Mashup {
+function makeMashup(over: Partial<Track> = {}): Track {
   return {
     id: 'm1',
     owner_id: 'o1',
@@ -20,7 +20,10 @@ function makeMashup(over: Partial<Mashup> = {}): Mashup {
     likes: 12,
     liked: false,
     created_at: '2026-01-01T00:00:00Z',
-    stream_url: '/api/mashups/media/abc',
+    source: 'upload',
+    thumbnail: '',
+    added_by: '',
+    url: '/api/tracks/m1/audio',
     ...over,
   }
 }
@@ -55,7 +58,7 @@ function makePlayer(over: Partial<MashupPlayerState> = {}): MashupPlayerState {
   } as MashupPlayerState
 }
 
-function renderModal(over: Partial<MashupPlayerState> = {}, queue: Mashup[] = []) {
+function renderModal(over: Partial<MashupPlayerState> = {}, queue: Track[] = []) {
   const player = makePlayer(over)
   const onClose = vi.fn()
   render(
@@ -104,3 +107,7 @@ describe('NowPlayingModal', () => {
     expect(player.cycleRepeat).toHaveBeenCalled()
   })
 })
+
+
+
+

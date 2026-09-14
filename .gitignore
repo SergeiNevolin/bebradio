@@ -47,4 +47,5 @@ frontend/ssl/
 pgdata/
 
 # Downloaded audio files
-backend/media/
+backend/music/
+

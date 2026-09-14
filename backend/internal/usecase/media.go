@@ -40,7 +40,7 @@ func (uc *MediaUsecase) EnsureTrackReady(track *entity.Track) bool {
 		if id == track.MediaID {
 			if track.URL == "" {
 				track.LocalPath = track.MediaID + ".m4a"
-				track.URL = "/api/media/" + track.MediaID
+				track.URL = "/api/music/" + track.MediaID
 				return true
 			}
 			return false
@@ -64,6 +64,12 @@ func (uc *MediaUsecase) EnsureRoomMedia(rm *entity.Room) bool {
 
 	var pending []*entity.Track
 	for _, t := range tracks {
+		// Uploads are ready by construction (only ready ones can be queued)
+		// and expose no URL field — StreamURL() derives it. Sending them to
+		// Ensure would burn yt-dlp runs with an empty source_url forever.
+		if t.Source == entity.TrackSourceUpload {
+			continue
+		}
 		if t.MediaID != "" && t.URL == "" {
 			pending = append(pending, t)
 		}
@@ -81,6 +87,11 @@ func (uc *MediaUsecase) EnsureRoomMedia(rm *entity.Room) bool {
 		return false
 	}
 
+	// Mutate under the write lock: readers (ToDict/Broadcast/SaveTracks) see
+	// the same *Track pointers. Tracks detached from the queue meanwhile are
+	// harmless to touch.
+	rm.Mu.Lock()
+	defer rm.Mu.Unlock()
 	changed := false
 	readySet := make(map[string]bool)
 	for _, id := range ready {
@@ -92,7 +103,7 @@ func (uc *MediaUsecase) EnsureRoomMedia(rm *entity.Room) bool {
 				changed = true
 			}
 			t.LocalPath = t.MediaID + ".m4a"
-			t.URL = "/api/media/" + t.MediaID
+			t.URL = "/api/music/" + t.MediaID
 		}
 	}
 	return changed

@@ -12,6 +12,15 @@ type RoomRepo struct {
 	pool *pgxpool.Pool
 }
 
+// nullIfEmpty maps "" to NULL so optional text columns stay NULL instead of
+// accumulating empty strings.
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 func NewRoomRepo(pool *pgxpool.Pool) *RoomRepo {
 	return &RoomRepo{pool: pool}
 }
@@ -121,11 +130,16 @@ func (r *RoomRepo) SaveTracks(room *entity.Room) error {
 
 	for i, track := range room.Queue {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO tracks (id, room_id, title, artist, url, thumbnail, duration, added_by, position_index, source_url, local_path, media_id, added_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-			track.ID, room.ID, track.Title, track.Artist, track.URL, track.Thumbnail,
+			`INSERT INTO tracks (id, room_id, source, title, artist, url, thumbnail, duration,
+				added_by, position_index, source_url, local_path, media_id, added_at,
+				owner_id, size_bytes, status, error, has_cover, plays, likes)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+				$15, $16, $17, $18, $19, $20, $21)`,
+			track.ID, room.ID, track.Source, track.Title, track.Artist, track.URL, track.Thumbnail,
 			track.Duration, track.AddedBy, i, track.SourceURL, track.LocalPath,
 			track.MediaID, track.AddedAt,
+			nullIfEmpty(track.OwnerID), track.SizeBytes, track.Status, track.Error,
+			track.HasCover, track.Plays, track.Likes,
 		)
 		if err != nil {
 			return err
@@ -136,7 +150,9 @@ func (r *RoomRepo) SaveTracks(room *entity.Room) error {
 
 func (r *RoomRepo) LoadTracks(roomID string) ([]*entity.Track, error) {
 	rows, err := r.pool.Query(context.Background(),
-		`SELECT id, title, artist, url, thumbnail, duration, added_by, source_url, local_path, media_id, position_index, added_at
+		`SELECT id, source, title, artist, url, thumbnail, duration, added_by, source_url,
+			local_path, media_id, position_index, added_at,
+			COALESCE(owner_id, ''), size_bytes, status, error, has_cover, plays, likes
 		 FROM tracks WHERE room_id = $1 ORDER BY position_index`, roomID,
 	)
 	if err != nil {
@@ -147,8 +163,9 @@ func (r *RoomRepo) LoadTracks(roomID string) ([]*entity.Track, error) {
 	var tracks []*entity.Track
 	for rows.Next() {
 		t := &entity.Track{}
-		err := rows.Scan(&t.ID, &t.Title, &t.Artist, &t.URL, &t.Thumbnail, &t.Duration,
-			&t.AddedBy, &t.SourceURL, &t.LocalPath, &t.MediaID, &t.Position, &t.AddedAt)
+		err := rows.Scan(&t.ID, &t.Source, &t.Title, &t.Artist, &t.URL, &t.Thumbnail, &t.Duration,
+			&t.AddedBy, &t.SourceURL, &t.LocalPath, &t.MediaID, &t.Position, &t.AddedAt,
+			&t.OwnerID, &t.SizeBytes, &t.Status, &t.Error, &t.HasCover, &t.Plays, &t.Likes)
 		if err != nil {
 			continue
 		}

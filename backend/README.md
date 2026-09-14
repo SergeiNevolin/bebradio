@@ -19,7 +19,7 @@ internal/
     ws/              - WebSocket handler + ConnectionManager
   infrastructure/
     postgres/        - Repository implementations
-    media/           - Media service HTTP client
+    media/           - Music service HTTP client
     auth/            - JWT + bcrypt
     worker/          - Background workers
   pkg/
@@ -34,7 +34,7 @@ migrations/          - SQL migrations
 |---|---|---|
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/bebradio` | PostgreSQL connection string |
 | `SECRET_KEY` | `bebradio-secret-key-change-in-production` | JWT signing key |
-| `MEDIA_SERVICE_URL` | `http://127.0.0.1:8100` | Media service URL |
+| `MUSIC_SERVICE_URL` | `http://127.0.0.1:8100` | Music service URL |
 | `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins (comma-separated) |
 | `PORT` | `8000` | Server port |
 | `JWT_EXPIRE_HOURS` | `72` | JWT token expiry |
@@ -53,3 +53,4 @@ go build -o server ./cmd/server
 docker build -t bebradio-backend-go .
 docker run -p 8000:8000 bebradio-backend-go
 ```
+

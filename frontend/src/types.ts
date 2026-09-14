@@ -1,37 +1,33 @@
+export type TrackSource = 'youtube' | 'upload'
+
+export type TrackStatus = 'ready' | 'processing' | 'failed'
+
 export interface Track {
   id: string
+  source: TrackSource
   title: string
   artist: string
+  // Playable audio URL. Empty while an upload is still processing.
+  // YouTube queue entries use /api/music/<media_id>, uploads use
+  // /api/tracks/<id>/audio.
   url: string
+  // YouTube thumbnail or upload cover. Empty when there is none.
   thumbnail: string
   duration: number
   added_by: string
-  likes?: number
-  dislikes?: number
-}
-
-export type MashupStatus = 'processing' | 'ready' | 'failed'
-
-export interface Mashup {
-  id: string
   owner_id: string
   owner_name?: string
-  title: string
-  artist: string
-  duration: number
   size_bytes: number
-  status: MashupStatus
+  status: TrackStatus
   error?: string
   has_cover: boolean
   plays: number
   likes: number
-  // Whether the current viewer has liked this mashup.
+  // Whether the current viewer has liked this track.
   liked?: boolean
   created_at: string
-  // Present only once status === 'ready'.
-  stream_url?: string
-  // Present only when has_cover is true.
-  cover_url?: string
+  // Room queue entries only (votes, not library likes).
+  dislikes?: number
 }
 
 export interface RoomListItem {

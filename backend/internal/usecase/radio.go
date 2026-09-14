@@ -106,7 +106,8 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 			continue
 		}
 		mediaID, _ := r.info["media_id"].(string)
-		if mediaID == "" || seenMediaIDs[mediaID] {
+		rowID, _ := r.info["id"].(string)
+		if mediaID == "" || rowID == "" || seenMediaIDs[mediaID] {
 			continue
 		}
 		duration, _ := r.info["duration"].(float64)
@@ -120,7 +121,6 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 		seenMediaIDs[mediaID] = true
 
 		track := entity.TrackFromYouTube(r.info, RadioTag)
-		track.ID = shortID(8)
 		picked = append(picked, track)
 	}
 
@@ -131,19 +131,12 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 			rm.Position = 0.0
 			rm.LastSyncAt = time.Now()
 		}
-		rm.RadioSeen = make(map[string]bool)
+		// NOTE: RadioSeen is intentionally NOT reset here — it is the only
+		// dedup memory across refills. It lives and dies with the room.
 		rm.Mu.Unlock()
 	}
 
 	return picked, nil
 }
 
-func shortID(length int) string {
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
-		time.Sleep(time.Nanosecond)
-	}
-	return string(b)
-}
+
