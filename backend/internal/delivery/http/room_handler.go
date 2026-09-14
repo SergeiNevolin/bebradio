@@ -261,17 +261,37 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, 400, "Track not available")
 			return
 		}
-		rm.Mu.RLock()
+		// Scan-and-append under one write lock: two concurrent adds must not
+		// both pass the dedupe check (shared id would violate the per-room
+		// queue uniqueness).
+		rm.Mu.Lock()
 		for _, t := range rm.Queue {
 			if t.ID == lib.ID {
 				existing := t.ToDict()
-				rm.Mu.RUnlock()
+				rm.Mu.Unlock()
 				s.writeJSON(w, 200, existing)
 				return
 			}
 		}
-		rm.Mu.RUnlock()
 		track = entity.QueueCopyFromUpload(lib, addedBy)
+		rm.Queue = append(rm.Queue, track)
+		if len(rm.Queue) == 1 {
+			rm.IsPlaying = true
+			rm.Position = 0
+			rm.LastSyncAt = time.Now()
+		}
+		rm.Mu.Unlock()
+
+		go func() {
+			if err := s.room.SaveTracks(rm); err != nil {
+				s.log.Error("save tracks failed", "error", err, "room_id", roomID)
+			}
+		}()
+
+		s.manager.Broadcast(roomID, rm.ToDict())
+
+		s.writeJSON(w, 200, track.ToDict())
+		return
 	} else {
 		info, err := s.media.FetchTrack(req.URL)
 		if err != nil {

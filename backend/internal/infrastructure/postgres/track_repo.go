@@ -75,6 +75,9 @@ func (r *TrackRepo) Create(t *entity.Track) error {
 	return err
 }
 
+// NOTE: one id may cover the library row plus its queue snapshots (they
+// share the file). FindByID/Detail return an arbitrary matching row —
+// equivalent for streaming, since all of them point at the same media.
 func (r *TrackRepo) FindByID(id string) (*entity.Track, error) {
 	row := r.pool.QueryRow(context.Background(),
 		`SELECT `+trackColumns+` FROM tracks WHERE id = $1`, id)
@@ -87,7 +90,14 @@ func (r *TrackRepo) Detail(id, viewerID string) (*entity.Track, error) {
 }
 
 func (r *TrackRepo) Delete(id string) error {
-	_, err := r.pool.Exec(context.Background(), `DELETE FROM tracks WHERE id = $1`, id)
+	ctx := context.Background()
+	// track_likes has no FK since queue snapshots share ids (migration 005).
+	if _, err := r.pool.Exec(ctx, `DELETE FROM track_likes WHERE track_id = $1`, id); err != nil {
+		return err
+	}
+	// One id may cover the library row plus its queue snapshots; all of them
+	// point at the same (now deleted) file, so they go together.
+	_, err := r.pool.Exec(ctx, `DELETE FROM tracks WHERE id = $1`, id)
 	return err
 }
 

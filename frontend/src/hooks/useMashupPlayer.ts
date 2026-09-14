@@ -248,8 +248,10 @@ export function useMashupPlayer() {
     }
 
     el.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false))
+    // NOTE: url is a dep, not just id — a processing track keeps its id while
+    // polling swaps in the ready url, and without this the audio stays silent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id])
+  }, [current?.id, current?.url])
 
   // Wire element events -> state.
   useEffect(() => {

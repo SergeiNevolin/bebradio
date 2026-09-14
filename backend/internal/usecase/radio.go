@@ -131,7 +131,8 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 			rm.Position = 0.0
 			rm.LastSyncAt = time.Now()
 		}
-		rm.RadioSeen = make(map[string]bool)
+		// NOTE: RadioSeen is intentionally NOT reset here — it is the only
+		// dedup memory across refills. It lives and dies with the room.
 		rm.Mu.Unlock()
 	}
 

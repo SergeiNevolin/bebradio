@@ -144,6 +144,13 @@ func (db *DB) Migrate() error {
 		ON CONFLICT DO NOTHING`,
 		`DROP TABLE IF EXISTS mashup_likes`,
 		`DROP TABLE IF EXISTS mashups`,
+		// 005: queue snapshots share the library track id — id is unique per
+		// library, and per (room_id, id) in queues. Likes lose their FK and
+		// are cleaned manually in TrackRepo.Delete.
+		`ALTER TABLE track_likes DROP CONSTRAINT IF EXISTS track_likes_track_id_fkey`,
+		`ALTER TABLE tracks DROP CONSTRAINT IF EXISTS tracks_pkey`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS tracks_library_id_uidx ON tracks (id) WHERE room_id IS NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS tracks_queue_uidx ON tracks (room_id, id) WHERE room_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_tracks_library ON tracks (room_id) WHERE room_id IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_tracks_owner ON tracks (owner_id) WHERE owner_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_track_likes_user ON track_likes (user_id, created_at DESC)`,
