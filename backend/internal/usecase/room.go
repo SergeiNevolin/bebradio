@@ -40,36 +40,42 @@ func (uc *RoomUsecase) GetOrLoadRoom(ctx context.Context, roomID string) (*entit
 		return nil, err
 	}
 
-	// On first load, hydrate Redis from Postgres.
-	tracks, _ := uc.roomRepo.LoadTracks(roomID)
-	if len(tracks) > 0 {
-		redisc.SetQueue(ctx, uc.rdb, roomID, tracks)
-	}
-	messages, _ := uc.roomRepo.LoadMessages(roomID)
-	if len(messages) > 0 {
-		for _, m := range messages {
-			redisc.AppendMessage(ctx, uc.rdb, roomID, m)
+	// Hydrate Redis from Postgres exactly once per room lifetime.
+	// Redis is the source of truth afterwards; an empty queue is a
+	// legitimate state (e.g. last track skipped, refill not done yet)
+	// and must NOT trigger re-hydration of stale Postgres rows.
+	hydrated, _ := uc.rdb.Exists(ctx, redisc.RoomKey(roomID, "hydrated")).Result()
+	if hydrated == 0 {
+		tracks, _ := uc.roomRepo.LoadTracks(roomID)
+		if len(tracks) > 0 {
+			redisc.SetQueue(ctx, uc.rdb, roomID, tracks)
 		}
-	}
-	votes, _ := uc.roomRepo.LoadVotes(roomID)
-	if len(votes) > 0 {
-		// Convert from entity format to Redis format.
-		voteMap := make(map[string]*redisc.VoteEntry)
-		for _, v := range votes {
-			ve, ok := voteMap[v.TrackID]
-			if !ok {
-				ve = &redisc.VoteEntry{}
-				voteMap[v.TrackID] = ve
-			}
-			if v.Vote == 1 {
-				ve.Likes++
-			} else if v.Vote == -1 {
-				ve.Disliked = append(ve.Disliked, v.UserID)
+		messages, _ := uc.roomRepo.LoadMessages(roomID)
+		if len(messages) > 0 {
+			for _, m := range messages {
+				redisc.AppendMessage(ctx, uc.rdb, roomID, m)
 			}
 		}
-		for trackID, ve := range voteMap {
-			redisc.SetVote(ctx, uc.rdb, roomID, trackID, ve)
+		votes, _ := uc.roomRepo.LoadVotes(roomID)
+		if len(votes) > 0 {
+			voteMap := make(map[string]*redisc.VoteEntry)
+			for _, v := range votes {
+				ve, ok := voteMap[v.TrackID]
+				if !ok {
+					ve = &redisc.VoteEntry{}
+					voteMap[v.TrackID] = ve
+				}
+				if v.Vote == 1 {
+					ve.Likes++
+				} else if v.Vote == -1 {
+					ve.Disliked = append(ve.Disliked, v.UserID)
+				}
+			}
+			for trackID, ve := range voteMap {
+				redisc.SetVote(ctx, uc.rdb, roomID, trackID, ve)
+			}
 		}
+		uc.rdb.Set(ctx, redisc.RoomKey(roomID, "hydrated"), "1", 0)
 	}
 
 	return rm, nil

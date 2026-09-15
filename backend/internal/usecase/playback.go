@@ -19,8 +19,8 @@ func NewPlaybackUsecase(rdb *redis.Client) *PlaybackUsecase {
 const advanceDedupWindow = 1.0
 
 func (uc *PlaybackUsecase) GoNext(ctx context.Context, roomID string) bool {
-	ps, err := redisc.GetPlayback(ctx, uc.rdb, roomID)
-	if err != nil || ps == nil {
+	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if ps == nil {
 		return false
 	}
 
@@ -40,9 +40,10 @@ func (uc *PlaybackUsecase) GoNext(ctx context.Context, roomID string) bool {
 		ps.RadioSeedURL = finished.SourceURL
 	}
 
-	// Remove the finished track.
-	newLen, _ := redisc.RemoveAt(ctx, uc.rdb, roomID, idx)
+	redisc.RemoveAt(ctx, uc.rdb, roomID, idx)
 
+	newTracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	newLen := len(newTracks)
 	newIdx := idx
 	if newIdx >= newLen {
 		newIdx = newLen - 1
@@ -67,8 +68,8 @@ func (uc *PlaybackUsecase) GoNext(ctx context.Context, roomID string) bool {
 }
 
 func (uc *PlaybackUsecase) GoPrev(ctx context.Context, roomID string) bool {
-	ps, err := redisc.GetPlayback(ctx, uc.rdb, roomID)
-	if err != nil || ps == nil {
+	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if ps == nil {
 		return false
 	}
 
@@ -88,13 +89,13 @@ func (uc *PlaybackUsecase) GoPrev(ctx context.Context, roomID string) bool {
 }
 
 func (uc *PlaybackUsecase) JumpTo(ctx context.Context, roomID string, index int) bool {
-	ps, err := redisc.GetPlayback(ctx, uc.rdb, roomID)
-	if err != nil || ps == nil {
+	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	if index < 0 || index >= len(tracks) {
 		return false
 	}
 
-	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
-	if index < 0 || index >= len(tracks) {
+	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if ps == nil {
 		return false
 	}
 
@@ -112,8 +113,8 @@ func (uc *PlaybackUsecase) SeekTo(ctx context.Context, roomID string, position f
 	if position < 0 {
 		position = 0
 	}
-	ps, err := redisc.GetPlayback(ctx, uc.rdb, roomID)
-	if err != nil || ps == nil {
+	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if ps == nil {
 		return
 	}
 	ps.Position = position

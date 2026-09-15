@@ -486,3 +486,52 @@ func TestSaveVotesOverwritesPrevious(t *testing.T) {
 		}
 	}
 }
+
+// Regression: skipped tracks must not come back.
+// Scenario: Redis queue becomes empty (all tracks skipped) while Postgres
+// still holds the stale rows. A repeated GetOrLoadRoom (new WS connection,
+// autoadvance tick, HTTP call) must NOT re-hydrate the stale rows.
+func TestGetOrLoadRoomDoesNotResurrectSkippedTracks(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
+	roomRepo := repository.NewMockRoomRepo()
+	userRepo := repository.NewMockUserRepo()
+	mediaClient := repository.NewMockMediaClient()
+	auth := repository.NewMockAuthBridge()
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
+
+	rm, _, _ := uc.CreateRoom(ctx, "Skip Room", "owner1", "")
+
+	// Stale Postgres rows, as left behind by a skip that wasn't persisted yet.
+	roomRepo.Tracks[rm.ID] = []*entity.Track{{ID: "stale1"}, {ID: "stale2"}}
+
+	// First load hydrates Redis from Postgres.
+	if _, err := uc.GetOrLoadRoom(ctx, rm.ID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	q, _ := redisc.GetQueue(ctx, rdb, rm.ID)
+	if len(q) != 2 {
+		t.Fatalf("expected 2 hydrated tracks, got %d", len(q))
+	}
+
+	// Simulate skipping everything in Redis; Postgres stays stale.
+	redisc.RemoveAt(ctx, rdb, rm.ID, 0)
+	redisc.RemoveAt(ctx, rdb, rm.ID, 0)
+	q, _ = redisc.GetQueue(ctx, rdb, rm.ID)
+	if len(q) != 0 {
+		t.Fatalf("expected empty queue after skips, got %d", len(q))
+	}
+
+	// Repeated loads (autoadvance ticks, new connections) must not resurrect.
+	for i := 0; i < 3; i++ {
+		if _, err := uc.GetOrLoadRoom(ctx, rm.ID); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	q, _ = redisc.GetQueue(ctx, rdb, rm.ID)
+	if len(q) != 0 {
+		t.Errorf("skipped tracks resurrected: expected empty queue, got %d tracks", len(q))
+	}
+}

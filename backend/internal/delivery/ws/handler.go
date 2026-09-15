@@ -249,8 +249,14 @@ func (h *Handler) handleVote(ctx context.Context, rm *entity.Room, conn *websock
 		likes := ve.Likes
 		dislikes := len(ve.Disliked)
 		if dislikes > likes {
-			h.playback.GoNext(ctx, roomID)
-			redisc.ResetSkipVotes(ctx, h.rdb, roomID)
+			if h.playback.GoNext(ctx, roomID) {
+				redisc.ResetSkipVotes(ctx, h.rdb, roomID)
+				if err := h.room.SaveTracks(ctx, rm); err != nil {
+					h.log.Error("save tracks after auto-skip failed", "room_id", roomID, "error", err)
+				}
+			} else {
+				redisc.ResetSkipVotes(ctx, h.rdb, roomID)
+			}
 		}
 	}
 }
@@ -269,7 +275,11 @@ func (h *Handler) handleSkipVote(ctx context.Context, rm *entity.Room, conn *web
 	}
 
 	if skipCount*2 > listeners {
-		h.playback.GoNext(ctx, roomID)
+		if h.playback.GoNext(ctx, roomID) {
+			if err := h.room.SaveTracks(ctx, rm); err != nil {
+				h.log.Error("save tracks after skip-vote failed", "room_id", roomID, "error", err)
+			}
+		}
 		redisc.ResetSkipVotes(ctx, h.rdb, roomID)
 	}
 }

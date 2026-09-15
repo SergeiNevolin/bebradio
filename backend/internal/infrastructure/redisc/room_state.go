@@ -24,7 +24,7 @@ import (
 //	room:{id}:presence       HASH   — conn_addr → JSON PresenceInfo
 //	room:{id}:radio_seen     SET    — media IDs already seeded
 
-func roomKey(id, suffix string) string {
+func RoomKey(id, suffix string) string {
 	return "room:" + id + ":" + suffix
 }
 
@@ -49,11 +49,11 @@ type VoteEntry struct {
 // ---------- Queue ----------
 
 func GetQueueLen(ctx context.Context, rdb *redis.Client, roomID string) (int64, error) {
-	return rdb.LLen(ctx, roomKey(roomID, "queue")).Result()
+	return rdb.LLen(ctx, RoomKey(roomID, "queue")).Result()
 }
 
 func GetQueue(ctx context.Context, rdb *redis.Client, roomID string) ([]*entity.Track, error) {
-	items, err := rdb.LRange(ctx, roomKey(roomID, "queue"), 0, -1).Result()
+	items, err := rdb.LRange(ctx, RoomKey(roomID, "queue"), 0, -1).Result()
 	if err != nil {
 		return nil, fmt.Errorf("lrange queue: %w", err)
 	}
@@ -70,7 +70,7 @@ func GetQueue(ctx context.Context, rdb *redis.Client, roomID string) ([]*entity.
 
 func SetQueue(ctx context.Context, rdb *redis.Client, roomID string, tracks []*entity.Track) error {
 	pipe := rdb.Pipeline()
-	key := roomKey(roomID, "queue")
+	key := RoomKey(roomID, "queue")
 	pipe.Del(ctx, key)
 	if len(tracks) > 0 {
 		vals := make([]any, len(tracks))
@@ -89,11 +89,11 @@ func AppendTrack(ctx context.Context, rdb *redis.Client, roomID string, track *e
 	if err != nil {
 		return err
 	}
-	return rdb.RPush(ctx, roomKey(roomID, "queue"), b).Err()
+	return rdb.RPush(ctx, RoomKey(roomID, "queue"), b).Err()
 }
 
 func RemoveAt(ctx context.Context, rdb *redis.Client, roomID string, index int) (int, error) {
-	key := roomKey(roomID, "queue")
+	key := RoomKey(roomID, "queue")
 	length, err := rdb.LLen(ctx, key).Result()
 	if err != nil {
 		return 0, err
@@ -116,7 +116,7 @@ func RemoveAt(ctx context.Context, rdb *redis.Client, roomID string, index int) 
 // ---------- Playback state ----------
 
 func GetPlayback(ctx context.Context, rdb *redis.Client, roomID string) (*PlaybackState, error) {
-	vals, err := rdb.HGetAll(ctx, roomKey(roomID, "state")).Result()
+	vals, err := rdb.HGetAll(ctx, RoomKey(roomID, "state")).Result()
 	if err != nil {
 		return nil, fmt.Errorf("hgetall state: %w", err)
 	}
@@ -162,17 +162,17 @@ func SetPlayback(ctx context.Context, rdb *redis.Client, roomID string, ps *Play
 		"radio_seed_url":     ps.RadioSeedURL,
 		"radio_filling":      boolToInt(ps.RadioFilling),
 	}
-	return rdb.HSet(ctx, roomKey(roomID, "state"), vals).Err()
+	return rdb.HSet(ctx, RoomKey(roomID, "state"), vals).Err()
 }
 
 func SetPlaybackField(ctx context.Context, rdb *redis.Client, roomID, field, value string) error {
-	return rdb.HSet(ctx, roomKey(roomID, "state"), field, value).Err()
+	return rdb.HSet(ctx, RoomKey(roomID, "state"), field, value).Err()
 }
 
 // ---------- Votes ----------
 
 func GetVotes(ctx context.Context, rdb *redis.Client, roomID string) (map[string]*VoteEntry, error) {
-	vals, err := rdb.HGetAll(ctx, roomKey(roomID, "votes")).Result()
+	vals, err := rdb.HGetAll(ctx, RoomKey(roomID, "votes")).Result()
 	if err != nil {
 		return nil, fmt.Errorf("hgetall votes: %w", err)
 	}
@@ -192,14 +192,14 @@ func SetVote(ctx context.Context, rdb *redis.Client, roomID, trackID string, ent
 	if err != nil {
 		return err
 	}
-	return rdb.HSet(ctx, roomKey(roomID, "votes"), trackID, b).Err()
+	return rdb.HSet(ctx, RoomKey(roomID, "votes"), trackID, b).Err()
 }
 
 // ---------- Skip votes ----------
 
 // ToggleSkipVote toggles a user's skip vote. Returns the new count.
 func ToggleSkipVote(ctx context.Context, rdb *redis.Client, roomID, userID string) (int64, error) {
-	key := roomKey(roomID, "skip_votes")
+	key := RoomKey(roomID, "skip_votes")
 	added, err := rdb.SAdd(ctx, key, userID).Result()
 	if err != nil {
 		return 0, err
@@ -212,11 +212,11 @@ func ToggleSkipVote(ctx context.Context, rdb *redis.Client, roomID, userID strin
 }
 
 func ResetSkipVotes(ctx context.Context, rdb *redis.Client, roomID string) error {
-	return rdb.Del(ctx, roomKey(roomID, "skip_votes")).Err()
+	return rdb.Del(ctx, RoomKey(roomID, "skip_votes")).Err()
 }
 
 func GetSkipVoteCount(ctx context.Context, rdb *redis.Client, roomID string) (int64, error) {
-	return rdb.SCard(ctx, roomKey(roomID, "skip_votes")).Result()
+	return rdb.SCard(ctx, RoomKey(roomID, "skip_votes")).Result()
 }
 
 // ---------- Messages ----------
@@ -226,7 +226,7 @@ func AppendMessage(ctx context.Context, rdb *redis.Client, roomID string, msg *e
 	if err != nil {
 		return err
 	}
-	key := roomKey(roomID, "messages")
+	key := RoomKey(roomID, "messages")
 	if err := rdb.RPush(ctx, key, b).Err(); err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func AppendMessage(ctx context.Context, rdb *redis.Client, roomID string, msg *e
 }
 
 func GetMessages(ctx context.Context, rdb *redis.Client, roomID string) ([]*entity.ChatMessage, error) {
-	items, err := rdb.LRange(ctx, roomKey(roomID, "messages"), 0, -1).Result()
+	items, err := rdb.LRange(ctx, RoomKey(roomID, "messages"), 0, -1).Result()
 	if err != nil {
 		return nil, fmt.Errorf("lrange messages: %w", err)
 	}
@@ -257,15 +257,15 @@ func SetPresence(ctx context.Context, rdb *redis.Client, roomID, connAddr string
 	if err != nil {
 		return err
 	}
-	return rdb.HSet(ctx, roomKey(roomID, "presence"), connAddr, b).Err()
+	return rdb.HSet(ctx, RoomKey(roomID, "presence"), connAddr, b).Err()
 }
 
 func RemovePresence(ctx context.Context, rdb *redis.Client, roomID, connAddr string) error {
-	return rdb.HDel(ctx, roomKey(roomID, "presence"), connAddr).Err()
+	return rdb.HDel(ctx, RoomKey(roomID, "presence"), connAddr).Err()
 }
 
 func GetPresence(ctx context.Context, rdb *redis.Client, roomID string) (map[string]*entity.PresenceInfo, error) {
-	vals, err := rdb.HGetAll(ctx, roomKey(roomID, "presence")).Result()
+	vals, err := rdb.HGetAll(ctx, RoomKey(roomID, "presence")).Result()
 	if err != nil {
 		return nil, fmt.Errorf("hgetall presence: %w", err)
 	}
@@ -281,23 +281,23 @@ func GetPresence(ctx context.Context, rdb *redis.Client, roomID string) (map[str
 }
 
 func GetPresenceCount(ctx context.Context, rdb *redis.Client, roomID string) (int64, error) {
-	return rdb.HLen(ctx, roomKey(roomID, "presence")).Result()
+	return rdb.HLen(ctx, RoomKey(roomID, "presence")).Result()
 }
 
 // ---------- Radio seen ----------
 
 func AddRadioSeen(ctx context.Context, rdb *redis.Client, roomID, mediaID string) error {
-	return rdb.SAdd(ctx, roomKey(roomID, "radio_seen"), mediaID).Err()
+	return rdb.SAdd(ctx, RoomKey(roomID, "radio_seen"), mediaID).Err()
 }
 
 func IsRadioSeen(ctx context.Context, rdb *redis.Client, roomID, mediaID string) (bool, error) {
-	return rdb.SIsMember(ctx, roomKey(roomID, "radio_seen"), mediaID).Result()
+	return rdb.SIsMember(ctx, RoomKey(roomID, "radio_seen"), mediaID).Result()
 }
 
 // ---------- Cleanup ----------
 
 func DeleteRoom(ctx context.Context, rdb *redis.Client, roomID string) error {
-	iter := rdb.Scan(ctx, 0, roomKey(roomID, "*"), 100).Iterator()
+	iter := rdb.Scan(ctx, 0, RoomKey(roomID, "*"), 100).Iterator()
 	for iter.Next(ctx) {
 		rdb.Del(ctx, iter.Val())
 	}
@@ -380,7 +380,7 @@ func BuildToDict(ctx context.Context, rdb *redis.Client, rm *entity.Room) map[st
 		msgDicts = append(msgDicts, m.ToDict())
 	}
 
-	skipVoters, _ := rdb.SMembers(ctx, roomKey(rm.ID, "skip_votes")).Result()
+	skipVoters, _ := rdb.SMembers(ctx, RoomKey(rm.ID, "skip_votes")).Result()
 
 	result := map[string]any{
 		"id":                  rm.ID,
