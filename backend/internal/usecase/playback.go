@@ -1,95 +1,124 @@
 package usecase
 
 import (
+	"context"
 	"time"
 
-	"github.com/bebradio/backend-go/internal/domain/entity"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
+	"github.com/redis/go-redis/v9"
 )
+
+type PlaybackUsecase struct {
+	rdb *redis.Client
+}
+
+func NewPlaybackUsecase(rdb *redis.Client) *PlaybackUsecase {
+	return &PlaybackUsecase{rdb: rdb}
+}
 
 const advanceDedupWindow = 1.0
 
-type PlaybackUsecase struct{}
-
-func NewPlaybackUsecase() *PlaybackUsecase {
-	return &PlaybackUsecase{}
-}
-
-func (uc *PlaybackUsecase) GoNext(rm *entity.Room) bool {
-	rm.Mu.Lock()
-	defer rm.Mu.Unlock()
-
-	if len(rm.Queue) == 0 {
+func (uc *PlaybackUsecase) GoNext(ctx context.Context, roomID string) bool {
+	ps, err := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if err != nil || ps == nil {
 		return false
 	}
 
 	now := time.Now()
-	if now.Sub(rm.LastAdvanceAt).Seconds() < advanceDedupWindow {
+	if now.Sub(ps.LastAdvanceAt).Seconds() < advanceDedupWindow {
 		return false
 	}
-	rm.LastAdvanceAt = now
 
-	idx := clamp(rm.CurrentIndex, 0, len(rm.Queue)-1)
-	finished := rm.Queue[idx]
-	if finished.SourceURL != "" {
-		rm.RadioSeedURL = finished.SourceURL
+	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	if len(tracks) == 0 {
+		return false
 	}
-	rm.Queue = append(rm.Queue[:idx], rm.Queue[idx+1:]...)
+
+	idx := clamp(ps.CurrentIndex, 0, len(tracks)-1)
+	finished := tracks[idx]
+	if finished.SourceURL != "" {
+		ps.RadioSeedURL = finished.SourceURL
+	}
+
+	// Remove the finished track.
+	newLen, _ := redisc.RemoveAt(ctx, uc.rdb, roomID, idx)
+
 	newIdx := idx
-	if newIdx >= len(rm.Queue) {
-		newIdx = len(rm.Queue) - 1
+	if newIdx >= newLen {
+		newIdx = newLen - 1
 	}
 	if newIdx < 0 {
 		newIdx = 0
 	}
-	rm.CurrentIndex = newIdx
-	rm.Position = 0
 
-	if len(rm.Queue) == 0 {
-		rm.IsPlaying = false
-		return true
+	ps.CurrentIndex = newIdx
+	ps.Position = 0
+	ps.LastAdvanceAt = now
+	if newLen == 0 {
+		ps.IsPlaying = false
+	} else {
+		ps.IsPlaying = true
+		ps.LastSyncAt = now
+		ps.CurrentStartedAt = now
 	}
 
-	rm.IsPlaying = true
-	rm.LastSyncAt = time.Now()
+	redisc.SetPlayback(ctx, uc.rdb, roomID, ps)
 	return true
 }
 
-func (uc *PlaybackUsecase) GoPrev(rm *entity.Room) bool {
-	rm.Mu.Lock()
-	defer rm.Mu.Unlock()
-
-	if len(rm.Queue) == 0 || rm.CurrentIndex <= 0 {
+func (uc *PlaybackUsecase) GoPrev(ctx context.Context, roomID string) bool {
+	ps, err := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if err != nil || ps == nil {
 		return false
 	}
-	rm.CurrentIndex--
-	rm.Position = 0
-	rm.IsPlaying = true
-	rm.LastSyncAt = time.Now()
-	return true
-}
 
-func (uc *PlaybackUsecase) JumpTo(rm *entity.Room, index int) bool {
-	rm.Mu.Lock()
-	defer rm.Mu.Unlock()
-
-	if index < 0 || index >= len(rm.Queue) {
+	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	if len(tracks) == 0 || ps.CurrentIndex <= 0 {
 		return false
 	}
-	rm.CurrentIndex = index
-	rm.Position = 0
-	rm.IsPlaying = true
-	rm.LastSyncAt = time.Now()
+
+	ps.CurrentIndex--
+	ps.Position = 0
+	ps.IsPlaying = true
+	ps.LastSyncAt = time.Now()
+	ps.CurrentStartedAt = time.Now()
+
+	redisc.SetPlayback(ctx, uc.rdb, roomID, ps)
 	return true
 }
 
-func (uc *PlaybackUsecase) SeekTo(rm *entity.Room, position float64) {
-	rm.Mu.Lock()
-	defer rm.Mu.Unlock()
+func (uc *PlaybackUsecase) JumpTo(ctx context.Context, roomID string, index int) bool {
+	ps, err := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if err != nil || ps == nil {
+		return false
+	}
+
+	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	if index < 0 || index >= len(tracks) {
+		return false
+	}
+
+	ps.CurrentIndex = index
+	ps.Position = 0
+	ps.IsPlaying = true
+	ps.LastSyncAt = time.Now()
+	ps.CurrentStartedAt = time.Now()
+
+	redisc.SetPlayback(ctx, uc.rdb, roomID, ps)
+	return true
+}
+
+func (uc *PlaybackUsecase) SeekTo(ctx context.Context, roomID string, position float64) {
 	if position < 0 {
 		position = 0
 	}
-	rm.Position = position
-	rm.LastSyncAt = time.Now()
+	ps, err := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if err != nil || ps == nil {
+		return
+	}
+	ps.Position = position
+	ps.LastSyncAt = time.Now()
+	redisc.SetPlayback(ctx, uc.rdb, roomID, ps)
 }
 
 func clamp(val, minVal, maxVal int) int {

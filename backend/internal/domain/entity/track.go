@@ -30,11 +30,11 @@ type Track struct {
 	AddedAt   time.Time `json:"added_at"`
 
 	// YouTube plumbing (empty for uploads).
-	SourceURL string `json:"-"`
-	LocalPath string `json:"-"`
-	MediaID   string `json:"-"`
+	SourceURL string `json:"source_url,omitempty"`
+	LocalPath string `json:"local_path,omitempty"`
+	MediaID   string `json:"media_id,omitempty"`
 	// Queue order, meaningful only on room rows.
-	Position int `json:"-"`
+	Position int `json:"position,omitempty"`
 
 	// Upload metadata (empty for YouTube tracks). The audio file lives on
 	// music-service; this row is the source of truth for its state.

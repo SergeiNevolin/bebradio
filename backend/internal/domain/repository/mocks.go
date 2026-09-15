@@ -119,7 +119,6 @@ func (m *MockRoomRepo) ListPublic() ([]map[string]any, error) {
 }
 
 func (m *MockRoomRepo) SaveTracks(room *entity.Room) error {
-	m.Tracks[room.ID] = room.Queue
 	return nil
 }
 
@@ -137,7 +136,16 @@ func (m *MockRoomRepo) LoadMessages(roomID string) ([]*entity.ChatMessage, error
 }
 
 func (m *MockRoomRepo) SaveVotes(room *entity.Room) error {
-	m.Votes[room.ID] = room.Votes
+	return nil
+}
+
+func (m *MockRoomRepo) SaveTracksFromSlice(roomID string, tracks []*entity.Track) error {
+	m.Tracks[roomID] = tracks
+	return nil
+}
+
+func (m *MockRoomRepo) SaveVotesFromSlice(roomID string, votes []*entity.TrackVote) error {
+	m.Votes[roomID] = votes
 	return nil
 }
 

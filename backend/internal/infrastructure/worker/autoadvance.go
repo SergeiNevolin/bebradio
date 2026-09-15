@@ -8,7 +8,9 @@ import (
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/delivery/ws"
 	"github.com/bebradio/backend-go/internal/domain/entity"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
 	"github.com/bebradio/backend-go/internal/usecase"
+	"github.com/redis/go-redis/v9"
 )
 
 type AutoAdvance struct {
@@ -18,8 +20,12 @@ type AutoAdvance struct {
 	radio     *usecase.RadioUsecase
 	manager   *ws.ConnectionManager
 	config    *config.Config
+	rdb       *redis.Client
 	log       *slog.Logger
 }
+
+// If a track has Duration==0 (live stream, unresolved), skip after this long.
+const durationZeroSkipAfter = 5 * time.Minute
 
 func NewAutoAdvance(
 	room *usecase.RoomUsecase,
@@ -28,6 +34,7 @@ func NewAutoAdvance(
 	radio *usecase.RadioUsecase,
 	manager *ws.ConnectionManager,
 	config *config.Config,
+	rdb *redis.Client,
 	log *slog.Logger,
 ) *AutoAdvance {
 	return &AutoAdvance{
@@ -37,6 +44,7 @@ func NewAutoAdvance(
 		radio:   radio,
 		manager: manager,
 		config:  config,
+		rdb:     rdb,
 		log:     log,
 	}
 }
@@ -54,84 +62,110 @@ func (w *AutoAdvance) Run(ctx context.Context) {
 			w.log.Info("auto-advance worker stopped")
 			return
 		case <-ticker.C:
-			w.tick()
+			w.tick(ctx)
 		}
 	}
 }
 
-func (w *AutoAdvance) tick() {
-	rooms := w.getRooms()
-	for _, rm := range rooms {
-		w.processRoom(rm)
+func (w *AutoAdvance) tick(ctx context.Context) {
+	// Scan Redis for room keys to find active rooms.
+	iter := w.rdb.Scan(ctx, 0, "room:*:state", 100).Iterator()
+	for iter.Next(ctx) {
+		key := iter.Val()
+		// Extract roomID from "room:{id}:state"
+		roomID := extractRoomID(key)
+		if roomID == "" {
+			continue
+		}
+		w.processRoom(ctx, roomID)
 	}
 }
 
-func (w *AutoAdvance) getRooms() []*entity.Room {
-	// Get all rooms from the room usecase
-	// The room usecase maintains an in-memory map
-	w.room.RoomsMu().RLock()
-	defer w.room.RoomsMu().RUnlock()
-
-	rooms := make([]*entity.Room, 0)
-	for _, rm := range w.room.GetRooms() {
-		rooms = append(rooms, rm)
+func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
+	count, _ := redisc.GetPresenceCount(ctx, w.rdb, roomID)
+	if count == 0 {
+		return
 	}
-	return rooms
-}
 
-func (w *AutoAdvance) processRoom(rm *entity.Room) {
-	roomID := rm.ID
+	ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
+	if ps == nil || !ps.IsPlaying {
+		return
+	}
 
-	if w.manager.GetCount(roomID) == 0 {
+	track := redisc.CurrentTrack(ctx, w.rdb, roomID)
+	if track == nil {
 		return
 	}
 
 	advanced := false
-	track := rm.CurrentTrack()
-	if rm.IsPlaying && track != nil && track.Duration > 0 {
-		pos := rm.GetCurrentPosition()
+	if track.Duration > 0 {
+		pos := redisc.GetCurrentPosition(ctx, w.rdb, roomID)
 		if pos >= float64(track.Duration)+w.config.AutoAdvanceGrace {
-			advanced = w.playback.GoNext(rm)
+			advanced = w.playback.GoNext(ctx, roomID)
 		}
+	} else if !ps.CurrentStartedAt.IsZero() && time.Since(ps.CurrentStartedAt) > durationZeroSkipAfter {
+		advanced = w.playback.GoNext(ctx, roomID)
 	}
 
-	refreshed := w.media.EnsureRoomMedia(rm)
+	// Load room metadata for EnsureRoomMedia and SaveTracks.
+	rm, err := w.room.GetOrLoadRoom(ctx, roomID)
+	if err != nil {
+		return
+	}
 
-	if w.radio.NeedsRefill(rm) {
-		go w.backgroundRefill(rm, roomID)
+	refreshed := w.media.EnsureRoomMedia(ctx, roomID)
+
+	if w.radio.NeedsRefill(ctx, roomID, rm.AutoRadio) {
+		go w.backgroundRefill(ctx, rm, roomID)
 	}
 
 	if advanced || refreshed {
-		if err := w.room.SaveTracks(rm); err != nil {
+		if err := w.room.SaveTracks(ctx, rm); err != nil {
 			w.log.Error("auto-advance save tracks failed", "room_id", roomID, "error", err)
 		}
-		w.manager.Broadcast(roomID, rm.ToDict())
+		w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
 	}
 }
 
-func (w *AutoAdvance) backgroundRefill(rm *entity.Room, roomID string) {
-	w.manager.Broadcast(roomID, rm.ToDict())
+func (w *AutoAdvance) backgroundRefill(ctx context.Context, rm *entity.Room, roomID string) {
+	w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
 
-	tracks, err := w.radio.Refill(rm)
+	tracks, err := w.radio.Refill(ctx, roomID)
 	if err != nil {
 		w.log.Error("radio refill failed", "room_id", roomID, "error", err)
 		return
 	}
 
 	if len(tracks) > 0 {
-		rm.Mu.Lock()
-		rm.Queue = append(rm.Queue, tracks...)
-		if !rm.IsPlaying {
-			rm.IsPlaying = true
-			rm.Position = 0
-			rm.LastSyncAt = time.Now()
+		for _, t := range tracks {
+			redisc.AppendTrack(ctx, w.rdb, roomID, t)
 		}
-		rm.Mu.Unlock()
+		ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
+		if ps != nil && !ps.IsPlaying {
+			ps.IsPlaying = true
+			ps.Position = 0
+			ps.LastSyncAt = time.Now()
+			redisc.SetPlayback(ctx, w.rdb, roomID, ps)
+		}
 
-		if err := w.room.SaveTracks(rm); err != nil {
+		if err := w.room.SaveTracks(ctx, rm); err != nil {
 			w.log.Error("save tracks after refill failed", "room_id", roomID, "error", err)
 		}
 	}
 
-	w.manager.Broadcast(roomID, rm.ToDict())
+	w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
+}
+
+func extractRoomID(key string) string {
+	// key is "room:{id}:state" — extract {id}
+	if len(key) < 6 || key[:5] != "room:" {
+		return ""
+	}
+	rest := key[5:]
+	for i, c := range rest {
+		if c == ':' {
+			return rest[:i]
+		}
+	}
+	return rest
 }

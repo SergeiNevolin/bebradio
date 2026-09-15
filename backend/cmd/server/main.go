@@ -16,6 +16,7 @@ import (
 	"github.com/bebradio/backend-go/internal/infrastructure/auth"
 	"github.com/bebradio/backend-go/internal/infrastructure/media"
 	"github.com/bebradio/backend-go/internal/infrastructure/postgres"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
 	"github.com/bebradio/backend-go/internal/infrastructure/worker"
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
@@ -43,6 +44,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	rdb, err := redisc.NewClient(cfg.RedisURL)
+	if err != nil {
+		log.Error("failed to connect to redis", "error", err)
+		os.Exit(1)
+	}
+	defer rdb.Close()
+
 	authService := auth.New(cfg.SecretKey, cfg.JWTExpireHours)
 	mediaSvc := media.NewClient(cfg.MusicServiceURL)
 
@@ -53,22 +61,22 @@ func main() {
 	var mediaClient repository.MediaClient = mediaSvc
 
 	authUC := usecase.NewAuthUsecase(userRepo, authService, log)
-	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, authService, log)
+	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, authService, log, rdb)
 	userUC := usecase.NewUserUsecase(userRepo, log)
 	searchUC := usecase.NewSearchUsecase(mediaClient, cfg, log)
-	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, log)
+	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, log, rdb)
 	trackUC := usecase.NewTrackUsecase(trackRepo, mediaClient, cfg, log)
-	playbackUC := usecase.NewPlaybackUsecase()
-	chatUC := usecase.NewChatUsecase(roomRepo, log)
-	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, log)
+	playbackUC := usecase.NewPlaybackUsecase(rdb)
+	chatUC := usecase.NewChatUsecase(roomRepo, log, rdb)
+	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, log, rdb)
 
 	// Re-poll any track left "processing" by a previous run.
 	go trackUC.ResumeProcessing()
 
 	connManager := ws.NewConnectionManager(log)
-	wsHandler := ws.NewHandler(connManager, roomUC, playbackUC, chatUC, radioUC, mediaUC, cfg, log)
+	wsHandler := ws.NewHandler(connManager, roomUC, playbackUC, chatUC, radioUC, mediaUC, cfg, rdb, log)
 
-	httpServer := httpDeliv.NewServer(cfg, log, authUC, roomUC, userUC, searchUC, mediaUC, playbackUC, trackUC, connManager)
+	httpServer := httpDeliv.NewServer(cfg, log, authUC, roomUC, userUC, searchUC, mediaUC, playbackUC, trackUC, connManager, rdb)
 
 	// Add WebSocket endpoint to the HTTP server's router
 	upgrader := websocket.Upgrader{
@@ -91,7 +99,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	autoAdvance := worker.NewAutoAdvance(roomUC, playbackUC, mediaUC, radioUC, connManager, cfg, log)
+	autoAdvance := worker.NewAutoAdvance(roomUC, playbackUC, mediaUC, radioUC, connManager, cfg, rdb, log)
 	go autoAdvance.Run(ctx)
 
 	// HTTP server
@@ -129,4 +137,3 @@ func main() {
 
 	log.Info("server stopped")
 }
-

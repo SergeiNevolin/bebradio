@@ -7,7 +7,9 @@ const DEFAULT_VOLUME = 0.7
 function readStored(): number {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved !== null ? Number(saved) : DEFAULT_VOLUME
+    if (saved === null) return DEFAULT_VOLUME
+    const n = Number(saved)
+    return Number.isFinite(n) ? n : DEFAULT_VOLUME
   } catch {
     return DEFAULT_VOLUME
   }

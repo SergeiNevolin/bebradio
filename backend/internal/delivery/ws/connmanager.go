@@ -13,8 +13,9 @@ import (
 // single concurrent writer, while Broadcast and SendJSON run on arbitrary
 // goroutines (HTTP handlers, WS loop, autoadvance ticker).
 type connEntry struct {
-	conn *websocket.Conn
-	mu   sync.Mutex
+	conn   *websocket.Conn
+	mu     sync.Mutex
+	userID string
 }
 
 type ConnectionManager struct {
@@ -37,6 +38,25 @@ func (cm *ConnectionManager) Connect(roomID string, conn *websocket.Conn) {
 		cm.connections[roomID] = make(map[*websocket.Conn]*connEntry)
 	}
 	cm.connections[roomID][conn] = &connEntry{conn: conn}
+}
+
+// BindUser records the authenticated user_id for a connection.
+func (cm *ConnectionManager) BindUser(roomID string, conn *websocket.Conn, userID string) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if entry, ok := cm.connections[roomID][conn]; ok {
+		entry.userID = userID
+	}
+}
+
+// GetUserID returns the user_id bound during hello, or an empty string.
+func (cm *ConnectionManager) GetUserID(roomID string, conn *websocket.Conn) string {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	if entry, ok := cm.connections[roomID][conn]; ok {
+		return entry.userID
+	}
+	return ""
 }
 
 func (cm *ConnectionManager) Disconnect(roomID string, conn *websocket.Conn) {

@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"time"
@@ -8,6 +9,8 @@ import (
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/domain/entity"
 	"github.com/bebradio/backend-go/internal/domain/repository"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
+	"github.com/redis/go-redis/v9"
 )
 
 const RadioTag = "Radio"
@@ -16,28 +19,37 @@ type RadioUsecase struct {
 	mediaClient repository.MediaClient
 	config      *config.Config
 	log         *slog.Logger
+	rdb         *redis.Client
 }
 
-func NewRadioUsecase(mediaClient repository.MediaClient, config *config.Config, log *slog.Logger) *RadioUsecase {
-	return &RadioUsecase{mediaClient: mediaClient, config: config, log: log}
+func NewRadioUsecase(mediaClient repository.MediaClient, config *config.Config, log *slog.Logger, rdb *redis.Client) *RadioUsecase {
+	return &RadioUsecase{mediaClient: mediaClient, config: config, log: log, rdb: rdb}
 }
 
-func (uc *RadioUsecase) NeedsRefill(rm *entity.Room) bool {
-	rm.Mu.RLock()
-	defer rm.Mu.RUnlock()
-	return uc.needsRefillUnlocked(rm)
-}
-
-func (uc *RadioUsecase) needsRefillUnlocked(rm *entity.Room) bool {
-	return rm.AutoRadio && !rm.RadioFilling && len(rm.Queue) <= uc.config.RadioRefillAt && uc.seedURLUnlocked(rm) != ""
-}
-
-func (uc *RadioUsecase) seedURLUnlocked(rm *entity.Room) string {
-	if rm.RadioSeedURL != "" {
-		return rm.RadioSeedURL
+func (uc *RadioUsecase) NeedsRefill(ctx context.Context, roomID string, autoRadio bool) bool {
+	if !autoRadio {
+		return false
 	}
-	if len(rm.Queue) > 0 {
-		return rm.Queue[len(rm.Queue)-1].SourceURL
+	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if ps == nil {
+		return false
+	}
+	if ps.RadioFilling {
+		return false
+	}
+	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	if len(tracks) > uc.config.RadioRefillAt {
+		return false
+	}
+	return uc.seedURL(ctx, roomID, ps, tracks) != ""
+}
+
+func (uc *RadioUsecase) seedURL(ctx context.Context, roomID string, ps *redisc.PlaybackState, tracks []*entity.Track) string {
+	if ps.RadioSeedURL != "" {
+		return ps.RadioSeedURL
+	}
+	if len(tracks) > 0 {
+		return tracks[len(tracks)-1].SourceURL
 	}
 	return ""
 }
@@ -48,38 +60,41 @@ type resolveResult struct {
 	err  error
 }
 
-func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
-	rm.Mu.Lock()
-	if !uc.needsRefillUnlocked(rm) {
-		rm.Mu.Unlock()
+func (uc *RadioUsecase) Refill(ctx context.Context, roomID string) ([]*entity.Track, error) {
+	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if ps == nil {
 		return nil, nil
 	}
-	rm.RadioFilling = true
-	rm.Mu.Unlock()
+	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	if !uc.needsRefill(ctx, roomID, ps, tracks) {
+		return nil, nil
+	}
+
+	// Mark filling.
+	ps.RadioFilling = true
+	redisc.SetPlayback(ctx, uc.rdb, roomID, ps)
 
 	defer func() {
-		rm.Mu.Lock()
-		rm.RadioFilling = false
-		rm.Mu.Unlock()
+		ps2, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+		if ps2 != nil {
+			ps2.RadioFilling = false
+			redisc.SetPlayback(ctx, uc.rdb, roomID, ps2)
+		}
 	}()
 
-	seed := uc.seedURLUnlocked(rm)
+	seed := uc.seedURL(ctx, roomID, ps, tracks)
 	candidates, err := uc.mediaClient.Related(seed, uc.config.RadioBatch*4)
 	if err != nil {
 		return nil, err
 	}
 
-	rm.Mu.RLock()
+	// Build seen set from queue + radio_seen.
 	seenMediaIDs := make(map[string]bool)
-	for _, t := range rm.Queue {
+	for _, t := range tracks {
 		if t.MediaID != "" {
 			seenMediaIDs[t.MediaID] = true
 		}
 	}
-	for mid := range rm.RadioSeen {
-		seenMediaIDs[mid] = true
-	}
-	rm.Mu.RUnlock()
 
 	results := make([]resolveResult, len(candidates))
 	var wg sync.WaitGroup
@@ -115,9 +130,7 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 			continue
 		}
 
-		rm.Mu.Lock()
-		rm.RadioSeen[mediaID] = true
-		rm.Mu.Unlock()
+		redisc.AddRadioSeen(ctx, uc.rdb, roomID, mediaID)
 		seenMediaIDs[mediaID] = true
 
 		track := entity.TrackFromYouTube(r.info, RadioTag)
@@ -125,18 +138,18 @@ func (uc *RadioUsecase) Refill(rm *entity.Room) ([]*entity.Track, error) {
 	}
 
 	if len(picked) > 0 {
-		rm.Mu.Lock()
-		if !rm.IsPlaying {
-			rm.IsPlaying = true
-			rm.Position = 0.0
-			rm.LastSyncAt = time.Now()
+		ps2, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+		if ps2 != nil && !ps2.IsPlaying {
+			ps2.IsPlaying = true
+			ps2.Position = 0
+			ps2.LastSyncAt = time.Now()
+			redisc.SetPlayback(ctx, uc.rdb, roomID, ps2)
 		}
-		// NOTE: RadioSeen is intentionally NOT reset here — it is the only
-		// dedup memory across refills. It lives and dies with the room.
-		rm.Mu.Unlock()
 	}
 
 	return picked, nil
 }
 
-
+func (uc *RadioUsecase) needsRefill(ctx context.Context, roomID string, ps *redisc.PlaybackState, tracks []*entity.Track) bool {
+	return ps != nil && !ps.RadioFilling && len(tracks) <= uc.config.RadioRefillAt && uc.seedURL(ctx, roomID, ps, tracks) != ""
+}

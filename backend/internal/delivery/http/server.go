@@ -12,6 +12,7 @@ import (
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
@@ -26,6 +27,7 @@ type Server struct {
 	playback      *usecase.PlaybackUsecase
 	tracks        *usecase.TrackUsecase
 	manager       *ws.ConnectionManager
+	rdb           *redis.Client
 	uploadLimiter *ratelimit.SlidingWindowLimiter
 }
 
@@ -40,6 +42,7 @@ func NewServer(
 	playback *usecase.PlaybackUsecase,
 	tracks *usecase.TrackUsecase,
 	manager *ws.ConnectionManager,
+	rdb *redis.Client,
 ) *Server {
 	uploadLimit := config.RateLimitUpload
 	if uploadLimit <= 0 {
@@ -57,6 +60,7 @@ func NewServer(
 		playback:      playback,
 		tracks:        tracks,
 		manager:       manager,
+		rdb:           rdb,
 		uploadLimiter: ratelimit.New(uploadLimit, 3600),
 	}
 	s.setupRoutes()
@@ -86,7 +90,6 @@ func (s *Server) setupRoutes() {
 			r.Post("/{roomID}/queue", s.handleAddToQueue)
 			r.Post("/{roomID}/visit", s.handleRecordVisit)
 			r.Get("/{roomID}/lyrics", s.handleGetLyrics)
-			r.Post("/{roomID}/playback", s.handlePlayback)
 		})
 
 		r.Post("/search", s.handleSearch)

@@ -155,6 +155,11 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_tracks_owner ON tracks (owner_id) WHERE owner_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_track_likes_user ON track_likes (user_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_tracks_likes ON tracks (likes DESC, added_at DESC) WHERE room_id IS NULL`,
+		// 006: playback pointer belongs to the room — a restart no longer
+		// freezes every room paused at index 0.
+		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS current_index INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_playing BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS current_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
 	}
 
 	for _, m := range migrations {

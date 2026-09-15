@@ -1,29 +1,38 @@
 package ws
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/domain/entity"
 	"github.com/bebradio/backend-go/internal/domain/repository"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
 	"github.com/bebradio/backend-go/internal/usecase"
+	"github.com/redis/go-redis/v9"
 )
 
 var handlerLog = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 type handlerDeps struct {
-	manager *ConnectionManager
-	room    *usecase.RoomUsecase
-	radio   *usecase.RadioUsecase
-	media   *usecase.MediaUsecase
-	handler *Handler
+	manager  *ConnectionManager
+	room     *usecase.RoomUsecase
+	roomRepo *repository.MockRoomRepo
+	radio    *usecase.RadioUsecase
+	media    *usecase.MediaUsecase
+	handler  *Handler
+	rdb      *redis.Client
 }
 
 func setupHandler(t *testing.T) *handlerDeps {
 	t.Helper()
+
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
@@ -31,32 +40,48 @@ func setupHandler(t *testing.T) *handlerDeps {
 	auth := repository.NewMockAuthBridge()
 
 	cfg := &config.Config{
-		RadioRefillAt:  3,
-		RadioBatch:     3,
-		MaxDuration:    3600,
+		RadioRefillAt:    3,
+		RadioBatch:       3,
+		MaxDuration:      3600,
 		AutoAdvanceGrace: 2.5,
 	}
 
-	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, handlerLog)
-	playbackUC := usecase.NewPlaybackUsecase()
-	chatUC := usecase.NewChatUsecase(roomRepo, handlerLog)
-	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, handlerLog)
-	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, handlerLog)
+	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, handlerLog, rdb)
+	playbackUC := usecase.NewPlaybackUsecase(rdb)
+	chatUC := usecase.NewChatUsecase(roomRepo, handlerLog, rdb)
+	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, handlerLog, rdb)
+	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, handlerLog, rdb)
 
 	manager := NewConnectionManager(handlerLog)
-	handler := NewHandler(manager, roomUC, playbackUC, chatUC, radioUC, mediaUC, cfg, handlerLog)
+	handler := NewHandler(manager, roomUC, playbackUC, chatUC, radioUC, mediaUC, cfg, rdb, handlerLog)
 
 	return &handlerDeps{
-		manager: manager,
-		room:    roomUC,
-		radio:   radioUC,
-		media:   mediaUC,
-		handler: handler,
+		manager:  manager,
+		room:     roomUC,
+		roomRepo: roomRepo,
+		radio:    radioUC,
+		media:    mediaUC,
+		handler:  handler,
+		rdb:      rdb,
+	}
+}
+
+func storeRoomRedis(t *testing.T, d *handlerDeps, rm *entity.Room, tracks []*entity.Track, ps *redisc.PlaybackState) {
+	t.Helper()
+	ctx := context.Background()
+	d.roomRepo.Save(rm)
+	if ps == nil {
+		ps = &redisc.PlaybackState{}
+	}
+	redisc.SetPlayback(ctx, d.rdb, rm.ID, ps)
+	if len(tracks) > 0 {
+		redisc.SetQueue(ctx, d.rdb, rm.ID, tracks)
 	}
 }
 
 func TestBackgroundRefillAddsTracks(t *testing.T) {
 	d := setupHandler(t)
+	ctx := context.Background()
 
 	mediaClient := repository.NewMockMediaClient()
 	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
@@ -73,29 +98,32 @@ func TestBackgroundRefillAddsTracks(t *testing.T) {
 		}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
 	rm.AutoRadio = true
-	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
-	rm.Queue = []*entity.Track{{ID: "existing", Title: "Existing Track", Duration: 300}}
-	rm.IsPlaying = true
-	rm.LastSyncAt = time.Now()
+	tracks := []*entity.Track{{ID: "existing", Title: "Existing Track", Duration: 300}}
+	ps := &redisc.PlaybackState{
+		IsPlaying:    true,
+		RadioSeedURL: "https://youtube.com/watch?v=seed",
+		LastSyncAt:   time.Now(),
+	}
+	storeRoomRedis(t, d, rm, tracks, ps)
 
-	d.room.StoreRoom(rm)
+	d.handler.backgroundRefill(ctx, rm, rm.ID)
 
-	d.handler.backgroundRefill(rm, rm.ID)
-
-	if len(rm.Queue) != 3 {
-		t.Fatalf("expected 3 tracks after refill (1 existing + 2 radio), got %d", len(rm.Queue))
+	finalTracks, _ := redisc.GetQueue(ctx, d.rdb, rm.ID)
+	if len(finalTracks) != 3 {
+		t.Fatalf("expected 3 tracks after refill (1 existing + 2 radio), got %d", len(finalTracks))
 	}
 
-	if rm.RadioFilling {
+	finalPs, _ := redisc.GetPlayback(ctx, d.rdb, rm.ID)
+	if finalPs.RadioFilling {
 		t.Error("RadioFilling should be false after backgroundRefill completes")
 	}
 
-	for _, track := range rm.Queue[1:] {
+	for _, track := range finalTracks[1:] {
 		if track.AddedBy != "Radio" {
 			t.Errorf("expected added_by 'Radio', got '%s'", track.AddedBy)
 		}
@@ -107,6 +135,7 @@ func TestBackgroundRefillAddsTracks(t *testing.T) {
 
 func TestBackgroundRefillDoesNotPreSetRadioFilling(t *testing.T) {
 	d := setupHandler(t)
+	ctx := context.Background()
 
 	mediaClient := repository.NewMockMediaClient()
 	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
@@ -122,92 +151,108 @@ func TestBackgroundRefillDoesNotPreSetRadioFilling(t *testing.T) {
 		}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
 	rm.AutoRadio = true
-	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
-	rm.Queue = []*entity.Track{{ID: "t1", Title: "Track 1", Duration: 300}}
-	rm.IsPlaying = true
-	rm.LastSyncAt = time.Now()
-	d.room.StoreRoom(rm)
+	tracks := []*entity.Track{{ID: "t1", Title: "Track 1", Duration: 300}}
+	ps := &redisc.PlaybackState{
+		IsPlaying:    true,
+		RadioSeedURL: "https://youtube.com/watch?v=seed",
+		LastSyncAt:   time.Now(),
+	}
+	storeRoomRedis(t, d, rm, tracks, ps)
 
-	if rm.RadioFilling {
+	initialPs, _ := redisc.GetPlayback(ctx, d.rdb, rm.ID)
+	if initialPs.RadioFilling {
 		t.Fatal("RadioFilling should start as false")
 	}
 
-	d.handler.backgroundRefill(rm, rm.ID)
+	d.handler.backgroundRefill(ctx, rm, rm.ID)
 
-	if rm.RadioFilling {
+	finalPs, _ := redisc.GetPlayback(ctx, d.rdb, rm.ID)
+	if finalPs.RadioFilling {
 		t.Error("RadioFilling should be false after backgroundRefill completes")
 	}
 
-	if len(rm.Queue) != 2 {
-		t.Fatalf("expected 2 tracks (1 existing + 1 radio), got %d", len(rm.Queue))
+	finalTracks, _ := redisc.GetQueue(ctx, d.rdb, rm.ID)
+	if len(finalTracks) != 2 {
+		t.Fatalf("expected 2 tracks (1 existing + 1 radio), got %d", len(finalTracks))
 	}
 }
 
 func TestBackgroundRefillHandlesRefillError(t *testing.T) {
 	d := setupHandler(t)
+	ctx := context.Background()
 
 	mediaClient := repository.NewMockMediaClient()
 	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
 		return nil, &testRadioError{"media service unavailable"}
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
 	rm.AutoRadio = true
-	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
-	rm.Queue = []*entity.Track{{ID: "t1", Title: "Track", Duration: 300}}
-	rm.IsPlaying = true
-	rm.LastSyncAt = time.Now()
-	d.room.StoreRoom(rm)
-
-	d.handler.backgroundRefill(rm, rm.ID)
-
-	if len(rm.Queue) != 1 {
-		t.Errorf("expected queue unchanged on error, got %d tracks", len(rm.Queue))
+	tracks := []*entity.Track{{ID: "t1", Title: "Track", Duration: 300}}
+	ps := &redisc.PlaybackState{
+		IsPlaying:    true,
+		RadioSeedURL: "https://youtube.com/watch?v=seed",
+		LastSyncAt:   time.Now(),
 	}
-	if rm.RadioFilling {
+	storeRoomRedis(t, d, rm, tracks, ps)
+
+	d.handler.backgroundRefill(ctx, rm, rm.ID)
+
+	finalTracks, _ := redisc.GetQueue(ctx, d.rdb, rm.ID)
+	if len(finalTracks) != 1 {
+		t.Errorf("expected queue unchanged on error, got %d tracks", len(finalTracks))
+	}
+	finalPs, _ := redisc.GetPlayback(ctx, d.rdb, rm.ID)
+	if finalPs.RadioFilling {
 		t.Error("RadioFilling should be false after error")
 	}
 }
 
 func TestBackgroundRefillEmptyCandidates(t *testing.T) {
 	d := setupHandler(t)
+	ctx := context.Background()
 
 	mediaClient := repository.NewMockMediaClient()
 	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
 		return []string{}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
 	rm.AutoRadio = true
-	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
-	rm.Queue = []*entity.Track{{ID: "t1", Title: "Track", Duration: 300}}
-	rm.IsPlaying = true
-	rm.LastSyncAt = time.Now()
-	d.room.StoreRoom(rm)
-
-	d.handler.backgroundRefill(rm, rm.ID)
-
-	if len(rm.Queue) != 1 {
-		t.Errorf("expected queue unchanged when no candidates, got %d tracks", len(rm.Queue))
+	tracks := []*entity.Track{{ID: "t1", Title: "Track", Duration: 300}}
+	ps := &redisc.PlaybackState{
+		IsPlaying:    true,
+		RadioSeedURL: "https://youtube.com/watch?v=seed",
+		LastSyncAt:   time.Now(),
 	}
-	if rm.RadioFilling {
+	storeRoomRedis(t, d, rm, tracks, ps)
+
+	d.handler.backgroundRefill(ctx, rm, rm.ID)
+
+	finalTracks, _ := redisc.GetQueue(ctx, d.rdb, rm.ID)
+	if len(finalTracks) != 1 {
+		t.Errorf("expected queue unchanged when no candidates, got %d tracks", len(finalTracks))
+	}
+	finalPs, _ := redisc.GetPlayback(ctx, d.rdb, rm.ID)
+	if finalPs.RadioFilling {
 		t.Error("RadioFilling should be false after empty result")
 	}
 }
 
 func TestBackgroundRefillRespectsMaxDuration(t *testing.T) {
 	d := setupHandler(t)
+	ctx := context.Background()
 
 	mediaClient := repository.NewMockMediaClient()
 	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
@@ -231,21 +276,24 @@ func TestBackgroundRefillRespectsMaxDuration(t *testing.T) {
 		}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
 	rm.AutoRadio = true
-	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
-	rm.Queue = []*entity.Track{{ID: "t1", Title: "Track", Duration: 300}}
-	rm.IsPlaying = true
-	rm.LastSyncAt = time.Now()
-	d.room.StoreRoom(rm)
+	tracks := []*entity.Track{{ID: "t1", Title: "Track", Duration: 300}}
+	ps := &redisc.PlaybackState{
+		IsPlaying:    true,
+		RadioSeedURL: "https://youtube.com/watch?v=seed",
+		LastSyncAt:   time.Now(),
+	}
+	storeRoomRedis(t, d, rm, tracks, ps)
 
-	d.handler.backgroundRefill(rm, rm.ID)
+	d.handler.backgroundRefill(ctx, rm, rm.ID)
 
+	finalTracks, _ := redisc.GetQueue(ctx, d.rdb, rm.ID)
 	radioTracks := 0
-	for _, tr := range rm.Queue[1:] {
+	for _, tr := range finalTracks[1:] {
 		if tr.AddedBy == "Radio" {
 			radioTracks++
 			if tr.Duration > 3600 {
@@ -260,6 +308,7 @@ func TestBackgroundRefillRespectsMaxDuration(t *testing.T) {
 
 func TestBackgroundRefillSetsIsPlaying(t *testing.T) {
 	d := setupHandler(t)
+	ctx := context.Background()
 
 	mediaClient := repository.NewMockMediaClient()
 	mediaClient.RelatedFn = func(sourceURL string, limit int) ([]string, error) {
@@ -275,19 +324,21 @@ func TestBackgroundRefillSetsIsPlaying(t *testing.T) {
 		}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
 	rm.AutoRadio = true
-	rm.RadioSeedURL = "https://youtube.com/watch?v=seed"
-	rm.IsPlaying = false
+	ps := &redisc.PlaybackState{
+		IsPlaying:    false,
+		RadioSeedURL: "https://youtube.com/watch?v=seed",
+	}
+	storeRoomRedis(t, d, rm, nil, ps)
 
-	d.room.StoreRoom(rm)
+	d.handler.backgroundRefill(ctx, rm, rm.ID)
 
-	d.handler.backgroundRefill(rm, rm.ID)
-
-	if !rm.IsPlaying {
+	finalPs, _ := redisc.GetPlayback(ctx, d.rdb, rm.ID)
+	if !finalPs.IsPlaying {
 		t.Error("expected IsPlaying true after refill adds tracks to empty queue")
 	}
 }

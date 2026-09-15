@@ -10,6 +10,7 @@ type Config struct {
 	DatabaseURL   string
 	SecretKey     string
 	MusicServiceURL string
+	RedisURL      string
 	CORSOrigins   []string
 
 	JWTExpireHours int
@@ -18,7 +19,6 @@ type Config struct {
 
 	AutoAdvanceInterval float64
 	AutoAdvanceGrace    float64
-	AdvanceDedupWindow  float64
 
 	RadioRefillAt int
 	RadioBatch    int
@@ -40,6 +40,7 @@ func Load() *Config {
 		DatabaseURL:    getEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/bebradio"),
 		SecretKey:      getEnv("SECRET_KEY", "bebradio-secret-key-change-in-production"),
 		MusicServiceURL: getEnvWithFallback("MUSIC_SERVICE_URL", "MEDIA_SERVICE_URL", "http://127.0.0.1:8100"),
+		RedisURL:       getEnv("REDIS_URL", "redis://localhost:6379"),
 		CORSOrigins:    strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000"), ","),
 
 		JWTExpireHours:  getEnvInt("JWT_EXPIRE_HOURS", 72),
@@ -48,7 +49,6 @@ func Load() *Config {
 
 		AutoAdvanceInterval: 2.0,
 		AutoAdvanceGrace:    2.5,
-		AdvanceDedupWindow:  1.0,
 
 		RadioRefillAt: getEnvInt("RADIO_REFILL_AT", 1),
 		RadioBatch:    getEnvInt("RADIO_BATCH", 3),
