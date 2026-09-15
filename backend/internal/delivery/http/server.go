@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/delivery/ws"
@@ -29,6 +30,11 @@ type Server struct {
 	manager       *ws.ConnectionManager
 	rdb           *redis.Client
 	uploadLimiter *ratelimit.SlidingWindowLimiter
+	// addMu serializes the check-and-append critical section of handleAddToQueue
+	// (duplicate check + RPush must be atomic, otherwise a double-click adds
+	// the same track twice and the "extra" copy later plays as if resurrected).
+	// Held only around fast Redis ops, never across network I/O.
+	addMu sync.Mutex
 }
 
 func NewServer(

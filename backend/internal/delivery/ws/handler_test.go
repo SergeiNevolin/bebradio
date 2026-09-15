@@ -348,3 +348,26 @@ type testRadioError struct {
 }
 
 func (e *testRadioError) Error() string { return e.msg }
+
+func TestSkipThresholdMet(t *testing.T) {
+	cases := []struct {
+		name      string
+		skips     int64
+		listeners int64
+		want      bool
+	}{
+		{"solo listener skips", 1, 1, true},
+		{"empty room, no votes", 0, 0, false},
+		{"one of two is not majority", 1, 2, false},
+		{"two of two skip", 2, 2, true},
+		{"two of three skip", 2, 3, true},
+		{"three of five skip", 3, 5, true},
+		{"two of five do not skip", 2, 5, false},
+	}
+	for _, c := range cases {
+		if got := skipThresholdMet(c.skips, c.listeners); got != c.want {
+			t.Errorf("%s: skipThresholdMet(%d, %d) = %v, want %v",
+				c.name, c.skips, c.listeners, got, c.want)
+		}
+	}
+}

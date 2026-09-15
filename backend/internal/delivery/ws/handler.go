@@ -220,43 +220,9 @@ func (h *Handler) handleVote(ctx context.Context, rm *entity.Room, conn *websock
 	trackID, _ := msg["track_id"].(string)
 	voteVal, _ := msg["vote"].(float64)
 
-	if userID == "" || trackID == "" {
-		return
-	}
-
-	// Update vote in Redis.
-	votes, _ := redisc.GetVotes(ctx, h.rdb, roomID)
-	ve, ok := votes[trackID]
-	if !ok {
-		ve = &redisc.VoteEntry{}
-	}
-
-	// Remove previous vote by this user.
-	ve.Disliked = removeStr(ve.Disliked, userID)
-	// Note: likes count doesn't track per-user in the current VoteEntry model.
-	// For simplicity, we track likes as a count (not per-user) — this is a known limitation.
-
-	if voteVal == -1 {
-		ve.Disliked = append(ve.Disliked, userID)
-	} else if voteVal == 1 {
-		ve.Likes++
-	}
-
-	redisc.SetVote(ctx, h.rdb, roomID, trackID, ve)
-
-	// Check auto-skip on dislike.
-	if voteVal == -1 {
-		likes := ve.Likes
-		dislikes := len(ve.Disliked)
-		if dislikes > likes {
-			if h.playback.GoNext(ctx, roomID) {
-				redisc.ResetSkipVotes(ctx, h.rdb, roomID)
-				if err := h.room.SaveTracks(ctx, rm); err != nil {
-					h.log.Error("save tracks after auto-skip failed", "room_id", roomID, "error", err)
-				}
-			} else {
-				redisc.ResetSkipVotes(ctx, h.rdb, roomID)
-			}
+	if h.playback.RegisterVote(ctx, roomID, userID, trackID, int(voteVal)) {
+		if err := h.room.SaveTracks(ctx, rm); err != nil {
+			h.log.Error("save tracks after auto-skip failed", "room_id", roomID, "error", err)
 		}
 	}
 }
@@ -268,13 +234,9 @@ func (h *Handler) handleSkipVote(ctx context.Context, rm *entity.Room, conn *web
 	}
 
 	skipCount, _ := redisc.ToggleSkipVote(ctx, h.rdb, roomID, userID)
-
 	listeners, _ := redisc.GetPresenceCount(ctx, h.rdb, roomID)
-	if listeners < 2 {
-		listeners = 2
-	}
 
-	if skipCount*2 > listeners {
+	if skipThresholdMet(skipCount, listeners) {
 		if h.playback.GoNext(ctx, roomID) {
 			if err := h.room.SaveTracks(ctx, rm); err != nil {
 				h.log.Error("save tracks after skip-vote failed", "room_id", roomID, "error", err)
@@ -293,10 +255,16 @@ func (h *Handler) backgroundRefill(ctx context.Context, rm *entity.Room, roomID 
 		return
 	}
 
-	if len(tracks) > 0 {
-		for _, t := range tracks {
-			redisc.AppendTrack(ctx, h.rdb, roomID, t)
+	// AppendFreshTrack re-validates each pick against the live queue: picks
+	// went stale if a skip landed while Refill was doing network I/O.
+	appended := 0
+	for _, t := range tracks {
+		if ok, _ := redisc.AppendFreshTrack(ctx, h.rdb, roomID, t); ok {
+			appended++
 		}
+	}
+
+	if appended > 0 {
 		ps, _ := redisc.GetPlayback(ctx, h.rdb, roomID)
 		if ps != nil && !ps.IsPlaying {
 			ps.IsPlaying = true
@@ -317,6 +285,12 @@ func (h *Handler) sendError(conn *websocket.Conn, message string) {
 	if err := conn.WriteJSON(map[string]any{"error": message}); err != nil {
 		h.log.Warn("failed to send error to client", "error", err)
 	}
+}
+
+// skipThresholdMet reports strict-majority consensus to skip the current
+// track. No listener floor: a solo listener's vote (1*2 > 1) skips.
+func skipThresholdMet(skipCount, listeners int64) bool {
+	return skipCount*2 > listeners
 }
 
 func toUpper(s string) string {
@@ -340,14 +314,4 @@ func trimSpace(s string) string {
 		end--
 	}
 	return s[start:end]
-}
-
-func removeStr(slice []string, val string) []string {
-	result := make([]string, 0, len(slice))
-	for _, s := range slice {
-		if s != val {
-			result = append(result, s)
-		}
-	}
-	return result
 }

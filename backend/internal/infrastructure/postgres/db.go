@@ -73,13 +73,8 @@ func (db *DB) Migrate() error {
 			text TEXT DEFAULT '',
 			created_at TIMESTAMPTZ DEFAULT NOW()
 		)`,
-		`CREATE TABLE IF NOT EXISTS track_votes (
-			id SERIAL PRIMARY KEY,
-			room_id VARCHAR(6) REFERENCES rooms(id) ON DELETE CASCADE,
-			user_id VARCHAR(8) NOT NULL,
-			track_id VARCHAR(8) NOT NULL,
-			vote INTEGER NOT NULL DEFAULT 0
-		)`,
+		// NOTE: track_votes was removed in 007 (votes live in Redis only),
+		// so it is no longer created. Existing databases drop it below.
 		`CREATE TABLE IF NOT EXISTS user_room_visits (
 			user_id VARCHAR(8) NOT NULL,
 			room_id VARCHAR(6) NOT NULL,
@@ -160,6 +155,10 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS current_index INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_playing BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS current_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+		// 007: room votes live in Redis only — per-track ephemeral state
+		// that is cleared on every track switch. The Postgres mirror was
+		// never written by the server and only risked stale resurrections.
+		`DROP TABLE IF EXISTS track_votes`,
 	}
 
 	for _, m := range migrations {

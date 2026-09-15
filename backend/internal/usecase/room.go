@@ -40,12 +40,13 @@ func (uc *RoomUsecase) GetOrLoadRoom(ctx context.Context, roomID string) (*entit
 		return nil, err
 	}
 
-	// Hydrate Redis from Postgres exactly once per room lifetime.
+	// Hydrate Redis from Postgres exactly once per room lifetime (SETNX makes
+	// concurrent first loads race-free: only the winner hydrates).
 	// Redis is the source of truth afterwards; an empty queue is a
 	// legitimate state (e.g. last track skipped, refill not done yet)
 	// and must NOT trigger re-hydration of stale Postgres rows.
-	hydrated, _ := uc.rdb.Exists(ctx, redisc.RoomKey(roomID, "hydrated")).Result()
-	if hydrated == 0 {
+	acquired, _ := uc.rdb.SetNX(ctx, redisc.RoomKey(roomID, "hydrated"), "1", 0).Result()
+	if acquired {
 		tracks, _ := uc.roomRepo.LoadTracks(roomID)
 		if len(tracks) > 0 {
 			redisc.SetQueue(ctx, uc.rdb, roomID, tracks)
@@ -56,25 +57,9 @@ func (uc *RoomUsecase) GetOrLoadRoom(ctx context.Context, roomID string) (*entit
 				redisc.AppendMessage(ctx, uc.rdb, roomID, m)
 			}
 		}
-		votes, _ := uc.roomRepo.LoadVotes(roomID)
-		if len(votes) > 0 {
-			voteMap := make(map[string]*redisc.VoteEntry)
-			for _, v := range votes {
-				ve, ok := voteMap[v.TrackID]
-				if !ok {
-					ve = &redisc.VoteEntry{}
-					voteMap[v.TrackID] = ve
-				}
-				if v.Vote == 1 {
-					ve.Likes++
-				} else if v.Vote == -1 {
-					ve.Disliked = append(ve.Disliked, v.UserID)
-				}
-			}
-			for trackID, ve := range voteMap {
-				redisc.SetVote(ctx, uc.rdb, roomID, trackID, ve)
-			}
-		}
+		// NOTE: votes live in Redis only. They are per-track ephemeral state
+		// (cleared whenever a track becomes current), so persisting them to
+		// Postgres buys nothing and only risks resurrecting stale votes.
 		uc.rdb.Set(ctx, redisc.RoomKey(roomID, "hydrated"), "1", 0)
 	}
 
@@ -196,31 +181,6 @@ func (uc *RoomUsecase) SaveTracks(ctx context.Context, rm *entity.Room) error {
 		return fmt.Errorf("get queue from redis: %w", err)
 	}
 	return uc.roomRepo.SaveTracksFromSlice(rm.ID, tracks)
-}
-
-func (uc *RoomUsecase) SaveVotes(ctx context.Context, rm *entity.Room) error {
-	votes, err := redisc.GetVotes(ctx, uc.rdb, rm.ID)
-	if err != nil {
-		return fmt.Errorf("get votes from redis: %w", err)
-	}
-	// Convert Redis vote format to entity format for persistence.
-	var entityVotes []*entity.TrackVote
-	for trackID, ve := range votes {
-		for _, uid := range ve.Disliked {
-			entityVotes = append(entityVotes, &entity.TrackVote{
-				UserID:  uid,
-				TrackID: trackID,
-				Vote:    -1,
-			})
-		}
-		for i := 0; i < ve.Likes; i++ {
-			entityVotes = append(entityVotes, &entity.TrackVote{
-				TrackID: trackID,
-				Vote:    1,
-			})
-		}
-	}
-	return uc.roomRepo.SaveVotesFromSlice(rm.ID, entityVotes)
 }
 
 func (uc *RoomUsecase) CreateAccessToken(roomID string) (string, error) {

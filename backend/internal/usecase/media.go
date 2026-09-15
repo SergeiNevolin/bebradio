@@ -60,24 +60,25 @@ func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID string) bool
 		return false
 	}
 
-	var candidates []*entity.Track
+	type pendingItem struct {
+		idx     int
+		id      string
+		mediaID string
+	}
+	var pending []pendingItem
 	// Current track.
 	if ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
-		candidates = append(candidates, tracks[ps.CurrentIndex])
+		t := tracks[ps.CurrentIndex]
+		if t.Source != entity.TrackSourceUpload && t.MediaID != "" && t.URL == "" {
+			pending = append(pending, pendingItem{ps.CurrentIndex, t.ID, t.MediaID})
+		}
 	}
 	// Next track.
 	nextIdx := ps.CurrentIndex + 1
 	if nextIdx >= 0 && nextIdx < len(tracks) {
-		candidates = append(candidates, tracks[nextIdx])
-	}
-
-	var pending []*entity.Track
-	for _, t := range candidates {
-		if t.Source == entity.TrackSourceUpload {
-			continue
-		}
-		if t.MediaID != "" && t.URL == "" {
-			pending = append(pending, t)
+		t := tracks[nextIdx]
+		if t.Source != entity.TrackSourceUpload && t.MediaID != "" && t.URL == "" {
+			pending = append(pending, pendingItem{nextIdx, t.ID, t.MediaID})
 		}
 	}
 	if len(pending) == 0 {
@@ -85,8 +86,9 @@ func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID string) bool
 	}
 
 	items := make([]map[string]any, 0, len(pending))
-	for _, t := range pending {
-		items = append(items, map[string]any{"media_id": t.MediaID, "source_url": t.SourceURL})
+	for _, p := range pending {
+		t := tracks[p.idx]
+		items = append(items, map[string]any{"media_id": p.mediaID, "source_url": t.SourceURL})
 	}
 	ready, err := uc.mediaClient.Ensure(items)
 	if err != nil {
@@ -98,20 +100,27 @@ func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID string) bool
 		readySet[id] = true
 	}
 
+	// The queue may have changed (skip/remove/append) while Ensure() was in
+	// flight — it does network I/O. Never write back the stale snapshot:
+	// re-read and stamp resolved URLs only onto tracks still sitting at the
+	// same index with the same ID. Anything else is retried on a later tick.
+	// (The old code did a blind full-queue SetQueue here and resurrected
+	// just-skipped tracks on every autoadvance tick.)
+	fresh, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
 	changed := false
-	for _, t := range pending {
-		if readySet[t.MediaID] {
-			if t.URL == "" {
-				changed = true
-			}
-			t.LocalPath = t.MediaID + ".m4a"
-			t.URL = "/api/music/" + t.MediaID
+	for _, p := range pending {
+		if !readySet[p.mediaID] {
+			continue
 		}
-	}
-
-	// Write updated tracks back to Redis.
-	if changed {
-		redisc.SetQueue(ctx, uc.rdb, roomID, tracks)
+		if p.idx >= len(fresh) || fresh[p.idx].ID != p.id || fresh[p.idx].URL != "" {
+			continue
+		}
+		fresh[p.idx].LocalPath = p.mediaID + ".m4a"
+		fresh[p.idx].URL = "/api/music/" + p.mediaID
+		if err := redisc.SetQueueAt(ctx, uc.rdb, roomID, p.idx, fresh[p.idx]); err != nil {
+			continue
+		}
+		changed = true
 	}
 	return changed
 }

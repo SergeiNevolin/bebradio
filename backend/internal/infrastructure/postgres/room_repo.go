@@ -66,9 +66,6 @@ func (r *RoomRepo) Delete(id string) error {
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, `DELETE FROM track_votes WHERE room_id = $1`, id); err != nil {
-		return fmt.Errorf("delete votes: %w", err)
-	}
 	if _, err := tx.Exec(ctx, `DELETE FROM chat_messages WHERE room_id = $1`, id); err != nil {
 		return fmt.Errorf("delete messages: %w", err)
 	}
@@ -174,31 +171,6 @@ func (r *RoomRepo) LoadMessages(roomID string) ([]*entity.ChatMessage, error) {
 	return msgs, nil
 }
 
-func (r *RoomRepo) SaveVotes(room *entity.Room) error {
-	// No-op: real saving is done via SaveVotesFromSlice from Redis.
-	return nil
-}
-
-func (r *RoomRepo) LoadVotes(roomID string) ([]*entity.TrackVote, error) {
-	rows, err := r.pool.Query(context.Background(),
-		`SELECT user_id, track_id, vote FROM track_votes WHERE room_id = $1`, roomID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var votes []*entity.TrackVote
-	for rows.Next() {
-		v := &entity.TrackVote{}
-		if err := rows.Scan(&v.UserID, &v.TrackID, &v.Vote); err != nil {
-			continue
-		}
-		votes = append(votes, v)
-	}
-	return votes, nil
-}
-
 func (r *RoomRepo) RecordVisit(userID, roomID string) error {
 	_, err := r.pool.Exec(context.Background(),
 		`INSERT INTO user_room_visits (user_id, room_id, visited_at)
@@ -263,31 +235,6 @@ func (r *RoomRepo) SaveTracksFromSlice(roomID string, tracks []*entity.Track) er
 			track.MediaID, track.AddedAt,
 			nullIfEmpty(track.OwnerID), track.SizeBytes, track.Status, track.Error,
 			track.HasCover, track.Plays, track.Likes,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
-}
-
-// SaveVotesFromSlice writes votes from a slice (Redis write-through).
-func (r *RoomRepo) SaveVotesFromSlice(roomID string, votes []*entity.TrackVote) error {
-	ctx := context.Background()
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := tx.Exec(ctx, `DELETE FROM track_votes WHERE room_id = $1`, roomID); err != nil {
-		return fmt.Errorf("delete old votes: %w", err)
-	}
-
-	for _, v := range votes {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO track_votes (room_id, user_id, track_id, vote) VALUES ($1, $2, $3, $4)`,
-			roomID, v.UserID, v.TrackID, v.Vote,
 		)
 		if err != nil {
 			return err

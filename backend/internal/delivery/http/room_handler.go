@@ -263,10 +263,13 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, 400, "Track not available")
 			return
 		}
-		// Check for duplicates in Redis queue.
+		// Check for duplicates in Redis queue (under lock: check+append must
+		// be atomic or a double-click appends the same track twice).
+		s.addMu.Lock()
 		queue, _ := redisc.GetQueue(ctx, s.rdb, roomID)
 		for _, t := range queue {
 			if t.ID == lib.ID {
+				s.addMu.Unlock()
 				s.writeJSON(w, 200, t.ToDict())
 				return
 			}
@@ -285,6 +288,7 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 			ps.LastSyncAt = time.Now()
 			redisc.SetPlayback(ctx, s.rdb, roomID, ps)
 		}
+		s.addMu.Unlock()
 
 		go func() {
 			if err := s.room.SaveTracks(ctx, rm); err != nil {
@@ -320,6 +324,18 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 		track.SourceURL = req.URL
 	}
 
+	// Duplicate check (under lock, same as the upload branch): without it a
+	// double-click appends the same video twice and the leftover copy plays
+	// later as if the skipped track "came back".
+	s.addMu.Lock()
+	queue, _ := redisc.GetQueue(ctx, s.rdb, roomID)
+	for _, t := range queue {
+		if t.ID == track.ID || (track.SourceURL != "" && t.SourceURL == track.SourceURL) {
+			s.addMu.Unlock()
+			s.writeJSON(w, 200, t.ToDict())
+			return
+		}
+	}
 	redisc.AppendTrack(ctx, s.rdb, roomID, track)
 	if track.SourceURL != "" {
 		redisc.SetPlaybackField(ctx, s.rdb, roomID, "radio_seed_url", track.SourceURL)
@@ -336,6 +352,7 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 		ps.LastSyncAt = time.Now()
 		redisc.SetPlayback(ctx, s.rdb, roomID, ps)
 	}
+	s.addMu.Unlock()
 
 	go func() {
 		if err := s.room.SaveTracks(ctx, rm); err != nil {

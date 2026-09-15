@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/domain/entity"
@@ -88,11 +87,17 @@ func (uc *RadioUsecase) Refill(ctx context.Context, roomID string) ([]*entity.Tr
 		return nil, err
 	}
 
-	// Build seen set from queue + radio_seen.
+	// Build seen set from queue + persistent radio_seen
+	// (finished/skipped tracks must never be recommended again).
 	seenMediaIDs := make(map[string]bool)
 	for _, t := range tracks {
 		if t.MediaID != "" {
 			seenMediaIDs[t.MediaID] = true
+		}
+	}
+	if seen, err := redisc.GetRadioSeen(ctx, uc.rdb, roomID); err == nil {
+		for mediaID := range seen {
+			seenMediaIDs[mediaID] = true
 		}
 	}
 
@@ -130,21 +135,14 @@ func (uc *RadioUsecase) Refill(ctx context.Context, roomID string) ([]*entity.Tr
 			continue
 		}
 
-		redisc.AddRadioSeen(ctx, uc.rdb, roomID, mediaID)
+		// No persistent marking here: tracks are marked seen at append time
+		// (AppendFreshTrack), after re-validating against the live queue.
+		// Marking at pick time would ban tracks that never made it into the
+		// queue. seenMediaIDs only dedupes within this batch.
 		seenMediaIDs[mediaID] = true
 
 		track := entity.TrackFromYouTube(r.info, RadioTag)
 		picked = append(picked, track)
-	}
-
-	if len(picked) > 0 {
-		ps2, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
-		if ps2 != nil && !ps2.IsPlaying {
-			ps2.IsPlaying = true
-			ps2.Position = 0
-			ps2.LastSyncAt = time.Now()
-			redisc.SetPlayback(ctx, uc.rdb, roomID, ps2)
-		}
 	}
 
 	return picked, nil

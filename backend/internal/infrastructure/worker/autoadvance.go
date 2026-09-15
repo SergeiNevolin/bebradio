@@ -136,10 +136,16 @@ func (w *AutoAdvance) backgroundRefill(ctx context.Context, rm *entity.Room, roo
 		return
 	}
 
-	if len(tracks) > 0 {
-		for _, t := range tracks {
-			redisc.AppendTrack(ctx, w.rdb, roomID, t)
+	// AppendFreshTrack re-validates each pick against the live queue: picks
+	// went stale if a skip landed while Refill was doing network I/O.
+	appended := 0
+	for _, t := range tracks {
+		if ok, _ := redisc.AppendFreshTrack(ctx, w.rdb, roomID, t); ok {
+			appended++
 		}
+	}
+
+	if appended > 0 {
 		ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
 		if ps != nil && !ps.IsPlaying {
 			ps.IsPlaying = true

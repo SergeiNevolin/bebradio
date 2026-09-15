@@ -42,8 +42,50 @@ type PlaybackState struct {
 }
 
 type VoteEntry struct {
-	Likes    int      `json:"likes"`
+	LikedBy  []string `json:"liked_by,omitempty"`
 	Disliked []string `json:"disliked_by,omitempty"`
+	// Likes is a legacy unattributed counter from before per-user likes.
+	// Kept for reading old data; new votes go into LikedBy.
+	Likes int `json:"likes,omitempty"`
+}
+
+// LikeCount returns the total like count (legacy base + per-user likes).
+func (v *VoteEntry) LikeCount() int {
+	if v == nil {
+		return 0
+	}
+	return v.Likes + len(v.LikedBy)
+}
+
+// DislikeCount returns the total dislike count.
+func (v *VoteEntry) DislikeCount() int {
+	if v == nil {
+		return 0
+	}
+	return len(v.Disliked)
+}
+
+// ApplyVote sets a user's vote with set semantics, idempotent per user:
+// 1 = like, -1 = dislike, anything else = retract previous vote.
+func (v *VoteEntry) ApplyVote(userID string, vote int) {
+	v.LikedBy = removeString(v.LikedBy, userID)
+	v.Disliked = removeString(v.Disliked, userID)
+	switch vote {
+	case 1:
+		v.LikedBy = append(v.LikedBy, userID)
+	case -1:
+		v.Disliked = append(v.Disliked, userID)
+	}
+}
+
+func removeString(slice []string, val string) []string {
+	result := make([]string, 0, len(slice))
+	for _, s := range slice {
+		if s != val {
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 // ---------- Queue ----------
@@ -90,6 +132,55 @@ func AppendTrack(ctx context.Context, rdb *redis.Client, roomID string, track *e
 		return err
 	}
 	return rdb.RPush(ctx, RoomKey(roomID, "queue"), b).Err()
+}
+
+// AppendFreshTrack appends track unless it is already queued (same ID) or
+// radio-seen (same media). Successfully appended tracks are marked seen.
+// Returns true if appended.
+//
+// This closes the Refill-vs-skip race: Refill snapshots the queue and then
+// does slow network I/O, so a skip landing mid-flight must not be undone by
+// a stale append (the last-track-never-skips bug). The check-act window here
+// holds no I/O, only fast Redis ops.
+func AppendFreshTrack(ctx context.Context, rdb *redis.Client, roomID string, track *entity.Track) (bool, error) {
+	if track.MediaID != "" {
+		seen, err := IsRadioSeen(ctx, rdb, roomID, track.MediaID)
+		if err != nil {
+			return false, err
+		}
+		if seen {
+			return false, nil
+		}
+	}
+	queue, err := GetQueue(ctx, rdb, roomID)
+	if err != nil {
+		return false, err
+	}
+	for _, t := range queue {
+		if t.ID == track.ID {
+			return false, nil
+		}
+	}
+	if err := AppendTrack(ctx, rdb, roomID, track); err != nil {
+		return false, err
+	}
+	if track.MediaID != "" {
+		if err := AddRadioSeen(ctx, rdb, roomID, track.MediaID); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// SetQueueAt replaces the track at index with an updated copy.
+// Callers must verify index+ID against a fresh read first: the queue may
+// have shifted (skip/remove) between their read and this write.
+func SetQueueAt(ctx context.Context, rdb *redis.Client, roomID string, index int, track *entity.Track) error {
+	b, err := json.Marshal(track)
+	if err != nil {
+		return err
+	}
+	return rdb.LSet(ctx, RoomKey(roomID, "queue"), int64(index), b).Err()
 }
 
 func RemoveAt(ctx context.Context, rdb *redis.Client, roomID string, index int) (int, error) {
@@ -195,6 +286,12 @@ func SetVote(ctx context.Context, rdb *redis.Client, roomID, trackID string, ent
 	return rdb.HSet(ctx, RoomKey(roomID, "votes"), trackID, b).Err()
 }
 
+// DelVote removes the vote entry for a track that left the queue,
+// so a re-added track with the same ID starts with a clean slate.
+func DelVote(ctx context.Context, rdb *redis.Client, roomID, trackID string) error {
+	return rdb.HDel(ctx, RoomKey(roomID, "votes"), trackID).Err()
+}
+
 // ---------- Skip votes ----------
 
 // ToggleSkipVote toggles a user's skip vote. Returns the new count.
@@ -294,6 +391,19 @@ func IsRadioSeen(ctx context.Context, rdb *redis.Client, roomID, mediaID string)
 	return rdb.SIsMember(ctx, RoomKey(roomID, "radio_seen"), mediaID).Result()
 }
 
+// GetRadioSeen returns all media IDs the radio must not recommend again.
+func GetRadioSeen(ctx context.Context, rdb *redis.Client, roomID string) (map[string]bool, error) {
+	members, err := rdb.SMembers(ctx, RoomKey(roomID, "radio_seen")).Result()
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool, len(members))
+	for _, m := range members {
+		seen[m] = true
+	}
+	return seen, nil
+}
+
 // ---------- Cleanup ----------
 
 func DeleteRoom(ctx context.Context, rdb *redis.Client, roomID string) error {
@@ -332,7 +442,7 @@ func BuildToDict(ctx context.Context, rdb *redis.Client, rm *entity.Room) map[st
 
 	voteTotals := make(map[string][2]int)
 	for trackID, v := range votes {
-		voteTotals[trackID] = [2]int{v.Likes, len(v.Disliked)}
+		voteTotals[trackID] = [2]int{v.LikeCount(), v.DislikeCount()}
 	}
 
 	var trackVotes [2]int
@@ -440,7 +550,7 @@ func GetCurrentPosition(ctx context.Context, rdb *redis.Client, roomID string) f
 func GetTrackVotes(ctx context.Context, rdb *redis.Client, roomID, trackID string) (likes, dislikes int) {
 	votes, _ := GetVotes(ctx, rdb, roomID)
 	if v, ok := votes[trackID]; ok {
-		return v.Likes, len(v.Disliked)
+		return v.LikeCount(), v.DislikeCount()
 	}
 	return 0, 0
 }

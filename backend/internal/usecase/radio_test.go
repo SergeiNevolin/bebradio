@@ -164,9 +164,12 @@ func TestRefillAppendsTracks(t *testing.T) {
 	if tracks[0].AddedBy != RadioTag {
 		t.Errorf("expected added_by '%s', got '%s'", RadioTag, tracks[0].AddedBy)
 	}
+	// NOTE: Refill only picks; appending (with live re-validation) and
+	// playback resume are the caller's job (backgroundRefill via
+	// AppendFreshTrack). Refill must not touch IsPlaying.
 	ps, _ := redisc.GetPlayback(ctx, rdb, roomID)
-	if !ps.IsPlaying {
-		t.Error("expected is_playing true after refill")
+	if ps.IsPlaying {
+		t.Error("expected is_playing untouched by Refill itself")
 	}
 }
 

@@ -428,69 +428,6 @@ func TestListPublicRoomsExcludesPrivate(t *testing.T) {
 	}
 }
 
-func TestSaveVotesPersistsToRepo(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	ctx := context.Background()
-
-	roomRepo := repository.NewMockRoomRepo()
-	userRepo := repository.NewMockUserRepo()
-	mediaClient := repository.NewMockMediaClient()
-	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
-
-	rm, _, _ := uc.CreateRoom(ctx, "Vote Room", "owner1", "")
-
-	redisc.SetVote(ctx, rdb, rm.ID, "t1", &redisc.VoteEntry{Likes: 2})
-	redisc.SetVote(ctx, rdb, rm.ID, "t2", &redisc.VoteEntry{Likes: 1})
-
-	if err := uc.SaveVotes(ctx, rm); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	saved, err := roomRepo.LoadVotes(rm.ID)
-	if err != nil {
-		t.Fatalf("unexpected error loading votes: %v", err)
-	}
-	if len(saved) != 3 {
-		t.Fatalf("expected 3 votes in repo, got %d", len(saved))
-	}
-}
-
-func TestSaveVotesOverwritesPrevious(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	ctx := context.Background()
-
-	roomRepo := repository.NewMockRoomRepo()
-	userRepo := repository.NewMockUserRepo()
-	mediaClient := repository.NewMockMediaClient()
-	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
-
-	rm, _, _ := uc.CreateRoom(ctx, "Vote Room", "owner1", "")
-
-	redisc.SetVote(ctx, rdb, rm.ID, "t1", &redisc.VoteEntry{Likes: 1})
-	uc.SaveVotes(ctx, rm)
-
-	redisc.SetVote(ctx, rdb, rm.ID, "t1", &redisc.VoteEntry{Likes: 1, Disliked: []string{"u1"}})
-	uc.SaveVotes(ctx, rm)
-
-	saved, _ := roomRepo.LoadVotes(rm.ID)
-	if len(saved) != 2 {
-		t.Fatalf("expected 2 votes after overwrite, got %d", len(saved))
-	}
-	for _, v := range saved {
-		if v.UserID == "u1" && v.Vote != -1 {
-			t.Errorf("expected u1 vote to be -1, got %d", v.Vote)
-		}
-	}
-}
-
-// Regression: skipped tracks must not come back.
-// Scenario: Redis queue becomes empty (all tracks skipped) while Postgres
-// still holds the stale rows. A repeated GetOrLoadRoom (new WS connection,
-// autoadvance tick, HTTP call) must NOT re-hydrate the stale rows.
 func TestGetOrLoadRoomDoesNotResurrectSkippedTracks(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
