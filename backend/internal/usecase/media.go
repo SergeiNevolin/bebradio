@@ -1,21 +1,25 @@
 package usecase
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/domain/entity"
 	"github.com/bebradio/backend-go/internal/domain/repository"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
+	"github.com/redis/go-redis/v9"
 )
 
 type MediaUsecase struct {
 	mediaClient repository.MediaClient
 	config      *config.Config
 	log         *slog.Logger
+	rdb         *redis.Client
 }
 
-func NewMediaUsecase(mediaClient repository.MediaClient, config *config.Config, log *slog.Logger) *MediaUsecase {
-	return &MediaUsecase{mediaClient: mediaClient, config: config, log: log}
+func NewMediaUsecase(mediaClient repository.MediaClient, config *config.Config, log *slog.Logger, rdb *redis.Client) *MediaUsecase {
+	return &MediaUsecase{mediaClient: mediaClient, config: config, log: log, rdb: rdb}
 }
 
 func (uc *MediaUsecase) FetchTrack(url string) (map[string]any, error) {
@@ -49,29 +53,32 @@ func (uc *MediaUsecase) EnsureTrackReady(track *entity.Track) bool {
 	return false
 }
 
-func (uc *MediaUsecase) EnsureRoomMedia(rm *entity.Room) bool {
-	rm.Mu.RLock()
-	tracks := make([]*entity.Track, 0)
-	current := rm.CurrentTrackUnlocked()
-	if current != nil {
-		tracks = append(tracks, current)
+func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID string) bool {
+	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+	if ps == nil || len(tracks) == 0 {
+		return false
 	}
-	nextIdx := rm.CurrentIndex + 1
-	if nextIdx >= 0 && nextIdx < len(rm.Queue) {
-		tracks = append(tracks, rm.Queue[nextIdx])
-	}
-	rm.Mu.RUnlock()
 
-	var pending []*entity.Track
-	for _, t := range tracks {
-		// Uploads are ready by construction (only ready ones can be queued)
-		// and expose no URL field — StreamURL() derives it. Sending them to
-		// Ensure would burn yt-dlp runs with an empty source_url forever.
-		if t.Source == entity.TrackSourceUpload {
-			continue
+	type pendingItem struct {
+		idx     int
+		id      string
+		mediaID string
+	}
+	var pending []pendingItem
+	// Current track.
+	if ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
+		t := tracks[ps.CurrentIndex]
+		if t.Source != entity.TrackSourceUpload && t.MediaID != "" && t.URL == "" {
+			pending = append(pending, pendingItem{ps.CurrentIndex, t.ID, t.MediaID})
 		}
-		if t.MediaID != "" && t.URL == "" {
-			pending = append(pending, t)
+	}
+	// Next track.
+	nextIdx := ps.CurrentIndex + 1
+	if nextIdx >= 0 && nextIdx < len(tracks) {
+		t := tracks[nextIdx]
+		if t.Source != entity.TrackSourceUpload && t.MediaID != "" && t.URL == "" {
+			pending = append(pending, pendingItem{nextIdx, t.ID, t.MediaID})
 		}
 	}
 	if len(pending) == 0 {
@@ -79,32 +86,41 @@ func (uc *MediaUsecase) EnsureRoomMedia(rm *entity.Room) bool {
 	}
 
 	items := make([]map[string]any, 0, len(pending))
-	for _, t := range pending {
-		items = append(items, map[string]any{"media_id": t.MediaID, "source_url": t.SourceURL})
+	for _, p := range pending {
+		t := tracks[p.idx]
+		items = append(items, map[string]any{"media_id": p.mediaID, "source_url": t.SourceURL})
 	}
 	ready, err := uc.mediaClient.Ensure(items)
 	if err != nil {
 		return false
 	}
 
-	// Mutate under the write lock: readers (ToDict/Broadcast/SaveTracks) see
-	// the same *Track pointers. Tracks detached from the queue meanwhile are
-	// harmless to touch.
-	rm.Mu.Lock()
-	defer rm.Mu.Unlock()
-	changed := false
 	readySet := make(map[string]bool)
 	for _, id := range ready {
 		readySet[id] = true
 	}
-	for _, t := range pending {
-		if readySet[t.MediaID] {
-			if t.URL == "" {
-				changed = true
-			}
-			t.LocalPath = t.MediaID + ".m4a"
-			t.URL = "/api/music/" + t.MediaID
+
+	// The queue may have changed (skip/remove/append) while Ensure() was in
+	// flight — it does network I/O. Never write back the stale snapshot:
+	// re-read and stamp resolved URLs only onto tracks still sitting at the
+	// same index with the same ID. Anything else is retried on a later tick.
+	// (The old code did a blind full-queue SetQueue here and resurrected
+	// just-skipped tracks on every autoadvance tick.)
+	fresh, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+	changed := false
+	for _, p := range pending {
+		if !readySet[p.mediaID] {
+			continue
 		}
+		if p.idx >= len(fresh) || fresh[p.idx].ID != p.id || fresh[p.idx].URL != "" {
+			continue
+		}
+		fresh[p.idx].LocalPath = p.mediaID + ".m4a"
+		fresh[p.idx].URL = "/api/music/" + p.mediaID
+		if err := redisc.SetQueueAt(ctx, uc.rdb, roomID, p.idx, fresh[p.idx]); err != nil {
+			continue
+		}
+		changed = true
 	}
 	return changed
 }

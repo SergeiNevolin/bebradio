@@ -55,13 +55,6 @@ func (r *RoomRepo) FindByID(id string) (*entity.Room, error) {
 		return nil, fmt.Errorf("room not found: %w", err)
 	}
 	rm.PasswordHash = passwordHash
-	rm.Queue = make([]*entity.Track, 0)
-	rm.Messages = make([]*entity.ChatMessage, 0)
-	rm.Votes = make([]*entity.TrackVote, 0)
-	rm.SkipVotes = make(map[string]bool)
-	rm.Presence = make(map[string]entity.PresenceInfo)
-	rm.Users = make(map[string]string)
-	rm.RadioSeen = make(map[string]bool)
 	return rm, nil
 }
 
@@ -73,9 +66,6 @@ func (r *RoomRepo) Delete(id string) error {
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, `DELETE FROM track_votes WHERE room_id = $1`, id); err != nil {
-		return fmt.Errorf("delete votes: %w", err)
-	}
 	if _, err := tx.Exec(ctx, `DELETE FROM chat_messages WHERE room_id = $1`, id); err != nil {
 		return fmt.Errorf("delete messages: %w", err)
 	}
@@ -117,35 +107,8 @@ func (r *RoomRepo) ListPublic() ([]map[string]any, error) {
 }
 
 func (r *RoomRepo) SaveTracks(room *entity.Room) error {
-	ctx := context.Background()
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := tx.Exec(ctx, `DELETE FROM tracks WHERE room_id = $1`, room.ID); err != nil {
-		return fmt.Errorf("delete old tracks: %w", err)
-	}
-
-	for i, track := range room.Queue {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO tracks (id, room_id, source, title, artist, url, thumbnail, duration,
-				added_by, position_index, source_url, local_path, media_id, added_at,
-				owner_id, size_bytes, status, error, has_cover, plays, likes)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-				$15, $16, $17, $18, $19, $20, $21)`,
-			track.ID, room.ID, track.Source, track.Title, track.Artist, track.URL, track.Thumbnail,
-			track.Duration, track.AddedBy, i, track.SourceURL, track.LocalPath,
-			track.MediaID, track.AddedAt,
-			nullIfEmpty(track.OwnerID), track.SizeBytes, track.Status, track.Error,
-			track.HasCover, track.Plays, track.Likes,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
+	// No-op: real saving is done via SaveTracksFromSlice from Redis.
+	return nil
 }
 
 func (r *RoomRepo) LoadTracks(roomID string) ([]*entity.Track, error) {
@@ -186,7 +149,7 @@ func (r *RoomRepo) SaveMessage(roomID string, msg *entity.ChatMessage) error {
 func (r *RoomRepo) LoadMessages(roomID string) ([]*entity.ChatMessage, error) {
 	rows, err := r.pool.Query(context.Background(),
 		`SELECT id, user_id, username, text, created_at
-		 FROM chat_messages WHERE room_id = $1 ORDER BY created_at`, roomID,
+		 FROM chat_messages WHERE room_id = $1 ORDER BY created_at DESC LIMIT 200`, roomID,
 	)
 	if err != nil {
 		return nil, err
@@ -201,51 +164,11 @@ func (r *RoomRepo) LoadMessages(roomID string) ([]*entity.ChatMessage, error) {
 		}
 		msgs = append(msgs, m)
 	}
+	// DESC LIMIT gives newest-first; reverse to chronological order.
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
 	return msgs, nil
-}
-
-func (r *RoomRepo) SaveVotes(room *entity.Room) error {
-	ctx := context.Background()
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := tx.Exec(ctx, `DELETE FROM track_votes WHERE room_id = $1`, room.ID); err != nil {
-		return fmt.Errorf("delete old votes: %w", err)
-	}
-
-	for _, v := range room.Votes {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO track_votes (room_id, user_id, track_id, vote) VALUES ($1, $2, $3, $4)`,
-			room.ID, v.UserID, v.TrackID, v.Vote,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
-}
-
-func (r *RoomRepo) LoadVotes(roomID string) ([]*entity.TrackVote, error) {
-	rows, err := r.pool.Query(context.Background(),
-		`SELECT user_id, track_id, vote FROM track_votes WHERE room_id = $1`, roomID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var votes []*entity.TrackVote
-	for rows.Next() {
-		v := &entity.TrackVote{}
-		if err := rows.Scan(&v.UserID, &v.TrackID, &v.Vote); err != nil {
-			continue
-		}
-		votes = append(votes, v)
-	}
-	return votes, nil
 }
 
 func (r *RoomRepo) RecordVisit(userID, roomID string) error {
@@ -285,4 +208,37 @@ func (r *RoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, erro
 		})
 	}
 	return rooms, nil
+}
+
+// SaveTracksFromSlice writes queue tracks from a slice (Redis write-through).
+func (r *RoomRepo) SaveTracksFromSlice(roomID string, tracks []*entity.Track) error {
+	ctx := context.Background()
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM tracks WHERE room_id = $1`, roomID); err != nil {
+		return fmt.Errorf("delete old tracks: %w", err)
+	}
+
+	for i, track := range tracks {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO tracks (id, room_id, source, title, artist, url, thumbnail, duration,
+				added_by, position_index, source_url, local_path, media_id, added_at,
+				owner_id, size_bytes, status, error, has_cover, plays, likes)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+				$15, $16, $17, $18, $19, $20, $21)`,
+			track.ID, roomID, track.Source, track.Title, track.Artist, track.URL, track.Thumbnail,
+			track.Duration, track.AddedBy, i, track.SourceURL, track.LocalPath,
+			track.MediaID, track.AddedAt,
+			nullIfEmpty(track.OwnerID), track.SizeBytes, track.Status, track.Error,
+			track.HasCover, track.Plays, track.Likes,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }

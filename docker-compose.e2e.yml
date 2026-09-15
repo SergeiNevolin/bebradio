@@ -11,6 +11,9 @@ services:
   minio:
     ports: !reset []
 
+  redis:
+    ports: !reset []
+
   backend:
     ports: !reset []
     healthcheck:

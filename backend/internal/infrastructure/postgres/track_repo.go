@@ -24,11 +24,11 @@ const trackColumns = `id, source, owner_id, title, artist, media_id, duration,
 
 // trackDetailSelect joins the owner's username and derives the viewer's liked
 // flag. $1 is always the viewer id ("" for anonymous -> liked is always false).
-const trackDetailSelect = `SELECT t.id, t.source, t.owner_id, u.username, t.title, t.artist, t.media_id,
+const trackDetailSelect = `SELECT t.id, t.source, t.owner_id, COALESCE(u.username, ''), t.title, t.artist, t.media_id,
 	t.duration, t.size_bytes, t.status, t.error, t.has_cover, t.plays, t.likes, t.added_at,
 	t.cover_updated_at,
 	($1 <> '' AND EXISTS (SELECT 1 FROM track_likes l WHERE l.track_id = t.id AND l.user_id = $1)) AS liked
-	FROM tracks t JOIN users u ON u.id = t.owner_id`
+	FROM tracks t LEFT JOIN users u ON u.id = t.owner_id`
 
 const libraryFilter = `t.room_id IS NULL AND t.source = 'upload'`
 

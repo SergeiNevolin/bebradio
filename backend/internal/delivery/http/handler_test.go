@@ -9,11 +9,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/delivery/ws"
 	"github.com/bebradio/backend-go/internal/domain/entity"
 	"github.com/bebradio/backend-go/internal/domain/repository"
 	"github.com/bebradio/backend-go/internal/usecase"
+	"github.com/redis/go-redis/v9"
 )
 
 var testLog = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -35,6 +37,9 @@ type testDeps struct {
 
 func setupTestServer(t *testing.T) *testDeps {
 	t.Helper()
+
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
 	userRepo := repository.NewMockUserRepo()
 	roomRepo := repository.NewMockRoomRepo()
@@ -59,8 +64,8 @@ func setupTestServer(t *testing.T) *testDeps {
 	}
 
 	cfg := &config.Config{
-		MaxDuration:     3600,
-		CORSOrigins:     []string{"http://localhost:3000"},
+		MaxDuration:        3600,
+		CORSOrigins:        []string{"http://localhost:3000"},
 		MashupUserQuota:    20,
 		MashupMaxSize:      60 * 1024 * 1024,
 		MashupCoverMaxSize: 5 * 1024 * 1024,
@@ -75,29 +80,29 @@ func setupTestServer(t *testing.T) *testDeps {
 		return h == "hashed_"+p
 	}
 	auth := usecase.NewAuthUsecase(userRepo, authBridge, testLog)
-	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, authBridge, testLog)
+	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, authBridge, testLog, rdb)
 	userUC := usecase.NewUserUsecase(userRepo, testLog)
 	searchUC := usecase.NewSearchUsecase(mediaClient, cfg, testLog)
-	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, testLog)
+	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, testLog, rdb)
 	trackRepo := repository.NewMockTrackRepo()
 	trackUC := usecase.NewTrackUsecase(trackRepo, mediaClient, cfg, testLog)
-	playback := usecase.NewPlaybackUsecase()
+	playback := usecase.NewPlaybackUsecase(rdb)
 
-	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, trackUC, ws.NewConnectionManager(testLog))
+	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, trackUC, ws.NewConnectionManager(testLog), rdb)
 
 	return &testDeps{
-		userRepo:   userRepo,
-		roomRepo:   roomRepo,
-		trackRepo:  trackRepo,
-		media:      mediaClient,
-		auth:     auth,
-		authUC:   auth,
-		roomUC:   roomUC,
-		userUC:   userUC,
-		searchUC: searchUC,
-		mediaUC:  mediaUC,
-		playback: playback,
-		server:   srv,
+		userRepo:  userRepo,
+		roomRepo:  roomRepo,
+		trackRepo: trackRepo,
+		media:     mediaClient,
+		auth:      auth,
+		authUC:    auth,
+		roomUC:    roomUC,
+		userUC:    userUC,
+		searchUC:  searchUC,
+		mediaUC:   mediaUC,
+		playback:  playback,
+		server:    srv,
 	}
 }
 
@@ -728,32 +733,6 @@ func TestHandleGetUserNotFound(t *testing.T) {
 
 	if w.Code != 404 {
 		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestHandlePlayback(t *testing.T) {
-	d := setupTestServer(t)
-	token := registerUser(t, d, "test@test.com", "testuser", "pass123")
-
-	body, _ := json.Marshal(map[string]string{"name": "Room"})
-	req := httptest.NewRequest("POST", "/api/rooms/", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	w := httptest.NewRecorder()
-	d.server.Router.ServeHTTP(w, req)
-
-	var createResp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &createResp)
-	roomID := createResp["id"].(string)
-
-	playBody, _ := json.Marshal(map[string]string{"action": "next"})
-	req2 := httptest.NewRequest("POST", "/api/rooms/"+roomID+"/playback", bytes.NewReader(playBody))
-	req2.Header.Set("Content-Type", "application/json")
-	w2 := httptest.NewRecorder()
-	d.server.Router.ServeHTTP(w2, req2)
-
-	if w2.Code != 200 {
-		t.Errorf("expected 200, got %d: %s", w2.Code, w2.Body.String())
 	}
 }
 

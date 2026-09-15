@@ -70,17 +70,15 @@ func (m *MockUserRepo) UpdateProfile(id string, bio, avatarURL *string) (*entity
 }
 
 type MockRoomRepo struct {
-	Rooms     map[string]*entity.Room
-	Messages  map[string][]*entity.ChatMessage
-	Votes     map[string][]*entity.TrackVote
-	Tracks    map[string][]*entity.Track
+	Rooms    map[string]*entity.Room
+	Messages map[string][]*entity.ChatMessage
+	Tracks   map[string][]*entity.Track
 }
 
 func NewMockRoomRepo() *MockRoomRepo {
 	return &MockRoomRepo{
 		Rooms:    make(map[string]*entity.Room),
 		Messages: make(map[string][]*entity.ChatMessage),
-		Votes:    make(map[string][]*entity.TrackVote),
 		Tracks:   make(map[string][]*entity.Track),
 	}
 }
@@ -100,7 +98,6 @@ func (m *MockRoomRepo) FindByID(id string) (*entity.Room, error) {
 func (m *MockRoomRepo) Delete(id string) error {
 	delete(m.Rooms, id)
 	delete(m.Messages, id)
-	delete(m.Votes, id)
 	delete(m.Tracks, id)
 	return nil
 }
@@ -119,7 +116,6 @@ func (m *MockRoomRepo) ListPublic() ([]map[string]any, error) {
 }
 
 func (m *MockRoomRepo) SaveTracks(room *entity.Room) error {
-	m.Tracks[room.ID] = room.Queue
 	return nil
 }
 
@@ -136,13 +132,9 @@ func (m *MockRoomRepo) LoadMessages(roomID string) ([]*entity.ChatMessage, error
 	return m.Messages[roomID], nil
 }
 
-func (m *MockRoomRepo) SaveVotes(room *entity.Room) error {
-	m.Votes[room.ID] = room.Votes
+func (m *MockRoomRepo) SaveTracksFromSlice(roomID string, tracks []*entity.Track) error {
+	m.Tracks[roomID] = tracks
 	return nil
-}
-
-func (m *MockRoomRepo) LoadVotes(roomID string) ([]*entity.TrackVote, error) {
-	return m.Votes[roomID], nil
 }
 
 func (m *MockRoomRepo) RecordVisit(userID, roomID string) error {

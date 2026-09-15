@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/delivery/ws"
@@ -12,6 +13,7 @@ import (
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
@@ -26,7 +28,13 @@ type Server struct {
 	playback      *usecase.PlaybackUsecase
 	tracks        *usecase.TrackUsecase
 	manager       *ws.ConnectionManager
+	rdb           *redis.Client
 	uploadLimiter *ratelimit.SlidingWindowLimiter
+	// addMu serializes the check-and-append critical section of handleAddToQueue
+	// (duplicate check + RPush must be atomic, otherwise a double-click adds
+	// the same track twice and the "extra" copy later plays as if resurrected).
+	// Held only around fast Redis ops, never across network I/O.
+	addMu sync.Mutex
 }
 
 func NewServer(
@@ -40,6 +48,7 @@ func NewServer(
 	playback *usecase.PlaybackUsecase,
 	tracks *usecase.TrackUsecase,
 	manager *ws.ConnectionManager,
+	rdb *redis.Client,
 ) *Server {
 	uploadLimit := config.RateLimitUpload
 	if uploadLimit <= 0 {
@@ -57,6 +66,7 @@ func NewServer(
 		playback:      playback,
 		tracks:        tracks,
 		manager:       manager,
+		rdb:           rdb,
 		uploadLimiter: ratelimit.New(uploadLimit, 3600),
 	}
 	s.setupRoutes()
@@ -86,7 +96,6 @@ func (s *Server) setupRoutes() {
 			r.Post("/{roomID}/queue", s.handleAddToQueue)
 			r.Post("/{roomID}/visit", s.handleRecordVisit)
 			r.Get("/{roomID}/lyrics", s.handleGetLyrics)
-			r.Post("/{roomID}/playback", s.handlePlayback)
 		})
 
 		r.Post("/search", s.handleSearch)

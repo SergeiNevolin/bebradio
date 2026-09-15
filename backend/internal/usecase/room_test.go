@@ -1,35 +1,42 @@
 package usecase
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/domain/entity"
 	"github.com/bebradio/backend-go/internal/domain/repository"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
+	"github.com/redis/go-redis/v9"
 )
 
 var testLog2 = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 func testConfig() *config.Config {
 	return &config.Config{
-		RadioRefillAt:     1,
-		RadioBatch:        3,
-		MaxDuration:       3600,
-		AutoAdvanceGrace:  2.5,
-		AdvanceDedupWindow: 1.0,
+		RadioRefillAt:    1,
+		RadioBatch:       3,
+		MaxDuration:      3600,
+		AutoAdvanceGrace: 2.5,
 	}
 }
 
 func TestCreateRoom(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, access, err := uc.CreateRoom("Test Room", "owner1", "")
+	rm, access, err := uc.CreateRoom(ctx, "Test Room", "owner1", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -51,13 +58,17 @@ func TestCreateRoom(t *testing.T) {
 }
 
 func TestCreateRoomWithPassword(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, err := uc.CreateRoom("Private Room", "owner1", "secret123")
+	rm, _, err := uc.CreateRoom(ctx, "Private Room", "owner1", "secret123")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -67,18 +78,24 @@ func TestCreateRoomWithPassword(t *testing.T) {
 }
 
 func TestGetOrLoadRoom(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom("Test Room", "owner1", "")
+	rm, _, _ := uc.CreateRoom(ctx, "Test Room", "owner1", "")
 
-	// Should be in memory
-	found := uc.GetRoom(rm.ID)
+	found, err := uc.GetOrLoadRoom(ctx, rm.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if found == nil {
-		t.Fatal("expected to find room in memory")
+		t.Fatal("expected to find room")
 	}
 	if found.ID != rm.ID {
 		t.Errorf("expected room ID '%s', got '%s'", rm.ID, found.ID)
@@ -86,18 +103,20 @@ func TestGetOrLoadRoom(t *testing.T) {
 }
 
 func TestGetOrLoadRoomFromDB(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	// Create a room in the repo directly
 	room := entity.NewRoom("DB001", "DB Room", "owner1")
 	roomRepo.Save(room)
 
-	// Should load from DB
-	found, err := uc.GetOrLoadRoom("DB001")
+	found, err := uc.GetOrLoadRoom(ctx, "DB001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,24 +126,31 @@ func TestGetOrLoadRoomFromDB(t *testing.T) {
 }
 
 func TestGetOrLoadRoomNotFound(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	_, err := uc.GetOrLoadRoom("NONEXISTENT")
+	_, err := uc.GetOrLoadRoom(ctx, "NONEXISTENT")
 	if err == nil {
 		t.Fatal("expected error for nonexistent room")
 	}
 }
 
 func TestHasRoomAccessNoPassword(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	rm := entity.NewRoom("X", "R", "O")
 	if !uc.HasRoomAccess(rm, "", "") {
@@ -133,11 +159,14 @@ func TestHasRoomAccessNoPassword(t *testing.T) {
 }
 
 func TestHasRoomAccessOwner(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	hash := "hashed_password"
 	rm := entity.NewRoom("X", "R", "owner1")
@@ -149,11 +178,14 @@ func TestHasRoomAccessOwner(t *testing.T) {
 }
 
 func TestHasRoomAccessWithToken(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	hash := "hashed_password"
 	rm := entity.NewRoom("X", "R", "owner1")
@@ -165,11 +197,14 @@ func TestHasRoomAccessWithToken(t *testing.T) {
 }
 
 func TestHasRoomAccessDenied(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	hash := "hashed_password"
 	rm := entity.NewRoom("X", "R", "owner1")
@@ -181,11 +216,14 @@ func TestHasRoomAccessDenied(t *testing.T) {
 }
 
 func TestJoinRoomNoPassword(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	rm := entity.NewRoom("X", "R", "O")
 
@@ -199,11 +237,14 @@ func TestJoinRoomNoPassword(t *testing.T) {
 }
 
 func TestJoinRoomCorrectPassword(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	hash := "hashed_secret123"
 	rm := entity.NewRoom("X", "R", "O")
@@ -219,11 +260,14 @@ func TestJoinRoomCorrectPassword(t *testing.T) {
 }
 
 func TestJoinRoomWrongPassword(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	hash := "hashed_secret123"
 	rm := entity.NewRoom("X", "R", "O")
@@ -243,17 +287,23 @@ func TestJoinRoomWrongPassword(t *testing.T) {
 }
 
 func TestUpdateRoomSettings(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	rm := entity.NewRoom("X", "R", "O")
 
 	f := false
 	tr := true
-	uc.UpdateRoomSettings(rm, &tr, &f, nil, nil)
+	if err := uc.UpdateRoomSettings(ctx, rm, &tr, &f, nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if !rm.AllowAnonymousAdd {
 		t.Error("expected AllowAnonymousAdd true")
@@ -264,16 +314,22 @@ func TestUpdateRoomSettings(t *testing.T) {
 }
 
 func TestUpdateRoomSettingsSetPassword(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	rm := entity.NewRoom("X", "R", "O")
 
 	pw := "newpassword"
-	uc.UpdateRoomSettings(rm, nil, nil, nil, &pw)
+	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, &pw); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if rm.PasswordHash == nil {
 		t.Error("expected password hash to be set")
@@ -281,18 +337,24 @@ func TestUpdateRoomSettingsSetPassword(t *testing.T) {
 }
 
 func TestUpdateRoomSettingsRemovePassword(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	hash := "old_hash"
 	rm := entity.NewRoom("X", "R", "O")
 	rm.PasswordHash = &hash
 
 	pw := ""
-	uc.UpdateRoomSettings(rm, nil, nil, nil, &pw)
+	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, &pw); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if rm.PasswordHash != nil {
 		t.Error("expected password hash to be removed")
@@ -300,34 +362,43 @@ func TestUpdateRoomSettingsRemovePassword(t *testing.T) {
 }
 
 func TestDeleteRoom(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom("To Delete", "owner1", "")
+	rm, _, _ := uc.CreateRoom(ctx, "To Delete", "owner1", "")
 
-	err := uc.DeleteRoom(rm)
+	err := uc.DeleteRoom(ctx, rm)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if uc.GetRoom(rm.ID) != nil {
-		t.Error("expected room to be removed from memory")
+	found, _ := uc.GetOrLoadRoom(ctx, rm.ID)
+	if found != nil {
+		t.Error("expected room to be removed")
 	}
 }
 
 func TestListPublicRooms(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	uc.CreateRoom("Public Room", "owner1", "")
+	uc.CreateRoom(ctx, "Public Room", "owner1", "")
 
-	rooms, err := uc.ListPublicRooms()
+	rooms, err := uc.ListPublicRooms(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -337,76 +408,67 @@ func TestListPublicRooms(t *testing.T) {
 }
 
 func TestListPublicRoomsExcludesPrivate(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom("Private Room", "owner1", "")
+	rm, _, _ := uc.CreateRoom(ctx, "Private Room", "owner1", "")
 	rm.IsPrivate = true
 	roomRepo.Save(rm)
 
-	rooms, _ := uc.ListPublicRooms()
+	rooms, _ := uc.ListPublicRooms(ctx)
 	if len(rooms) != 0 {
 		t.Errorf("expected 0 public rooms, got %d", len(rooms))
 	}
 }
 
-func TestSaveVotesPersistsToRepo(t *testing.T) {
+func TestGetOrLoadRoomDoesNotResurrectSkippedTracks(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
 	userRepo := repository.NewMockUserRepo()
 	mediaClient := repository.NewMockMediaClient()
 	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom("Vote Room", "owner1", "")
-	rm.Votes = []*entity.TrackVote{
-		{UserID: "u1", TrackID: "t1", Vote: 1},
-		{UserID: "u2", TrackID: "t1", Vote: -1},
-		{UserID: "u3", TrackID: "t2", Vote: 1},
-	}
+	rm, _, _ := uc.CreateRoom(ctx, "Skip Room", "owner1", "")
 
-	if err := uc.SaveVotes(rm); err != nil {
+	// Stale Postgres rows, as left behind by a skip that wasn't persisted yet.
+	roomRepo.Tracks[rm.ID] = []*entity.Track{{ID: "stale1"}, {ID: "stale2"}}
+
+	// First load hydrates Redis from Postgres.
+	if _, err := uc.GetOrLoadRoom(ctx, rm.ID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	saved, err := roomRepo.LoadVotes(rm.ID)
-	if err != nil {
-		t.Fatalf("unexpected error loading votes: %v", err)
+	q, _ := redisc.GetQueue(ctx, rdb, rm.ID)
+	if len(q) != 2 {
+		t.Fatalf("expected 2 hydrated tracks, got %d", len(q))
 	}
-	if len(saved) != 3 {
-		t.Fatalf("expected 3 votes in repo, got %d", len(saved))
+
+	// Simulate skipping everything in Redis; Postgres stays stale.
+	redisc.RemoveAt(ctx, rdb, rm.ID, 0)
+	redisc.RemoveAt(ctx, rdb, rm.ID, 0)
+	q, _ = redisc.GetQueue(ctx, rdb, rm.ID)
+	if len(q) != 0 {
+		t.Fatalf("expected empty queue after skips, got %d", len(q))
 	}
-}
 
-func TestSaveVotesOverwritesPrevious(t *testing.T) {
-	roomRepo := repository.NewMockRoomRepo()
-	userRepo := repository.NewMockUserRepo()
-	mediaClient := repository.NewMockMediaClient()
-	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2)
-
-	rm, _, _ := uc.CreateRoom("Vote Room", "owner1", "")
-
-	rm.Votes = []*entity.TrackVote{
-		{UserID: "u1", TrackID: "t1", Vote: 1},
-	}
-	uc.SaveVotes(rm)
-
-	rm.Votes = []*entity.TrackVote{
-		{UserID: "u1", TrackID: "t1", Vote: -1},
-		{UserID: "u2", TrackID: "t1", Vote: 1},
-	}
-	uc.SaveVotes(rm)
-
-	saved, _ := roomRepo.LoadVotes(rm.ID)
-	if len(saved) != 2 {
-		t.Fatalf("expected 2 votes after overwrite, got %d", len(saved))
-	}
-	for _, v := range saved {
-		if v.UserID == "u1" && v.Vote != -1 {
-			t.Errorf("expected u1 vote to be -1, got %d", v.Vote)
+	// Repeated loads (autoadvance ticks, new connections) must not resurrect.
+	for i := 0; i < 3; i++ {
+		if _, err := uc.GetOrLoadRoom(ctx, rm.ID); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
+	}
+	q, _ = redisc.GetQueue(ctx, rdb, rm.ID)
+	if len(q) != 0 {
+		t.Errorf("skipped tracks resurrected: expected empty queue, got %d tracks", len(q))
 	}
 }

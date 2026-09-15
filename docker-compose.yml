@@ -43,6 +43,20 @@ services:
     networks:
       - app-net
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-net
+
   music-service:
     build: ./music-service
     ports:
@@ -68,6 +82,7 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/bebradio
+      - REDIS_URL=redis://redis:6379
       - SECRET_KEY=dev-secret-key
       - CORS_ORIGINS=http://localhost:3000
       - MUSIC_SERVICE_URL=http://music-service:8100
@@ -76,6 +91,8 @@ services:
       - MASHUP_USER_QUOTA=20
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       music-service:
         condition: service_started
@@ -105,3 +122,4 @@ networks:
 volumes:
   pgdata:
   miniodata:
+  redisdata:

@@ -1,22 +1,33 @@
 package usecase
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/bebradio/backend-go/internal/domain/entity"
 	"github.com/bebradio/backend-go/internal/domain/repository"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
+	"github.com/redis/go-redis/v9"
 )
 
 var chatLog = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 func TestSendMessage(t *testing.T) {
-	roomRepo := repository.NewMockRoomRepo()
-	uc := NewChatUsecase(roomRepo, chatLog)
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
 
-	rm := entity.NewRoom("X", "R", "O")
-	msg := uc.SendMessage(rm, "u1", "Alice", "Hello!")
+	roomRepo := repository.NewMockRoomRepo()
+	uc := NewChatUsecase(roomRepo, chatLog, rdb)
+
+	roomID := "X"
+	rm := entity.NewRoom(roomID, "R", "O")
+	roomRepo.Save(rm)
+
+	msg := uc.SendMessage(ctx, roomID, "u1", "Alice", "Hello!")
 
 	if msg == nil {
 		t.Fatal("expected non-nil message")
@@ -36,47 +47,69 @@ func TestSendMessage(t *testing.T) {
 }
 
 func TestSendMessageAppendsToRoom(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
-	uc := NewChatUsecase(roomRepo, chatLog)
+	uc := NewChatUsecase(roomRepo, chatLog, rdb)
 
-	rm := entity.NewRoom("X", "R", "O")
-	uc.SendMessage(rm, "u1", "Alice", "First")
-	uc.SendMessage(rm, "u2", "Bob", "Second")
+	roomID := "X"
+	rm := entity.NewRoom(roomID, "R", "O")
+	roomRepo.Save(rm)
 
-	if len(rm.Messages) != 2 {
-		t.Errorf("expected 2 messages, got %d", len(rm.Messages))
+	uc.SendMessage(ctx, roomID, "u1", "Alice", "First")
+	uc.SendMessage(ctx, roomID, "u2", "Bob", "Second")
+
+	msgs, _ := redisc.GetMessages(ctx, rdb, roomID)
+	if len(msgs) != 2 {
+		t.Errorf("expected 2 messages, got %d", len(msgs))
 	}
-	if rm.Messages[0].Text != "First" {
-		t.Errorf("expected first message 'First', got '%s'", rm.Messages[0].Text)
+	if msgs[0].Text != "First" {
+		t.Errorf("expected first message 'First', got '%s'", msgs[0].Text)
 	}
-	if rm.Messages[1].Text != "Second" {
-		t.Errorf("expected second message 'Second', got '%s'", rm.Messages[1].Text)
+	if msgs[1].Text != "Second" {
+		t.Errorf("expected second message 'Second', got '%s'", msgs[1].Text)
 	}
 }
 
 func TestSendMessageTrimsToMax(t *testing.T) {
-	roomRepo := repository.NewMockRoomRepo()
-	uc := NewChatUsecase(roomRepo, chatLog)
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
 
-	rm := entity.NewRoom("X", "R", "O")
-	// Add more than MaxChatMessages
+	roomRepo := repository.NewMockRoomRepo()
+	uc := NewChatUsecase(roomRepo, chatLog, rdb)
+
+	roomID := "X"
+	rm := entity.NewRoom(roomID, "R", "O")
+	roomRepo.Save(rm)
+
 	for i := 0; i < entity.MaxChatMessages+10; i++ {
-		uc.SendMessage(rm, "u1", "Alice", "msg")
+		uc.SendMessage(ctx, roomID, "u1", "Alice", "msg")
 	}
 
-	if len(rm.Messages) != entity.MaxChatMessages {
-		t.Errorf("expected %d messages (max), got %d", entity.MaxChatMessages, len(rm.Messages))
+	msgs, _ := redisc.GetMessages(ctx, rdb, roomID)
+	if len(msgs) != entity.MaxChatMessages {
+		t.Errorf("expected %d messages (max), got %d", entity.MaxChatMessages, len(msgs))
 	}
 }
 
 func TestSendMessageSavesToRepo(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
 	roomRepo := repository.NewMockRoomRepo()
-	uc := NewChatUsecase(roomRepo, chatLog)
+	uc := NewChatUsecase(roomRepo, chatLog, rdb)
 
-	rm := entity.NewRoom("X", "R", "O")
-	uc.SendMessage(rm, "u1", "Alice", "Persist me")
+	roomID := "X"
+	rm := entity.NewRoom(roomID, "R", "O")
+	roomRepo.Save(rm)
 
-	if len(roomRepo.Messages["X"]) != 1 {
-		t.Errorf("expected 1 message saved to repo, got %d", len(roomRepo.Messages["X"]))
+	uc.SendMessage(ctx, roomID, "u1", "Alice", "Persist me")
+
+	if len(roomRepo.Messages[roomID]) != 1 {
+		t.Errorf("expected 1 message saved to repo, got %d", len(roomRepo.Messages[roomID]))
 	}
 }

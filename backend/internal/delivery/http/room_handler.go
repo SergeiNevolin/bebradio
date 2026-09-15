@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 )
@@ -26,20 +27,22 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		req.Name = "My Room"
 	}
 
-	rm, access, err := s.room.CreateRoom(req.Name, userID, req.Password)
+	ctx := r.Context()
+	rm, access, err := s.room.CreateRoom(ctx, req.Name, userID, req.Password)
 	if err != nil {
 		s.log.Error("create room failed", "error", err, "user_id", userID)
 		s.writeError(w, 500, "Failed to create room")
 		return
 	}
 
-	result := rm.ToDict()
+	result := redisc.BuildToDict(ctx, s.rdb, rm)
 	result["access"] = access
 	s.writeJSON(w, 200, result)
 }
 
 func (s *Server) handleListRooms(w http.ResponseWriter, r *http.Request) {
-	rooms, err := s.room.ListPublicRooms()
+	ctx := r.Context()
+	rooms, err := s.room.ListPublicRooms(ctx)
 	if err != nil {
 		s.log.Error("list rooms failed", "error", err)
 		s.writeError(w, 500, "Failed to list rooms")
@@ -57,7 +60,8 @@ func (s *Server) handleRecentRooms(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, 401, "Not authenticated")
 		return
 	}
-	rooms, err := s.room.RecentRooms(userID, 6)
+	ctx := r.Context()
+	rooms, err := s.room.RecentRooms(ctx, userID, 6)
 	if err != nil {
 		s.log.Error("recent rooms failed", "error", err)
 		s.writeError(w, 500, "Failed to get recent rooms")
@@ -83,8 +87,9 @@ func (s *Server) handleGetRoom(w http.ResponseWriter, r *http.Request) {
 	roomID := chi.URLParam(r, "roomID")
 	access := r.URL.Query().Get("access")
 	userID := s.getUserOptional(r)
+	ctx := r.Context()
 
-	rm, err := s.room.GetOrLoadRoom(roomID)
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
 	if err != nil {
 		s.writeError(w, 404, "Room not found")
 		return
@@ -92,17 +97,16 @@ func (s *Server) handleGetRoom(w http.ResponseWriter, r *http.Request) {
 
 	if !s.room.HasRoomAccess(rm, userID, access) {
 		s.writeJSON(w, 200, map[string]any{
-			"id":            rm.ID,
-			"name":          rm.Name,
-			"has_password":  true,
-			"locked":        true,
+			"id":           rm.ID,
+			"name":         rm.Name,
+			"has_password": true,
+			"locked":       true,
 		})
 		return
 	}
 
-	result := rm.ToDict()
+	result := redisc.BuildToDict(ctx, s.rdb, rm)
 	if rm.PasswordHash != nil && userID != "" && userID == rm.OwnerID {
-		// Owner gets an access token for password-protected rooms
 		t, err := s.room.CreateAccessToken(rm.ID)
 		if err != nil {
 			s.log.Error("failed to create access token", "room_id", rm.ID, "error", err)
@@ -121,7 +125,8 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rm, err := s.room.GetOrLoadRoom(roomID)
+	ctx := r.Context()
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
 	if err != nil {
 		s.writeError(w, 404, "Room not found")
 		return
@@ -139,14 +144,15 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
-	if err := s.room.UpdateRoomSettings(rm, req.AllowAnonymousAdd, req.IsPrivate, req.AutoRadio, req.Password); err != nil {
+	if err := s.room.UpdateRoomSettings(ctx, rm, req.AllowAnonymousAdd, req.IsPrivate, req.AutoRadio, req.Password); err != nil {
 		s.log.Error("update room settings failed", "error", err, "room_id", roomID)
 		s.writeError(w, 500, "Failed to update room settings")
 		return
 	}
 
-	s.manager.Broadcast(roomID, rm.ToDict())
-	s.writeJSON(w, 200, rm.ToDict())
+	result := redisc.BuildToDict(ctx, s.rdb, rm)
+	s.manager.Broadcast(roomID, result)
+	s.writeJSON(w, 200, result)
 }
 
 func (s *Server) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +163,8 @@ func (s *Server) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rm, err := s.room.GetOrLoadRoom(roomID)
+	ctx := r.Context()
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
 	if err != nil {
 		s.writeError(w, 404, "Room not found")
 		return
@@ -167,7 +174,7 @@ func (s *Server) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.room.DeleteRoom(rm); err != nil {
+	if err := s.room.DeleteRoom(ctx, rm); err != nil {
 		s.log.Error("delete room failed", "error", err, "room_id", roomID)
 		s.writeError(w, 500, "Failed to delete room")
 		return
@@ -187,7 +194,8 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		req.Username = "Anonymous"
 	}
 
-	rm, err := s.room.GetOrLoadRoom(roomID)
+	ctx := r.Context()
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
 	if err != nil {
 		s.writeError(w, 404, "Room not found")
 		return
@@ -204,19 +212,19 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, 200, map[string]any{
-		"room":     rm.ToDict(),
-		"username": req.Username,
-		"access":   access,
-	})
+	result := redisc.BuildToDict(ctx, s.rdb, rm)
+	result["username"] = req.Username
+	result["access"] = access
+	s.writeJSON(w, 200, result)
 }
 
 func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	roomID := chi.URLParam(r, "roomID")
 	access := r.URL.Query().Get("access")
 	userID := s.getUserOptional(r)
+	ctx := r.Context()
 
-	rm, err := s.room.GetOrLoadRoom(roomID)
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
 	if err != nil {
 		s.writeError(w, 404, "Room not found")
 		return
@@ -237,7 +245,6 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get username for added_by
 	addedBy := req.AddedBy
 	if addedBy == "" {
 		addedBy = "Anonymous"
@@ -249,96 +256,112 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Identity arrives with the data: uploads carry the id minted at upload
-	// time, YouTube entries — the id minted per resolve call.
 	var track *entity.Track
 	if req.TrackID != "" {
-		// A track is a track: snapshot a ready library upload into the queue
-		// under its own id (votes are scoped per room, so sharing is safe).
-		// Re-adding is idempotent: return the entry already queued.
 		lib, err := s.tracks.Get(req.TrackID, userID)
 		if err != nil || lib.Source != entity.TrackSourceUpload || lib.Status != entity.TrackStatusReady {
 			s.writeError(w, 400, "Track not available")
 			return
 		}
-		// Scan-and-append under one write lock: two concurrent adds must not
-		// both pass the dedupe check (shared id would violate the per-room
-		// queue uniqueness).
-		rm.Mu.Lock()
-		for _, t := range rm.Queue {
+		// Check for duplicates in Redis queue (under lock: check+append must
+		// be atomic or a double-click appends the same track twice).
+		s.addMu.Lock()
+		queue, _ := redisc.GetQueue(ctx, s.rdb, roomID)
+		for _, t := range queue {
 			if t.ID == lib.ID {
-				existing := t.ToDict()
-				rm.Mu.Unlock()
-				s.writeJSON(w, 200, existing)
+				s.addMu.Unlock()
+				s.writeJSON(w, 200, t.ToDict())
 				return
 			}
 		}
 		track = entity.QueueCopyFromUpload(lib, addedBy)
-		rm.Queue = append(rm.Queue, track)
-		if len(rm.Queue) == 1 {
-			rm.IsPlaying = true
-			rm.Position = 0
-			rm.LastSyncAt = time.Now()
+		redisc.AppendTrack(ctx, s.rdb, roomID, track)
+
+		queueLen, _ := redisc.GetQueueLen(ctx, s.rdb, roomID)
+		if queueLen == 1 {
+			ps, _ := redisc.GetPlayback(ctx, s.rdb, roomID)
+			if ps == nil {
+				ps = &redisc.PlaybackState{}
+			}
+			ps.IsPlaying = true
+			ps.Position = 0
+			ps.LastSyncAt = time.Now()
+			redisc.SetPlayback(ctx, s.rdb, roomID, ps)
 		}
-		rm.Mu.Unlock()
+		s.addMu.Unlock()
 
 		go func() {
-			if err := s.room.SaveTracks(rm); err != nil {
+			if err := s.room.SaveTracks(ctx, rm); err != nil {
 				s.log.Error("save tracks failed", "error", err, "room_id", roomID)
 			}
 		}()
 
-		s.manager.Broadcast(roomID, rm.ToDict())
-
+		s.manager.Broadcast(roomID, redisc.BuildToDict(ctx, s.rdb, rm))
 		s.writeJSON(w, 200, track.ToDict())
 		return
-	} else {
-		info, err := s.media.FetchTrack(req.URL)
-		if err != nil {
-			s.log.Error("fetch track failed", "error", err, "url", req.URL)
-			s.writeError(w, 400, "Could not fetch video info")
-			return
-		}
-
-		duration, _ := info["duration"].(float64)
-		if int(duration) > s.config.MaxDuration {
-			s.writeError(w, 400, "Video too long")
-			return
-		}
-
-		track = entity.TrackFromYouTube(info, addedBy)
-		if track.ID == "" {
-			s.log.Error("resolve returned no track id", "url", req.URL)
-			s.writeError(w, 502, "Music service unavailable, try again")
-			return
-		}
-		if track.SourceURL == "" {
-			track.SourceURL = req.URL
-		}
 	}
 
-	rm.Mu.Lock()
-	rm.Queue = append(rm.Queue, track)
+	info, err := s.media.FetchTrack(req.URL)
+	if err != nil {
+		s.log.Error("fetch track failed", "error", err, "url", req.URL)
+		s.writeError(w, 400, "Could not fetch video info")
+		return
+	}
+
+	duration, _ := info["duration"].(float64)
+	if int(duration) > s.config.MaxDuration {
+		s.writeError(w, 400, "Video too long")
+		return
+	}
+
+	track = entity.TrackFromYouTube(info, addedBy)
+	if track.ID == "" {
+		s.log.Error("resolve returned no track id", "url", req.URL)
+		s.writeError(w, 502, "Music service unavailable, try again")
+		return
+	}
+	if track.SourceURL == "" {
+		track.SourceURL = req.URL
+	}
+
+	// Duplicate check (under lock, same as the upload branch): without it a
+	// double-click appends the same video twice and the leftover copy plays
+	// later as if the skipped track "came back".
+	s.addMu.Lock()
+	queue, _ := redisc.GetQueue(ctx, s.rdb, roomID)
+	for _, t := range queue {
+		if t.ID == track.ID || (track.SourceURL != "" && t.SourceURL == track.SourceURL) {
+			s.addMu.Unlock()
+			s.writeJSON(w, 200, t.ToDict())
+			return
+		}
+	}
+	redisc.AppendTrack(ctx, s.rdb, roomID, track)
 	if track.SourceURL != "" {
-		rm.RadioSeedURL = track.SourceURL
+		redisc.SetPlaybackField(ctx, s.rdb, roomID, "radio_seed_url", track.SourceURL)
 	}
-	if len(rm.Queue) == 1 {
-		rm.IsPlaying = true
-		rm.Position = 0
-		rm.LastSyncAt = time.Now()
+
+	queueLen, _ := redisc.GetQueueLen(ctx, s.rdb, roomID)
+	if queueLen == 1 {
+		ps, _ := redisc.GetPlayback(ctx, s.rdb, roomID)
+		if ps == nil {
+			ps = &redisc.PlaybackState{}
+		}
+		ps.IsPlaying = true
+		ps.Position = 0
+		ps.LastSyncAt = time.Now()
+		redisc.SetPlayback(ctx, s.rdb, roomID, ps)
 	}
-	rm.Mu.Unlock()
+	s.addMu.Unlock()
 
 	go func() {
-		if err := s.room.SaveTracks(rm); err != nil {
+		if err := s.room.SaveTracks(ctx, rm); err != nil {
 			s.log.Error("save tracks failed", "error", err, "room_id", roomID)
 		}
 	}()
 
-	s.manager.Broadcast(roomID, rm.ToDict())
-
-	result := track.ToDict()
-	s.writeJSON(w, 200, result)
+	s.manager.Broadcast(roomID, redisc.BuildToDict(ctx, s.rdb, rm))
+	s.writeJSON(w, 200, track.ToDict())
 }
 
 func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
@@ -346,8 +369,9 @@ func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 	access := r.URL.Query().Get("access")
 	userID := s.getUserOptional(r)
 	lang := r.URL.Query().Get("lang")
+	ctx := r.Context()
 
-	rm, err := s.room.GetOrLoadRoom(roomID)
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
 	if err != nil {
 		s.writeError(w, 404, "Room not found")
 		return
@@ -358,7 +382,7 @@ func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	track := rm.CurrentTrack()
+	track := redisc.CurrentTrack(ctx, s.rdb, roomID)
 	if track == nil || track.MediaID == "" {
 		s.writeJSON(w, 200, map[string]any{
 			"available": false,
@@ -377,45 +401,4 @@ func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 		"auto":      subs["auto"],
 		"cues":      cues,
 	})
-}
-
-func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request) {
-	roomID := chi.URLParam(r, "roomID")
-	access := r.URL.Query().Get("access")
-	userID := s.getUserOptional(r)
-
-	rm, err := s.room.GetOrLoadRoom(roomID)
-	if err != nil {
-		s.writeError(w, 404, "Room not found")
-		return
-	}
-
-	if !s.room.HasRoomAccess(rm, userID, access) {
-		s.writeError(w, 403, "This room is password protected")
-		return
-	}
-
-	var req struct {
-		Action   string   `json:"action"`
-		Position *float64 `json:"position"`
-		Index    *int     `json:"index"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-
-	switch req.Action {
-	case "next":
-		s.playback.GoNext(rm)
-	case "prev":
-		s.playback.GoPrev(rm)
-	case "jump":
-		if req.Index != nil {
-			s.playback.JumpTo(rm, *req.Index)
-		}
-	case "seek":
-		if req.Position != nil {
-			s.playback.SeekTo(rm, *req.Position)
-		}
-	}
-
-	s.writeJSON(w, 200, rm.ToDict())
 }

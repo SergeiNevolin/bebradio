@@ -1,15 +1,18 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"time"
 
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/domain/entity"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
 	"github.com/bebradio/backend-go/internal/pkg/id"
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 var reactionEmojis = map[string]bool{
@@ -25,6 +28,7 @@ type Handler struct {
 	radio    *usecase.RadioUsecase
 	media    *usecase.MediaUsecase
 	config   *config.Config
+	rdb      *redis.Client
 	log      *slog.Logger
 }
 
@@ -36,6 +40,7 @@ func NewHandler(
 	radio *usecase.RadioUsecase,
 	media *usecase.MediaUsecase,
 	config *config.Config,
+	rdb *redis.Client,
 	log *slog.Logger,
 ) *Handler {
 	return &Handler{
@@ -46,14 +51,16 @@ func NewHandler(
 		radio:    radio,
 		media:    media,
 		config:   config,
+		rdb:      rdb,
 		log:      log,
 	}
 }
 
 func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access string) {
 	roomID = toUpper(roomID)
+	ctx := context.Background()
 
-	rm, err := h.room.GetOrLoadRoom(roomID)
+	rm, err := h.room.GetOrLoadRoom(ctx, roomID)
 	if err != nil {
 		h.sendError(conn, "Room not found")
 		conn.Close()
@@ -69,16 +76,12 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access string) {
 	}
 
 	h.manager.Connect(roomID, conn)
-	h.manager.SendJSON(roomID, conn, rm.ToDict())
+	h.manager.SendJSON(roomID, conn, redisc.BuildToDict(ctx, h.rdb, rm))
 
 	defer func() {
 		h.manager.Disconnect(roomID, conn)
-		rm.Mu.Lock()
-		// Clean up presence for this connection
-		addr := conn.RemoteAddr().String()
-		delete(rm.Presence, addr)
-		rm.Mu.Unlock()
-		h.manager.Broadcast(roomID, rm.ToDict())
+		redisc.RemovePresence(ctx, h.rdb, roomID, conn.RemoteAddr().String())
+		h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
 	}()
 
 	for {
@@ -93,48 +96,39 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access string) {
 		}
 
 		action, _ := msg["action"].(string)
-		userID, _ := msg["user_id"].(string)
-
-		rm.Mu.Lock()
-		if userID != "" {
-			rm.Users[conn.RemoteAddr().String()] = userID
-		}
-		rm.Mu.Unlock()
 
 		switch action {
 		case "hello":
-			h.handleHello(rm, conn, msg, roomID)
+			h.handleHello(ctx, rm, conn, msg, roomID)
 		case "reaction":
-			h.handleReaction(rm, msg, roomID)
+			h.handleReaction(ctx, rm, conn, msg, roomID)
 		case "next":
-			h.handleNext(rm, roomID)
+			h.handleNext(ctx, rm, roomID)
 		case "prev":
-			h.handlePrev(rm, roomID)
+			h.handlePrev(ctx, roomID)
 		case "jump":
-			h.handleJump(rm, msg, roomID)
+			h.handleJump(ctx, msg, roomID)
 		case "seek", "sync":
-			h.handleSeek(rm, msg)
+			h.handleSeek(ctx, msg, roomID)
 		case "chat":
-			h.handleChat(rm, msg, roomID)
+			h.handleChat(ctx, rm, conn, msg, roomID)
 		case "vote":
-			h.handleVote(rm, msg, roomID)
+			h.handleVote(ctx, rm, conn, msg, roomID)
 		case "skip_vote":
-			h.handleSkipVote(rm, msg, roomID)
-		case "clear_skip_votes":
-			rm.Mu.Lock()
-			rm.SkipVotes = make(map[string]bool)
-			rm.Mu.Unlock()
+			h.handleSkipVote(ctx, rm, conn, roomID)
 		}
 
-		h.manager.Broadcast(roomID, rm.ToDict())
+		if action != "sync" {
+			h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
+		}
 
-		if h.radio.NeedsRefill(rm) {
-			go h.backgroundRefill(rm, roomID)
+		if h.radio.NeedsRefill(ctx, roomID, rm.AutoRadio) {
+			go h.backgroundRefill(ctx, rm, roomID)
 		}
 	}
 }
 
-func (h *Handler) handleHello(rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
+func (h *Handler) handleHello(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
 	userID, _ := msg["user_id"].(string)
 	username, _ := msg["username"].(string)
 	if username == "" {
@@ -144,26 +138,26 @@ func (h *Handler) handleHello(rm *entity.Room, conn *websocket.Conn, msg map[str
 		username = username[:30]
 	}
 
-	rm.Mu.Lock()
 	id := userID
 	if id == "" {
 		id = "anon:" + conn.RemoteAddr().String()
 	}
-	rm.Presence[conn.RemoteAddr().String()] = entity.PresenceInfo{
-		ID:   id,
-		Name: username,
-	}
-	rm.Mu.Unlock()
+	info := &entity.PresenceInfo{ID: id, Name: username}
+	redisc.SetPresence(ctx, h.rdb, roomID, conn.RemoteAddr().String(), info)
+
+	h.manager.BindUser(roomID, conn, id)
 }
 
-func (h *Handler) handleReaction(rm *entity.Room, msg map[string]any, roomID string) {
+func (h *Handler) handleReaction(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
 	emoji, _ := msg["emoji"].(string)
-	username, _ := msg["username"].(string)
 	if !reactionEmojis[emoji] {
 		return
 	}
-	if username == "" {
-		username = "Anonymous"
+
+	username := "Anonymous"
+	presence, _ := redisc.GetPresence(ctx, h.rdb, roomID)
+	if info, ok := presence[conn.RemoteAddr().String()]; ok && info.Name != "" {
+		username = info.Name
 	}
 
 	h.manager.Broadcast(roomID, map[string]any{
@@ -174,157 +168,129 @@ func (h *Handler) handleReaction(rm *entity.Room, msg map[string]any, roomID str
 	})
 }
 
-func (h *Handler) handleNext(rm *entity.Room, roomID string) {
-	changed := h.playback.GoNext(rm)
+func (h *Handler) handleNext(ctx context.Context, rm *entity.Room, roomID string) {
+	changed := h.playback.GoNext(ctx, roomID)
 	if changed {
-		h.media.EnsureRoomMedia(rm)
-		if err := h.room.SaveTracks(rm); err != nil {
+		h.media.EnsureRoomMedia(ctx, roomID)
+		if err := h.room.SaveTracks(ctx, rm); err != nil {
 			h.log.Error("save tracks after next failed", "room_id", roomID, "error", err)
 		}
 	}
 }
 
-func (h *Handler) handlePrev(rm *entity.Room, roomID string) {
-	h.playback.GoPrev(rm)
+func (h *Handler) handlePrev(ctx context.Context, roomID string) {
+	h.playback.GoPrev(ctx, roomID)
 }
 
-func (h *Handler) handleJump(rm *entity.Room, msg map[string]any, roomID string) {
+func (h *Handler) handleJump(ctx context.Context, msg map[string]any, roomID string) {
 	if index, ok := msg["index"].(float64); ok {
-		h.playback.JumpTo(rm, int(index))
+		h.playback.JumpTo(ctx, roomID, int(index))
 	}
 }
 
-func (h *Handler) handleSeek(rm *entity.Room, msg map[string]any) {
+func (h *Handler) handleSeek(ctx context.Context, msg map[string]any, roomID string) {
 	if pos, ok := msg["position"].(float64); ok {
-		h.playback.SeekTo(rm, pos)
+		h.playback.SeekTo(ctx, roomID, pos)
 	}
 }
 
-func (h *Handler) handleChat(rm *entity.Room, msg map[string]any, roomID string) {
+func (h *Handler) handleChat(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
 	text, _ := msg["text"].(string)
-	userID, _ := msg["user_id"].(string)
-	username, _ := msg["username"].(string)
-
 	text = trimSpace(text)
 	if text == "" {
 		return
 	}
-	if username == "" {
-		username = "Anonymous"
+
+	userID := h.manager.GetUserID(roomID, conn)
+	username := "Anonymous"
+	presence, _ := redisc.GetPresence(ctx, h.rdb, roomID)
+	if info, ok := presence[conn.RemoteAddr().String()]; ok && info.Name != "" {
+		username = info.Name
 	}
 
-	chatMsg := h.chat.SendMessage(rm, userID, username, text)
+	chatMsg := h.chat.SendMessage(ctx, roomID, userID, username, text)
 	h.manager.Broadcast(roomID, map[string]any{
 		"type":    "chat",
 		"message": chatMsg.ToDict(),
 	})
 }
 
-func (h *Handler) handleVote(rm *entity.Room, msg map[string]any, roomID string) {
-	userID, _ := msg["user_id"].(string)
+func (h *Handler) handleVote(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
+	userID := h.manager.GetUserID(roomID, conn)
 	trackID, _ := msg["track_id"].(string)
 	voteVal, _ := msg["vote"].(float64)
 
-	if userID == "" || trackID == "" {
-		return
-	}
-
-	rm.Mu.Lock()
-	newVotes := make([]*entity.TrackVote, 0)
-	for _, v := range rm.Votes {
-		if !(v.UserID == userID && v.TrackID == trackID) {
-			newVotes = append(newVotes, v)
-		}
-	}
-	rm.Votes = newVotes
-
-	if voteVal == 1 || voteVal == -1 {
-		rm.Votes = append(rm.Votes, &entity.TrackVote{
-			UserID:  userID,
-			TrackID: trackID,
-			Vote:    int(voteVal),
-		})
-	}
-	rm.Mu.Unlock()
-
-	if err := h.room.SaveVotes(rm); err != nil {
-		h.log.Error("save votes after vote failed", "room_id", roomID, "error", err)
-	}
-	if err := h.room.SaveTracks(rm); err != nil {
-		h.log.Error("save tracks after vote failed", "room_id", roomID, "error", err)
-	}
-
-	currentTrack := rm.CurrentTrack()
-	if currentTrack != nil && currentTrack.ID == trackID {
-		likes, dislikes := rm.GetTrackVotes(trackID)
-		if dislikes > likes {
-			h.playback.GoNext(rm)
-			rm.Mu.Lock()
-			rm.SkipVotes = make(map[string]bool)
-			rm.Mu.Unlock()
+	if h.playback.RegisterVote(ctx, roomID, userID, trackID, int(voteVal)) {
+		if err := h.room.SaveTracks(ctx, rm); err != nil {
+			h.log.Error("save tracks after auto-skip failed", "room_id", roomID, "error", err)
 		}
 	}
 }
 
-func (h *Handler) handleSkipVote(rm *entity.Room, msg map[string]any, roomID string) {
-	userID, _ := msg["user_id"].(string)
+func (h *Handler) handleSkipVote(ctx context.Context, rm *entity.Room, conn *websocket.Conn, roomID string) {
+	userID := h.manager.GetUserID(roomID, conn)
 	if userID == "" {
 		return
 	}
 
-	rm.Mu.Lock()
-	if rm.SkipVotes[userID] {
-		delete(rm.SkipVotes, userID)
-	} else {
-		rm.SkipVotes[userID] = true
-	}
+	skipCount, _ := redisc.ToggleSkipVote(ctx, h.rdb, roomID, userID)
+	listeners, _ := redisc.GetPresenceCount(ctx, h.rdb, roomID)
 
-	listeners := h.manager.GetCount(roomID)
-	if listeners < 2 {
-		listeners = 2
-	}
-	skipCount := len(rm.SkipVotes)
-	rm.Mu.Unlock()
-
-	if skipCount >= listeners/2 {
-		h.playback.GoNext(rm)
-		rm.Mu.Lock()
-		rm.SkipVotes = make(map[string]bool)
-		rm.Mu.Unlock()
+	if skipThresholdMet(skipCount, listeners) {
+		if h.playback.GoNext(ctx, roomID) {
+			if err := h.room.SaveTracks(ctx, rm); err != nil {
+				h.log.Error("save tracks after skip-vote failed", "room_id", roomID, "error", err)
+			}
+		}
+		redisc.ResetSkipVotes(ctx, h.rdb, roomID)
 	}
 }
 
-func (h *Handler) backgroundRefill(rm *entity.Room, roomID string) {
-	h.manager.Broadcast(roomID, rm.ToDict())
+func (h *Handler) backgroundRefill(ctx context.Context, rm *entity.Room, roomID string) {
+	h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
 
-	tracks, err := h.radio.Refill(rm)
+	tracks, err := h.radio.Refill(ctx, roomID)
 	if err != nil {
 		h.log.Error("radio refill failed", "room_id", roomID, "error", err)
 		return
 	}
 
-	if len(tracks) > 0 {
-		rm.Mu.Lock()
-		rm.Queue = append(rm.Queue, tracks...)
-		if !rm.IsPlaying {
-			rm.IsPlaying = true
-			rm.Position = 0
-			rm.LastSyncAt = time.Now()
+	// AppendFreshTrack re-validates each pick against the live queue: picks
+	// went stale if a skip landed while Refill was doing network I/O.
+	appended := 0
+	for _, t := range tracks {
+		if ok, _ := redisc.AppendFreshTrack(ctx, h.rdb, roomID, t); ok {
+			appended++
 		}
-		rm.Mu.Unlock()
+	}
 
-		if err := h.room.SaveTracks(rm); err != nil {
+	if appended > 0 {
+		ps, _ := redisc.GetPlayback(ctx, h.rdb, roomID)
+		if ps != nil && !ps.IsPlaying {
+			ps.IsPlaying = true
+			ps.Position = 0
+			ps.LastSyncAt = time.Now()
+			redisc.SetPlayback(ctx, h.rdb, roomID, ps)
+		}
+
+		if err := h.room.SaveTracks(ctx, rm); err != nil {
 			h.log.Error("save tracks after refill failed", "room_id", roomID, "error", err)
 		}
 	}
 
-	h.manager.Broadcast(roomID, rm.ToDict())
+	h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
 }
 
 func (h *Handler) sendError(conn *websocket.Conn, message string) {
 	if err := conn.WriteJSON(map[string]any{"error": message}); err != nil {
 		h.log.Warn("failed to send error to client", "error", err)
 	}
+}
+
+// skipThresholdMet reports strict-majority consensus to skip the current
+// track. No listener floor: a solo listener's vote (1*2 > 1) skips.
+func skipThresholdMet(skipCount, listeners int64) bool {
+	return skipCount*2 > listeners
 }
 
 func toUpper(s string) string {

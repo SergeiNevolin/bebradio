@@ -41,15 +41,3 @@ func TestChatMessageToDictEmpty(t *testing.T) {
 		t.Errorf("expected empty text, got '%v'", dict["text"])
 	}
 }
-
-func TestTrackVoteValues(t *testing.T) {
-	v1 := &TrackVote{UserID: "u1", TrackID: "t1", Vote: 1}
-	v2 := &TrackVote{UserID: "u2", TrackID: "t1", Vote: -1}
-
-	if v1.Vote != 1 {
-		t.Errorf("expected vote 1, got %d", v1.Vote)
-	}
-	if v2.Vote != -1 {
-		t.Errorf("expected vote -1, got %d", v2.Vote)
-	}
-}
