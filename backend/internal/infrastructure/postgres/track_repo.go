@@ -174,13 +174,13 @@ func (r *TrackRepo) ListLikedByUser(userID string, limit, offset int) ([]*entity
 func (r *TrackRepo) CountByOwner(ownerID string) (int, error) {
 	var count int
 	err := r.pool.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM tracks WHERE `+libraryFilter+` AND owner_id = $1`, ownerID).Scan(&count)
+		`SELECT COUNT(*) FROM tracks t WHERE `+libraryFilter+` AND t.owner_id = $1`, ownerID).Scan(&count)
 	return count, err
 }
 
 func (r *TrackRepo) ListProcessing() ([]*entity.Track, error) {
 	rows, err := r.pool.Query(context.Background(),
-		`SELECT `+trackColumns+` FROM tracks WHERE `+libraryFilter+` AND status = 'processing' ORDER BY added_at`)
+		`SELECT `+trackColumns+` FROM tracks t WHERE `+libraryFilter+` AND t.status = 'processing' ORDER BY t.added_at`)
 	if err != nil {
 		return nil, err
 	}
