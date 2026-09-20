@@ -79,6 +79,7 @@ services:
       - MASHUP_MAX_SIZE=${MASHUP_MAX_SIZE:-62914560}
       - MASHUP_COVER_MAX_SIZE=${MASHUP_COVER_MAX_SIZE:-5242880}
       - MASHUP_USER_QUOTA=${MASHUP_USER_QUOTA:-20}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
     depends_on:
       postgres:
         condition: service_healthy
