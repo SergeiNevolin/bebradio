@@ -170,8 +170,11 @@ func (s *Server) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rm.OwnerID != userID {
-		s.writeError(w, 403, "Only the room owner can delete the room")
-		return
+		admin, _ := s.isAdmin(userID)
+		if !admin {
+			s.writeError(w, 403, "Only the room owner can delete the room")
+			return
+		}
 	}
 
 	if err := s.room.DeleteRoom(ctx, rm); err != nil {

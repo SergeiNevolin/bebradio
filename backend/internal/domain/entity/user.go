@@ -9,7 +9,12 @@ type User struct {
 	PasswordHash string    `json:"-"`
 	Bio          string    `json:"bio"`
 	AvatarURL    string    `json:"avatar_url"`
+	Role         string    `json:"role"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (u *User) IsAdmin() bool {
+	return u.Role == "admin"
 }
 
 func (u *User) PublicProfile() map[string]any {
@@ -25,5 +30,6 @@ func (u *User) PublicProfile() map[string]any {
 func (u *User) ProfileWithEmail() map[string]any {
 	p := u.PublicProfile()
 	p["email"] = u.Email
+	p["role"] = u.Role
 	return p
 }

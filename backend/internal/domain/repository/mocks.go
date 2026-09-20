@@ -69,6 +69,37 @@ func (m *MockUserRepo) UpdateProfile(id string, bio, avatarURL *string) (*entity
 	return u, nil
 }
 
+func (m *MockUserRepo) SetRole(id string, role string) error {
+	u, ok := m.Users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	u.Role = role
+	return nil
+}
+
+func (m *MockUserRepo) SearchByUsername(prefix string, limit int) ([]*entity.User, error) {
+	var result []*entity.User
+	for _, u := range m.Users {
+		if len(result) >= limit {
+			break
+		}
+		if len(u.Username) >= len(prefix) && u.Username[:len(prefix)] == prefix {
+			result = append(result, u)
+		}
+	}
+	return result, nil
+}
+
+func (m *MockUserRepo) HasAdmin() (bool, error) {
+	for _, u := range m.Users {
+		if u.Role == "admin" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 type MockRoomRepo struct {
 	Rooms    map[string]*entity.Room
 	Messages map[string][]*entity.ChatMessage

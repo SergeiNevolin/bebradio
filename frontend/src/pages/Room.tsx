@@ -38,6 +38,8 @@ export default function Room() {
   } = useRoomWebSocket(roomId, user, token, navigate)
 
   const isOwner = user && room && user.id === room.owner_id
+  const isAdmin = !!user && user.role === 'admin'
+  const canManage = isOwner || isAdmin
   const canAddTrack = user || room?.allow_anonymous_add
 
   const handleUnlock = async () => {
@@ -145,14 +147,14 @@ export default function Room() {
       <RoomHeader
         room={room!}
         roomId={roomId!}
-        isOwner={!!isOwner}
+        isOwner={!!canManage}
         copied={copied}
         onCopyCode={handleCopyCode}
         onShare={handleShare}
         onOpenSettings={() => setShowSettings(true)}
       />
 
-      {showSettings && isOwner && (
+      {showSettings && canManage && (
         <RoomSettingsModal
           room={room!}
           onUpdate={handleUpdateSettings}

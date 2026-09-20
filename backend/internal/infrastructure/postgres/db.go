@@ -159,6 +159,8 @@ func (db *DB) Migrate() error {
 		// that is cleared on every track switch. The Postgres mirror was
 		// never written by the server and only risked stale resurrections.
 		`DROP TABLE IF EXISTS track_votes`,
+		// 008: admin role
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`,
 	}
 
 	for _, m := range migrations {

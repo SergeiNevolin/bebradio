@@ -90,5 +90,5 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, 200, map[string]any{"user": user.PublicProfile()})
+	s.writeJSON(w, 200, map[string]any{"user": user.ProfileWithEmail()})
 }

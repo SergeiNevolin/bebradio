@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { ACCENT_PRESETS, DEFAULT_ACCENT, applyAccent, getStoredAccent, getStoredTheme, applyTheme } from '../lib/theme'
 import styles from './Settings.module.css'
 
-type Tab = 'profile' | 'appearance'
+type Tab = 'profile' | 'appearance' | 'admin'
 
 export default function Settings() {
   const { user } = useAuth()
@@ -17,6 +17,11 @@ export default function Settings() {
   const [avatarUrl, setAvatarUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  const isAdmin = !!user && user.role === 'admin'
+  const [adminQuery, setAdminQuery] = useState('')
+  const [adminResults, setAdminResults] = useState<Array<{ id: string; username: string; role: string }>>([])
+  const [adminLoading, setAdminLoading] = useState(false)
 
   useEffect(() => {
     applyTheme(dark ? 'dark' : 'light')
@@ -48,6 +53,32 @@ export default function Settings() {
     }
   }
 
+  useEffect(() => {
+    if (!adminQuery.trim()) {
+      setAdminResults([])
+      return
+    }
+    const t = setTimeout(async () => {
+      setAdminLoading(true)
+      try {
+        const results = await api.adminSearchUsers(adminQuery.trim())
+        setAdminResults(results)
+      } catch { /* ignore */ }
+      setAdminLoading(false)
+    }, 200)
+    return () => clearTimeout(t)
+  }, [adminQuery])
+
+  const handlePromote = async (userId: string) => {
+    await api.adminPromote(userId)
+    setAdminResults((prev) => prev.map((u) => u.id === userId ? { ...u, role: 'admin' } : u))
+  }
+
+  const handleDemote = async (userId: string) => {
+    await api.adminDemote(userId)
+    setAdminResults((prev) => prev.map((u) => u.id === userId ? { ...u, role: 'user' } : u))
+  }
+
   return (
     <div className={styles.settingsPage}>
       <div className={styles.settingsLayout}>
@@ -66,6 +97,14 @@ export default function Settings() {
             >
               Appearance
             </button>
+            {isAdmin && (
+              <button
+                className={`${styles.settingsNavItem}${tab === 'admin' ? ` ${styles.settingsNavItemActive}` : ''}`}
+                onClick={() => setTab('admin')}
+              >
+                Admin
+              </button>
+            )}
           </div>
         </nav>
 
@@ -144,6 +183,50 @@ export default function Settings() {
                 </div>
               </div>
             </>
+          )}
+
+          {tab === 'admin' && (
+            <div className={styles.settingsSection}>
+              <h3 className={styles.settingsSectionTitle}>Управление ролями</h3>
+              <p className={styles.settingsSectionDesc}>Найдите пользователя по имени и назначьте или снимите права администратора.</p>
+
+              <div className={styles.settingsField}>
+                <input
+                  className={styles.settingsInput}
+                  type="text"
+                  placeholder="Имя пользователя..."
+                  value={adminQuery}
+                  onChange={(e) => setAdminQuery(e.target.value)}
+                />
+              </div>
+
+              {adminLoading && <p className={styles.settingsHint}>Поиск...</p>}
+
+              {adminResults.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  {adminResults.map((u) => (
+                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{u.username}</span>
+                        <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{u.id}</span>
+                        {u.role === 'admin' && (
+                          <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '2px 6px', borderRadius: 4 }}>ADMIN</span>
+                        )}
+                      </div>
+                      {u.role === 'admin' ? (
+                        <button className="btn btn-secondary btn-sm" onClick={() => handleDemote(u.id)}>Снять админа</button>
+                      ) : (
+                        <button className="btn btn-sm" onClick={() => handlePromote(u.id)}>Сделать админом</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adminQuery.trim() && !adminLoading && adminResults.length === 0 && (
+                <p className={styles.settingsHint}>Пользователи не найдены</p>
+              )}
+            </div>
           )}
 
         </div>
