@@ -101,18 +101,18 @@ test.describe('Logout', () => {
     await expect(page).toHaveURL('/')
 
     await page.locator(avatarBtn).click()
-    await page.getByRole('button', { name: 'Sign out' }).click()
+    await page.getByRole('button', { name: 'Выйти' }).click()
 
-    await expect(page.getByRole('link', { name: 'Sign In' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Register' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Войти' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Регистрация' })).toBeVisible()
   })
 })
 
 test.describe('Navbar', () => {
   test('shows guest buttons when not logged in', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('link', { name: 'Sign In' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Register' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Войти' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Регистрация' })).toBeVisible()
   })
 
   test('shows user avatar when logged in', async ({ page }) => {

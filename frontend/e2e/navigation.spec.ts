@@ -1,11 +1,17 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('Navigation', () => {
-  test('home page shows hero section', async ({ page }) => {
-    await page.goto('/')
+  test('rooms page shows hero section', async ({ page }) => {
+    await page.goto('/rooms')
     await expect(page.getByRole('heading', { name: 'Слушать музыку вместе с друзьями' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Create Room' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Join by Code' })).toBeVisible()
+  })
+
+  test('home page shows discovery sections', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Комнаты' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Топ мэшапов' })).toBeVisible()
   })
 
   test('shows 404 for unknown routes', async ({ page }) => {
@@ -19,7 +25,7 @@ test.describe('Navigation', () => {
     await page.goto('/nonexistent')
     await page.getByRole('link', { name: 'Go Home' }).click()
     await expect(page).toHaveURL('/')
-    await expect(page.getByRole('heading', { name: 'Слушать музыку вместе с друзьями' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Комнаты' })).toBeVisible()
   })
 
   test('login page renders correctly', async ({ page }) => {

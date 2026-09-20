@@ -5,6 +5,7 @@ import SeekBar from './player/SeekBar'
 import VolumeControl from './player/VolumeControl'
 import { useGaplessPlayer } from '../hooks/useGaplessPlayer'
 import { useVolume } from '../hooks/useVolume'
+import { MicIcon, PlayIcon, SkipIcon, ThumbDownIcon, ThumbUpIcon } from './player/icons'
 import styles from './Player.module.css'
 
 /** Seconds of overlap between tracks. 0 would disable crossfading. */
@@ -106,7 +107,7 @@ function Player({
 
       {needsGesture && track && (
         <button type="button" className={styles.playerUnlock} onClick={unlock}>
-          ▶ Tap to enable sound
+          <PlayIcon size={16} /> Tap to enable sound
         </button>
       )}
 
@@ -140,7 +141,7 @@ function Player({
                 aria-pressed={showKaraoke}
                 onClick={() => setShowKaraoke((v) => !v)}
               >
-                🎤 Karaoke
+                <MicIcon size={14} /> Karaoke
               </button>
             )}
             <button
@@ -149,7 +150,7 @@ function Player({
               onClick={onSkipVote}
               title="Vote to skip"
             >
-              ⏭ Skip{skipCount > 0 ? ` (${skipCount})` : ''}
+              <SkipIcon size={14} /> Skip{skipCount > 0 ? ` (${skipCount})` : ''}
             </button>
           </div>
 
@@ -162,8 +163,9 @@ function Player({
               type="button"
               className={`vote-btn ${userVote === 1 ? 'vote-btn-active' : ''}`}
               onClick={() => onVote(track.id, userVote === 1 ? 0 : 1)}
+              aria-label="Like this track"
             >
-              👍 {likes}
+              <ThumbUpIcon size={14} /> {likes}
             </button>
             <div className="vote-scale">
               <div className="vote-bar">
@@ -182,8 +184,9 @@ function Player({
               type="button"
               className={`vote-btn ${userVote === -1 ? 'vote-btn-active-down' : ''}`}
               onClick={() => onVote(track.id, userVote === -1 ? 0 : -1)}
+              aria-label="Dislike this track"
             >
-              👎 {dislikes}
+              <ThumbDownIcon size={14} /> {dislikes}
             </button>
           </div>
         </>

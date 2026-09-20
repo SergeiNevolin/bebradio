@@ -1,4 +1,5 @@
 import type { RoomState } from '../../types'
+import { CheckIcon, LockIcon, RadioIcon } from '../player/icons'
 import styles from '../../pages/Room.module.css'
 
 interface RoomHeaderProps {
@@ -25,7 +26,7 @@ export default function RoomHeader({
       <div className={styles.roomHeaderLeft}>
         <div className={styles.roomTitleGroup}>
           <h1 className={styles.roomTitle}>
-            {room?.has_password && <span title="Password protected">🔒 </span>}
+            {room?.has_password && <span title="Password protected"><LockIcon size={18} /></span>}
             {room?.name || 'Room'}
           </h1>
           <div className={styles.roomMeta}>
@@ -42,7 +43,7 @@ export default function RoomHeader({
                     Finding tracks…
                   </span>
                 ) : (
-                  <span className="radio-badge" title="Auto-radio keeps the queue full">📻 Radio</span>
+                  <span className="radio-badge" title="Auto-radio keeps the queue full"><RadioIcon size={14} /> Radio</span>
                 )}
               </>
             )}
@@ -52,7 +53,7 @@ export default function RoomHeader({
               onClick={onCopyCode}
               title={copied ? 'Copied!' : 'Click to copy room code'}
             >
-              {copied ? '✓ Copied' : roomId}
+              {copied ? <><CheckIcon size={12} /> Copied</> : roomId}
             </button>
           </div>
         </div>

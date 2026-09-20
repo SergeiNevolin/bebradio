@@ -107,8 +107,9 @@ func (m *MockRoomRepo) ListPublic() ([]map[string]any, error) {
 	for _, r := range m.Rooms {
 		if !r.IsPrivate {
 			result = append(result, map[string]any{
-				"id":   r.ID,
-				"name": r.Name,
+				"id":         r.ID,
+				"name":       r.Name,
+				"auto_radio": r.AutoRadio,
 			})
 		}
 	}

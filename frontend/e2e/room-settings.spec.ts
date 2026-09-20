@@ -15,6 +15,7 @@ async function registerAndCreateRoom(page: import('@playwright/test').Page, room
   await page.getByRole('button', { name: 'Register' }).click()
   await expect(page).toHaveURL('/')
 
+  await page.goto('/rooms')
   await page.getByRole('button', { name: 'Create Room' }).click()
   await page.getByPlaceholder('Room name').fill(roomName)
   await page.getByRole('button', { name: 'Create room', exact: true }).click()

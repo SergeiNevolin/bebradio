@@ -37,6 +37,9 @@ export interface RoomListItem {
   track_count?: number
   is_playing: boolean
   has_password: boolean
+  // True for autodj rooms (auto_radio). Exposed by GET /api/rooms so the
+  // home page can shelf them as radio stations.
+  auto_radio?: boolean
 }
 
 export interface RoomState {

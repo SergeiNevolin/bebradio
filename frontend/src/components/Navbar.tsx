@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import SearchBar from './SearchBar'
 import styles from './Navbar.module.css'
@@ -7,6 +7,7 @@ import styles from './Navbar.module.css'
 export default function Navbar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -35,7 +36,24 @@ export default function Navbar() {
       <div className={styles.navbarInner}>
         <div className={styles.navbarLeft}>
           <Link to="/" className={styles.navbarBrand}>bebradio</Link>
-          <Link to="/mashup" className={styles.navbarLink}>Mashups</Link>
+          <Link
+            to="/rooms"
+            className={`${styles.navbarLink} ${location.pathname === '/rooms' || location.pathname.startsWith('/room/') ? styles.navbarLinkActive : ''}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M3.24 6.15C2.51 6.43 2 7.17 2 8v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-.83-.51-1.57-1.24-1.85L12 1 3.24 6.15ZM4 8l8-4.5L20 8v11c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1V8Zm7 4c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3Zm0 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Z" />
+            </svg>
+            Комнаты
+          </Link>
+          <Link
+            to="/mashup"
+            className={`${styles.navbarLink} ${location.pathname === '/mashup' ? styles.navbarLinkActive : ''}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+            </svg>
+            Мэшапы
+          </Link>
         </div>
         <SearchBar />
         <div className={styles.navbarRight}>
@@ -67,29 +85,29 @@ export default function Navbar() {
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M8 8a3 3 0 100-6 3 3 0 000 6zm0 1c-3.3 0-6 1.8-6 4v1h12v-1c0-2.2-2.7-4-6-4z" />
                     </svg>
-                    Your Profile
+                    Профиль
                   </button>
                   <button className={styles.navbarDropdownItem} onClick={() => handleNavigate('/settings')}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M8 4.754a3.246 3.246 0 100 6.492 3.246 3.246 0 000-6.492zM5.754 8a2.246 2.246 0 114.492 0 2.246 2.246 0 01-4.492 0z" />
                       <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 01-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 01-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 01.52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 011.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 011.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 01.52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 01-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 01-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 002.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 001.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 00-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 00-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 00-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 001.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 003.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 002.692-1.115l.094-.319z" />
                     </svg>
-                    Settings
+                    Настройки
                   </button>
                   <div className={styles.navbarDropdownDivider} />
                   <button className={`${styles.navbarDropdownItem} ${styles.navbarDropdownItemDanger}`} onClick={handleLogout}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M2 3h5v1H2v8h5v1H1V2h6v1H2V3zm7.5 3.5l1-1 3 3-3 3-1-1 2-2H6v-1h6.5l-2-2z" />
                     </svg>
-                    Sign out
+                    Выйти
                   </button>
                 </div>
               )}
             </div>
           ) : (
             <>
-              <Link to="/login" className="btn btn-secondary btn-sm">Sign In</Link>
-              <Link to="/register" className="btn btn-secondary btn-sm">Register</Link>
+              <Link to="/login" className="btn btn-secondary btn-sm">Войти</Link>
+              <Link to="/register" className="btn btn-secondary btn-sm">Регистрация</Link>
             </>
           )}
         </div>

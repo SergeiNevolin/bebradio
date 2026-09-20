@@ -1,6 +1,7 @@
 import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
+import { HeartFillIcon, HeartIcon } from '../player/icons'
 import styles from './NowPlayingPanel.module.css'
 
 interface NowPlayingPanelProps {
@@ -83,7 +84,7 @@ export default function NowPlayingPanel({
                 aria-pressed={!!current.liked}
                 aria-label={current.liked ? `Unlike ${current.title}` : `Like ${current.title}`}
               >
-                <span className={styles.heart} aria-hidden="true">{current.liked ? '♥' : '♡'}</span>
+                <span className={styles.heart} aria-hidden="true">{current.liked ? <HeartFillIcon size={18} /> : <HeartIcon size={18} />}</span>
                 {current.likes}
               </button>
               {current.status === 'ready' && (

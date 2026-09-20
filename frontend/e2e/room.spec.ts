@@ -14,6 +14,7 @@ async function registerAndGoHome(page: import('@playwright/test').Page) {
   await page.getByPlaceholder('Password').fill(password)
   await page.getByRole('button', { name: 'Register' }).click()
   await expect(page).toHaveURL('/')
+  await page.goto('/rooms')
   return { email, username, password, id }
 }
 
@@ -42,7 +43,8 @@ test.describe('Create Room', () => {
     await page.getByRole('button', { name: 'Create room', exact: true }).click()
 
     await expect(page).toHaveURL(/\/room\//)
-    await expect(page.getByText('🔒')).toBeVisible()
+    await expect(page.getByRole('heading', { name: roomName })).toBeVisible()
+    await expect(page.locator('header span[title="Password protected"]')).toBeVisible()
   })
 
   test('cannot create room without name', async ({ page }) => {
@@ -74,7 +76,7 @@ test.describe('Join Room', () => {
     await expect(page).toHaveURL(/\/room\//)
 
     const code = page.url().split('/room/')[1]
-    await page.goto('/')
+    await page.goto('/rooms')
     await page.getByRole('button', { name: 'Join by Code' }).click()
     await expect(page.getByRole('heading', { name: 'Join a room' })).toBeVisible()
 
@@ -119,6 +121,7 @@ test.describe('Password-protected Room', () => {
     await page.getByRole('button', { name: 'Register' }).click()
     await expect(page).toHaveURL('/')
 
+    await page.goto('/rooms')
     await page.getByRole('button', { name: 'Create Room' }).click()
     await page.getByPlaceholder('Room name').fill(`Locked ${id}`)
     await page.getByPlaceholder('Leave empty for an open room').fill('roompass')
@@ -158,6 +161,7 @@ test.describe('Password-protected Room', () => {
     await page.getByRole('button', { name: 'Register' }).click()
     await expect(page).toHaveURL('/')
 
+    await page.goto('/rooms')
     await page.getByRole('button', { name: 'Create Room' }).click()
     await page.getByPlaceholder('Room name').fill(`Wrong Pass ${id}`)
     await page.getByPlaceholder('Leave empty for an open room').fill('correct')

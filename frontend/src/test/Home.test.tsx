@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import Home from '../pages/Home'
@@ -9,18 +9,9 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-const { mockAuthHeaders } = vi.hoisted(() => ({
-  mockAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer tok' })),
-}))
-
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ authHeaders: mockAuthHeaders, user: null }),
+  useAuth: () => ({ user: null }),
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
-
-const setRoomAccess = vi.fn()
-vi.mock('../lib/roomAccess', () => ({
-  setRoomAccess: (...args: unknown[]) => setRoomAccess(...args),
 }))
 
 function mockFetch(handler: (url: string, init?: RequestInit) => unknown) {
@@ -32,75 +23,74 @@ function mockFetch(handler: (url: string, init?: RequestInit) => unknown) {
   ) as unknown as typeof fetch
 }
 
-describe('Home password rooms', () => {
+const rooms = [
+  { id: 'AAA111', name: 'Party', user_count: 5, track_count: 3, is_playing: true, has_password: false, auto_radio: false },
+  { id: 'BBB222', name: 'Chill', user_count: 0, track_count: 0, is_playing: false, has_password: true, auto_radio: false },
+  { id: 'STN001', name: 'Nonstop Hits', user_count: 10, track_count: 4, is_playing: true, has_password: false, auto_radio: true },
+]
+
+const tracks = [
+  { id: 't1', title: 'Hit One', artist: 'DJ A', likes: 42, thumbnail: '', status: 'ready' },
+  { id: 't2', title: 'Hit Two', artist: 'DJ B', likes: 7, thumbnail: '', status: 'ready' },
+]
+
+function mockHomeApis(roomList = rooms) {
+  mockFetch((url) => {
+    if (url === '/api/rooms') return roomList
+    if (url.startsWith('/api/tracks/')) return tracks
+    return []
+  })
+}
+
+describe('Home', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockAuthHeaders.mockReturnValue({ Authorization: 'Bearer tok' })
-    mockFetch(() => [])
+    mockHomeApis()
   })
 
-  it('opens a create-room window with an optional password field', async () => {
+  it('shelves autodj rooms as popular stations with a badge', async () => {
     render(<MemoryRouter><Home /></MemoryRouter>)
-    fireEvent.click(screen.getByText('Create Room'))
-    expect(await screen.findByText('Create a room')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Room name')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Leave empty for an open room')).toBeInTheDocument()
+    expect(await screen.findByText('Потоки')).toBeInTheDocument()
+    expect(screen.getByText('24/7')).toBeInTheDocument()
+    expect(screen.getByText('Nonstop Hits')).toBeInTheDocument()
   })
 
-  it('sends the password when creating a room and stores the access token', async () => {
-    mockFetch((url, init) => {
-      if (url === '/api/rooms' && init?.method === 'POST') {
-        return { id: 'ABC123', access: 'room-token', has_password: true }
-      }
-      return []
-    })
-
+  it('shows live rooms with a browse-all link', async () => {
     render(<MemoryRouter><Home /></MemoryRouter>)
-    fireEvent.click(screen.getByText('Create Room'))
-
-    fireEvent.change(await screen.findByPlaceholderText('Room name'), { target: { value: 'Party' } })
-    fireEvent.change(screen.getByPlaceholderText('Leave empty for an open room'), { target: { value: 's3cret' } })
-    fireEvent.click(screen.getByText('Create room'))
-
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/room/ABC123'))
-
-    const body = JSON.parse((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
-      .find((c) => c[0] === '/api/rooms' && c[1]?.method === 'POST')![1].body)
-    expect(body).toEqual({ name: 'Party', password: 's3cret' })
-    expect(setRoomAccess).toHaveBeenCalledWith('ABC123', 'room-token')
+    expect(await screen.findByText('Комнаты')).toBeInTheDocument()
+    expect(screen.getAllByText('Party').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('prompts for a password when joining a locked room, then joins', async () => {
-    mockFetch((url, init) => {
-      if (url === '/api/rooms/LOCKED' && !init?.method) return { id: 'LOCKED', name: 'Secret', locked: true, has_password: true }
-      if (url === '/api/rooms/LOCKED/join') return { access: 'granted' }
-      return []
-    })
-
+  it('hides the stations section when no room runs autodj', async () => {
+    mockHomeApis(rooms.filter((r) => !r.auto_radio))
     render(<MemoryRouter><Home /></MemoryRouter>)
-    fireEvent.click(screen.getByText('Join by Code'))
-
-    fireEvent.change(await screen.findByPlaceholderText('e.g. ABC123'), { target: { value: 'LOCKED' } })
-    fireEvent.click(screen.getByText('Join room'))
-
-    expect(await screen.findByText('Password required')).toBeInTheDocument()
-
-    fireEvent.change(screen.getByPlaceholderText('Room password'), { target: { value: 'open-sesame' } })
-    fireEvent.click(screen.getByText('Enter room'))
-
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/room/LOCKED'))
-    expect(setRoomAccess).toHaveBeenCalledWith('LOCKED', 'granted')
+    await screen.findByText('Комнаты')
+    expect(screen.queryByText('Потоки')).not.toBeInTheDocument()
   })
 
-  it('shows a lock icon for password-protected rooms in the list', async () => {
-    mockFetch(() => [
-      { id: 'AAA111', name: 'Open', user_count: 0, track_count: 0, is_playing: false, has_password: false },
-      { id: 'BBB222', name: 'Closed', user_count: 0, track_count: 0, is_playing: false, has_password: true },
-    ])
-
+  it('shows live rooms with a browse-all link, stations excluded', async () => {
     render(<MemoryRouter><Home /></MemoryRouter>)
-    const closed = await screen.findByText('Closed')
-    expect(closed.closest('.homeCard')?.textContent).toContain('\u{1F512}')
-    expect((await screen.findByText('Open')).closest('.homeCard')?.textContent).not.toContain('\u{1F512}')
+    expect(await screen.findByText('Комнаты')).toBeInTheDocument()
+    expect(screen.getAllByText('Party').length).toBeGreaterThanOrEqual(1)
+    // Idle rooms and stations belong to other shelves, not the live shelf.
+    expect(screen.queryByText('Chill')).not.toBeInTheDocument()
+    const browseLinks = screen.getAllByText('Все →')
+    expect(browseLinks.length).toBeGreaterThanOrEqual(1)
+    for (const link of browseLinks) {
+      expect(link.closest('a')).toHaveAttribute('href', '/rooms')
+    }
   })
+
+  it('shows top mashups with a link to the mashups page', async () => {
+    render(<MemoryRouter><Home /></MemoryRouter>)
+    expect(await screen.findByText('Топ мэшапов')).toBeInTheDocument()
+    expect(screen.getByText('Hit One')).toBeInTheDocument()
+    const card = screen.getAllByTestId('top-track-card')[0]
+    expect(card.textContent).toContain('DJ A')
+    expect(card.textContent).toContain('42')
+    expect(card.querySelector('svg')).not.toBeNull()
+    const open = screen.getByText('Все мэшапы →')
+    expect(open.closest('a')).toHaveAttribute('href', '/mashup')
+  })
+
 })

@@ -41,6 +41,10 @@
   line-height: 1.2;
 }
 
+.roomTitle svg {
+  vertical-align: -3px;
+}
+
 .roomMeta {
   display: flex;
   align-items: center;
@@ -73,6 +77,9 @@
 }
 
 .roomCodeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: none;
   color: var(--text-muted);
   font-size: 12px;
