@@ -32,6 +32,8 @@ type Config struct {
 	MashupCoverMaxSize int64
 	RateLimitUpload    int
 
+	AdminUsername string
+
 	Port string
 }
 
@@ -61,6 +63,8 @@ func Load() *Config {
 		MashupMaxSize:      int64(getEnvInt("MASHUP_MAX_SIZE", 60*1024*1024)),
 		MashupCoverMaxSize: int64(getEnvInt("MASHUP_COVER_MAX_SIZE", 5*1024*1024)),
 		RateLimitUpload:    getEnvInt("RATE_LIMIT_UPLOAD", 5),
+
+		AdminUsername: getEnv("ADMIN_USERNAME", ""),
 
 		Port: getEnv("PORT", "8000"),
 	}

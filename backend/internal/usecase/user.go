@@ -27,3 +27,11 @@ func (uc *UserUsecase) UpdateProfile(userID string, bio, avatarURL *string) (*en
 func (uc *UserUsecase) GetUser(userID string) (*entity.User, error) {
 	return uc.userRepo.FindByID(userID)
 }
+
+func (uc *UserUsecase) SetRole(userID, role string) error {
+	return uc.userRepo.SetRole(userID, role)
+}
+
+func (uc *UserUsecase) SearchByUsername(prefix string, limit int) ([]*entity.User, error) {
+	return uc.userRepo.SearchByUsername(prefix, limit)
+}

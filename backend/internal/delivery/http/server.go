@@ -120,6 +120,12 @@ func (s *Server) setupRoutes() {
 			r.Put("/me", s.handleUpdateMe)
 			r.Get("/{userID}", s.handleGetUser)
 		})
+
+		r.Route("/admin", func(r chi.Router) {
+			r.Post("/promote", s.handleAdminPromote)
+			r.Post("/demote", s.handleAdminDemote)
+			r.Get("/users", s.handleAdminSearchUsers)
+		})
 	})
 }
 
@@ -160,6 +166,14 @@ func (s *Server) getUserRequired(r *http.Request) (string, bool) {
 		return "", false
 	}
 	return id, true
+}
+
+func (s *Server) isAdmin(userID string) (bool, error) {
+	u, err := s.user.GetUser(userID)
+	if err != nil {
+		return false, err
+	}
+	return u.IsAdmin(), nil
 }
 
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {

@@ -178,6 +178,18 @@ func (uc *TrackUsecase) Delete(trackID, userID string) error {
 	return uc.repo.Delete(trackID)
 }
 
+func (uc *TrackUsecase) DeleteAsAdmin(trackID string) error {
+	m, err := uc.repo.FindByID(trackID)
+	if err != nil {
+		return ErrTrackNotFound
+	}
+	if err := uc.mediaClient.DeleteTrack(m.MediaID); err != nil {
+		uc.log.Error("track delete on music service failed", "track_id", trackID, "error", err)
+		return ErrTrackMediaDown
+	}
+	return uc.repo.Delete(trackID)
+}
+
 // ResumeProcessing re-attaches a poller to every row still marked processing.
 // Called once at startup so a restart never leaves an eternal "processing".
 func (uc *TrackUsecase) ResumeProcessing() {

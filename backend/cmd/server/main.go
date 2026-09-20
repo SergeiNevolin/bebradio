@@ -58,6 +58,24 @@ func main() {
 	roomRepo := postgres.NewRoomRepo(db.Pool)
 	trackRepo := postgres.NewTrackRepo(db.Pool)
 
+	if cfg.AdminUsername != "" {
+		hasAdmin, err := userRepo.HasAdmin()
+		if err != nil {
+			log.Error("failed to check admin status", "error", err)
+		} else if !hasAdmin {
+			user, err := userRepo.FindByUsername(cfg.AdminUsername)
+			if err != nil {
+				log.Warn("ADMIN_USERNAME user not found, skipping admin assignment", "username", cfg.AdminUsername)
+			} else {
+				if err := userRepo.SetRole(user.ID, "admin"); err != nil {
+					log.Error("failed to assign admin role", "error", err)
+				} else {
+					log.Info("admin role assigned", "username", cfg.AdminUsername, "user_id", user.ID)
+				}
+			}
+		}
+	}
+
 	var mediaClient repository.MediaClient = mediaSvc
 
 	authUC := usecase.NewAuthUsecase(userRepo, authService, log)

@@ -281,6 +281,7 @@ export default function Mashups() {
   }
 
   const activeId = player.current?.id
+  const isAdmin = !!user && user.role === 'admin'
 
   const renderCard = (m: Track) => (
     <div key={m.id} className={styles.railItem}>
@@ -288,7 +289,7 @@ export default function Mashups() {
         mashup={m}
         active={m.id === activeId}
         isPlaying={player.isPlaying}
-        canEdit={!!user && user.id === m.owner_id}
+        canEdit={!!user && (user.id === m.owner_id || isAdmin)}
         onPlay={() => (m.id === activeId ? player.toggle() : player.play(m))}
         onToggleLike={() => handleToggleLike(m)}
         onEdit={() => setEditingId(m.id)}
@@ -425,8 +426,8 @@ export default function Mashups() {
       {editing && (
         <EditMashupModal
           mashup={editing}
-          canManageCover={!!user && user.id === editing.owner_id}
-          canDelete={!!user && user.id === editing.owner_id}
+          canManageCover={!!user && (user.id === editing.owner_id || isAdmin)}
+          canDelete={!!user && (user.id === editing.owner_id || isAdmin)}
           onChangeCover={(file) => handleChangeCover(editing, file)}
           onDelete={() => handleDelete(editing)}
           onClose={() => setEditingId(null)}

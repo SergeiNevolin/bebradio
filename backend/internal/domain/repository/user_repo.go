@@ -8,4 +8,7 @@ type UserRepository interface {
 	FindByEmail(email string) (*entity.User, error)
 	FindByUsername(username string) (*entity.User, error)
 	UpdateProfile(id string, bio, avatarURL *string) (*entity.User, error)
+	SetRole(id string, role string) error
+	SearchByUsername(prefix string, limit int) ([]*entity.User, error)
+	HasAdmin() (bool, error)
 }

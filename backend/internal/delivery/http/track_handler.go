@@ -164,7 +164,14 @@ func (s *Server) handleDeleteTrack(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, 401, "Not authenticated")
 		return
 	}
-	if err := s.tracks.Delete(chi.URLParam(r, "trackID"), userID); err != nil {
+	admin, _ := s.isAdmin(userID)
+	var err error
+	if admin {
+		err = s.tracks.DeleteAsAdmin(chi.URLParam(r, "trackID"))
+	} else {
+		err = s.tracks.Delete(chi.URLParam(r, "trackID"), userID)
+	}
+	if err != nil {
 		if be, ok := err.(*usecase.BusinessError); ok {
 			s.writeError(w, be.Code, be.Message)
 			return

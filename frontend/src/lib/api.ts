@@ -263,5 +263,23 @@ export const api = {
       xhr.onerror = () => reject(new ApiError(0, 'Network error during upload'))
       xhr.send(form)
     }),
+
+  // ── Admin ────────────────────────────────────────────────────────────
+  adminSearchUsers: (q: string) =>
+    request<Array<{ id: string; username: string; role: string }>>(
+      `/api/admin/users?q=${encodeURIComponent(q)}`,
+    ),
+
+  adminPromote: (userId: string) =>
+    request<{ ok: boolean }>('/api/admin/promote', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    }),
+
+  adminDemote: (userId: string) =>
+    request<{ ok: boolean }>('/api/admin/demote', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    }),
 }
 
