@@ -1,0 +1,159 @@
+.card {
+  flex: 0 0 200px;
+  scroll-snap-align: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.2s;
+  min-width: 0;
+}
+
+.card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.card:active {
+  transform: scale(0.99);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.art {
+  position: relative;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.95);
+  overflow: hidden;
+}
+
+
+
+.glyph {
+  font-size: 40px;
+  font-weight: 900;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+  user-select: none;
+}
+
+.badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  z-index: 1;
+}
+
+.live {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+.station {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 3px 9px;
+  backdrop-filter: blur(4px);
+}
+
+.lock {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 999px;
+  padding: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.play {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.card:hover .play {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px 12px;
+  min-width: 0;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.code {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--text-muted);
+  opacity: 0.6;
+  letter-spacing: 1px;
+}
+
+@media (max-width: 640px) {
+  .card {
+    flex-basis: 170px;
+  }
+
+  .art {
+    height: 96px;
+  }
+}

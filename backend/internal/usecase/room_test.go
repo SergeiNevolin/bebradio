@@ -407,6 +407,42 @@ func TestListPublicRooms(t *testing.T) {
 	}
 }
 
+func TestListPublicRoomsExposesAutoRadio(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
+	roomRepo := repository.NewMockRoomRepo()
+	userRepo := repository.NewMockUserRepo()
+	mediaClient := repository.NewMockMediaClient()
+	auth := repository.NewMockAuthBridge()
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
+
+	rm, _, _ := uc.CreateRoom(ctx, "Station", "owner1", "")
+	rm.AutoRadio = true
+	roomRepo.Save(rm)
+	uc.CreateRoom(ctx, "Plain", "owner1", "")
+
+	rooms, err := uc.ListPublicRooms(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rooms) != 2 {
+		t.Fatalf("expected 2 public rooms, got %d", len(rooms))
+	}
+	byName := map[string]map[string]any{}
+	for _, r := range rooms {
+		name, _ := r["name"].(string)
+		byName[name] = r
+	}
+	if auto, _ := byName["Station"]["auto_radio"].(bool); !auto {
+		t.Error("expected auto_radio=true for the station room")
+	}
+	if auto, _ := byName["Plain"]["auto_radio"].(bool); auto {
+		t.Error("expected auto_radio=false for the plain room")
+	}
+}
+
 func TestListPublicRoomsExcludesPrivate(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})

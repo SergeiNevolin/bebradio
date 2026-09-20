@@ -31,16 +31,26 @@
 }
 
 .navbarLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-muted);
   text-decoration: none;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
 }
 
 .navbarLink:hover {
   color: var(--text);
+  background: var(--surface);
+}
+
+.navbarLinkActive {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 .navbarRight {

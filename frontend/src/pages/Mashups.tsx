@@ -16,7 +16,6 @@ import styles from './Mashups.module.css'
 
 const RECENT_LIMIT = 12
 const TOP_PAGE = 24
-const SEARCH_LIMIT = 50
 
 export default function Mashups() {
   const { user } = useAuth()
@@ -44,13 +43,11 @@ export default function Mashups() {
     }
   }, [])
 
-  const [query, setQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [showUpload, setShowUpload] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
-  const [queueOpen, setQueueOpen] = useState(true)
+  const [queueOpen, setQueueOpen] = useState(false)
 
   const [recent, setRecent] = useState<Track[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
@@ -65,15 +62,6 @@ export default function Mashups() {
   const [mine, setMine] = useState<Track[]>([])
   const [mineLoading, setMineLoading] = useState(false)
 
-  const [searchResults, setSearchResults] = useState<Track[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
-
-  // Debounce the search box (~300ms) before it becomes a request.
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300)
-    return () => clearTimeout(t)
-  }, [query])
-
   // Apply an update to a single mashup across every list it may appear in.
   const patchAll = useCallback((id: string, updater: (m: Track) => Track) => {
     const apply = (arr: Track[]) => arr.map((m) => (m.id === id ? updater(m) : m))
@@ -81,7 +69,6 @@ export default function Mashups() {
     setTop(apply)
     setLiked(apply)
     setMine(apply)
-    setSearchResults(apply)
   }, [])
 
   const removeEverywhere = useCallback((id: string) => {
@@ -90,7 +77,6 @@ export default function Mashups() {
     setTop(drop)
     setLiked(drop)
     setMine(drop)
-    setSearchResults(drop)
   }, [])
 
   // ── Section loads ─────────────────────────────────────────────────
@@ -172,36 +158,12 @@ export default function Mashups() {
     }
   }, [user, loadLiked, loadMine])
 
-  // Search: a non-empty query collapses the shelves to one result grid.
-  useEffect(() => {
-    if (!debouncedQuery) {
-      setSearchResults([])
-      return
-    }
-    let cancelled = false
-    setSearchLoading(true)
-    api
-      .listTracks(debouncedQuery, 'recent', SEARCH_LIMIT)
-      .then((r) => {
-        if (!cancelled) setSearchResults(r)
-      })
-      .catch(() => {
-        if (!cancelled) showToast('Search failed', 'error')
-      })
-      .finally(() => {
-        if (!cancelled) setSearchLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [debouncedQuery, showToast])
-
   // Infinite scroll for the "Top by likes" shelf. The observer's root is that
   // rail's own horizontal scroll box.
   const sentinelRef = useRef<HTMLDivElement>(null)
   const topRailRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (debouncedQuery || topDone) return
+    if (topDone) return
     const el = sentinelRef.current
     if (!el) return
     const io = new IntersectionObserver(
@@ -212,17 +174,17 @@ export default function Mashups() {
     )
     io.observe(el)
     return () => io.disconnect()
-  }, [debouncedQuery, topDone, loadTopPage, top.length])
+  }, [topDone, loadTopPage, top.length])
 
   // The player's walkable list is every mashup currently loaded, in a stable
   // order. Search results are appended rather than swapped in, so starting a
   // search never drops the playing track out of the list (which would stop it).
   const playerList = useMemo(() => {
     const seen = new Set<string>()
-    return [...recent, ...top, ...liked, ...mine, ...searchResults].filter((m) =>
+    return [...recent, ...top, ...liked, ...mine].filter((m) =>
       seen.has(m.id) ? false : seen.add(m.id),
     )
-  }, [recent, top, liked, mine, searchResults])
+  }, [recent, top, liked, mine])
 
   useEffect(() => {
     setList(playerList)
@@ -343,22 +305,12 @@ export default function Mashups() {
     </div>
   )
 
-  const skeletonGrid = (
-    <div className={styles.grid}>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className={styles.skeletonCard} />
-      ))}
-    </div>
-  )
-
   const queue =
     player.index >= 0 ? playerList.slice(player.index + 1, player.index + 4) : []
 
   const hint = recentLoading
     ? 'Loading mashups…'
-    : debouncedQuery
-      ? 'Showing what matches your search across every uploader.'
-      : 'Uploads from everyone on bebradio. Click a card to play it here.'
+    : 'Uploads from everyone on bebradio. Click a card to play it here.'
 
   const renderShelf = (
     title: string,
@@ -397,43 +349,16 @@ export default function Mashups() {
 
         <div className={styles.main}>
           <div className={styles.mainScroll}>
-            <div className={styles.maintop}>
-              <div className={styles.searchWrap}>
-                <svg
-                  className={styles.searchIcon}
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  aria-hidden="true"
-                >
-                  <circle cx="7" cy="7" r="4.5" />
-                  <path d="M10.5 10.5 14 14" strokeLinecap="round" />
-                </svg>
-                <input
-                  className={styles.search}
-                  type="search"
-                  placeholder="Search mashups by title or artist"
-                  aria-label="Search mashups"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-              <span className={styles.spacer} />
-              {user && (
-                <button className="btn" onClick={() => setShowUpload(true)}>
-                  Upload
-                </button>
-              )}
-            </div>
-
             <div className={styles.content}>
               <div className={styles.pagehead}>
                 <h1 className={styles.title}>Загружайте и слушайте мешапы</h1>
                 {!recentLoading && (
                   <span className={styles.counter}>{playerList.length}</span>
+                )}
+                {user && (
+                  <button className="btn" onClick={() => setShowUpload(true)}>
+                    Upload
+                  </button>
                 )}
               </div>
               <p className={styles.sub}>
@@ -441,39 +366,21 @@ export default function Mashups() {
                 {hint && ` ${hint}`}
               </p>
 
-              {debouncedQuery ? (
-                <section className={styles.shelf}>
-                  <h2 className={styles.shelfTitle}>Search results</h2>
-                  {searchLoading ? (
-                    skeletonGrid
-                  ) : searchResults.length === 0 ? (
-                    <div className={styles.blank}>
-                      <div className={styles.blankTitle}>No mashups found</div>
-                      <div className={styles.blankSub}>Nothing matches this query. Try a shorter one.</div>
-                    </div>
-                  ) : (
-                    <div className={styles.grid}>{searchResults.map(renderCard)}</div>
-                  )}
-                </section>
-              ) : (
-                <>
-                  {renderShelf('Latest', recent, recentLoading, {
-                    emptyText: user ? 'No mashups yet — hit Upload.' : 'No mashups yet.',
-                  })}
-                  {renderShelf('Top by likes', top, topLoading && top.length === 0, {
-                    emptyText: 'No mashups yet.',
-                    rail: true,
-                  })}
-                  {user &&
-                    renderShelf('Liked', liked, likedLoading, {
-                      emptyText: 'You haven’t liked any mashups yet.',
-                    })}
-                  {user &&
-                    renderShelf('My mashups', mine, mineLoading, {
-                      emptyText: 'You have not uploaded any mashups yet.',
-                    })}
-                </>
-              )}
+              {renderShelf('Latest', recent, recentLoading, {
+                emptyText: user ? 'No mashups yet — hit Upload.' : 'No mashups yet.',
+              })}
+              {renderShelf('Top by likes', top, topLoading && top.length === 0, {
+                emptyText: 'No mashups yet.',
+                rail: true,
+              })}
+              {user &&
+                renderShelf('Liked', liked, likedLoading, {
+                  emptyText: 'You haven\u2019t liked any mashups yet.',
+                })}
+              {user &&
+                renderShelf('My mashups', mine, mineLoading, {
+                  emptyText: 'You have not uploaded any mashups yet.',
+                })}
             </div>
           </div>
         </div>

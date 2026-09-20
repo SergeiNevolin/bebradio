@@ -81,14 +81,14 @@ describe('Player', () => {
 
   it('renders vote buttons when track is present', () => {
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
-    expect(screen.getByText(/👍/)).toBeInTheDocument()
-    expect(screen.getByText(/👎/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Like this track' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Dislike this track' })).toBeInTheDocument()
     expect(screen.getByText(/Skip/)).toBeInTheDocument()
   })
 
   it('does not render vote buttons when no track', () => {
     render(<Player track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
-    expect(screen.queryByText(/👍/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Like this track' })).not.toBeInTheDocument()
   })
 })
 
@@ -96,59 +96,59 @@ describe('Player vote buttons', () => {
   it('sends vote=1 when clicking like with no user vote', () => {
     const onVote = vi.fn()
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onVote={onVote} />)
-    fireEvent.click(screen.getByText(/👍/))
+    fireEvent.click(screen.getByRole('button', { name: 'Like this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 1)
   })
 
   it('sends vote=0 when clicking like if already liked (userVote=1)', () => {
     const onVote = vi.fn()
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} onVote={onVote} />)
-    fireEvent.click(screen.getByText(/👍/))
+    fireEvent.click(screen.getByRole('button', { name: 'Like this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 0)
   })
 
   it('sends vote=-1 when clicking dislike with no user vote', () => {
     const onVote = vi.fn()
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onVote={onVote} />)
-    fireEvent.click(screen.getByText(/👎/))
+    fireEvent.click(screen.getByRole('button', { name: 'Dislike this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', -1)
   })
 
   it('sends vote=0 when clicking dislike if already disliked (userVote=-1)', () => {
     const onVote = vi.fn()
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} onVote={onVote} />)
-    fireEvent.click(screen.getByText(/👎/))
+    fireEvent.click(screen.getByRole('button', { name: 'Dislike this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 0)
   })
 
   it('sends vote=1 when switching from dislike to like', () => {
     const onVote = vi.fn()
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} onVote={onVote} />)
-    fireEvent.click(screen.getByText(/👍/))
+    fireEvent.click(screen.getByRole('button', { name: 'Like this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 1)
   })
 
   it('sends vote=-1 when switching from like to dislike', () => {
     const onVote = vi.fn()
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} onVote={onVote} />)
-    fireEvent.click(screen.getByText(/👎/))
+    fireEvent.click(screen.getByRole('button', { name: 'Dislike this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', -1)
   })
 
   it('highlights like button when userVote=1', () => {
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} />)
-    expect(screen.getByText(/👍/)).toHaveClass('vote-btn-active')
+    expect(screen.getByRole('button', { name: 'Like this track' })).toHaveClass('vote-btn-active')
   })
 
   it('highlights dislike button when userVote=-1', () => {
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} />)
-    expect(screen.getByText(/👎/)).toHaveClass('vote-btn-active-down')
+    expect(screen.getByRole('button', { name: 'Dislike this track' })).toHaveClass('vote-btn-active-down')
   })
 
   it('sends vote even when others already voted', () => {
     const onVote = vi.fn()
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={5} dislikes={3} userVote={0} onVote={onVote} />)
-    fireEvent.click(screen.getByText(/👍/))
+    fireEvent.click(screen.getByRole('button', { name: 'Like this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 1)
   })
 })
@@ -208,8 +208,8 @@ describe('Player vote scale', () => {
     const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     const buttons = container.querySelector('.vote-buttons')
     const children = Array.from(buttons!.children)
-    const likeBtn = screen.getByText(/👍/)
-    const dislikeBtn = screen.getByText(/👎/)
+    const likeBtn = screen.getByRole('button', { name: 'Like this track' })
+    const dislikeBtn = screen.getByRole('button', { name: 'Dislike this track' })
     const scale = container.querySelector('.vote-scale')
     expect(children.indexOf(likeBtn)).toBeLessThan(children.indexOf(scale!))
     expect(children.indexOf(scale!)).toBeLessThan(children.indexOf(dislikeBtn))

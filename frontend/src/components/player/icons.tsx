@@ -157,3 +157,61 @@ export function ChevronDownIcon({ size }: IconProps) {
     </Icon>
   )
 }
+
+/* ── Material status ─────────────────────────────────────────────────── */
+
+export function LockIcon({ size }: IconProps) {
+  return (
+    <Icon size={size} viewBox="0 0 24 24">
+      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2Zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2Zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2Z" />
+    </Icon>
+  )
+}
+
+export function MicIcon({ size }: IconProps) {
+  return (
+    <Icon size={size} viewBox="0 0 24 24">
+      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3Zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14Z" />
+    </Icon>
+  )
+}
+
+export function RadioIcon({ size }: IconProps) {
+  return (
+    <Icon size={size} viewBox="0 0 24 24">
+      <path d="M3.24 6.15C2.51 6.43 2 7.17 2 8v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-.83-.51-1.57-1.24-1.85L12 1 3.24 6.15ZM4 8l8-4.5L20 8v11c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1V8Zm7 4c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3Zm0 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Z" />
+    </Icon>
+  )
+}
+
+export function CheckIcon({ size }: IconProps) {
+  return (
+    <Icon size={size} viewBox="0 0 24 24">
+      <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41Z" />
+    </Icon>
+  )
+}
+
+export function SkipIcon({ size }: IconProps) {
+  return (
+    <Icon size={size} viewBox="0 0 24 24">
+      <path d="M6 18l8.5-6L6 6v12ZM16 6v12h2V6h-2Z" />
+    </Icon>
+  )
+}
+
+export function ThumbUpIcon({ size }: IconProps) {
+  return (
+    <Icon size={size} viewBox="0 0 24 24">
+      <path d="M1 21h4V9H1v12Zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2Z" />
+    </Icon>
+  )
+}
+
+export function ThumbDownIcon({ size }: IconProps) {
+  return (
+    <Icon size={size} viewBox="0 0 24 24">
+      <path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.58-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2Zm4 0v12h4V3h-4Z" />
+    </Icon>
+  )
+}

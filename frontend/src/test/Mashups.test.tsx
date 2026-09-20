@@ -108,17 +108,6 @@ describe('Mashups page', () => {
     expect(screen.queryByRole('heading', { name: 'My mashups' })).not.toBeInTheDocument()
   })
 
-  it('collapses to a search result grid while a query is active', async () => {
-    renderPage()
-    await screen.findByRole('heading', { name: 'Latest' })
-
-    fireEvent.change(screen.getByLabelText('Search mashups'), { target: { value: 'beta' } })
-
-    await waitFor(() => expect(listTracks).toHaveBeenCalledWith('beta', 'recent', 50))
-    expect(await screen.findByRole('heading', { name: 'Search results' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Latest' })).not.toBeInTheDocument()
-  })
-
   it('toggles a like optimistically and settles on the server count', async () => {
     mockUser = { id: 'someone', username: 'me' }
     renderPage()
@@ -170,13 +159,13 @@ describe('Mashups page', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Play Alpha Bootleg' })[0])
 
     const panel = () => container.querySelectorAll('aside[aria-label="Now playing"]')
-    expect(panel()).toHaveLength(1)
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Queue' }))
     expect(panel()).toHaveLength(0)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Queue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Queue' }))
     expect(panel()).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue' }))
+    expect(panel()).toHaveLength(0)
   })
 })
 

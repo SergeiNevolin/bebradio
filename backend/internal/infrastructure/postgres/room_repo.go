@@ -81,7 +81,7 @@ func (r *RoomRepo) Delete(id string) error {
 
 func (r *RoomRepo) ListPublic() ([]map[string]any, error) {
 	rows, err := r.pool.Query(context.Background(),
-		`SELECT id, name FROM rooms WHERE is_private = false ORDER BY created_at DESC`,
+		`SELECT id, name, auto_radio FROM rooms WHERE is_private = false ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -91,12 +91,14 @@ func (r *RoomRepo) ListPublic() ([]map[string]any, error) {
 	var rooms []map[string]any
 	for rows.Next() {
 		var id, name string
-		if err := rows.Scan(&id, &name); err != nil {
+		var autoRadio bool
+		if err := rows.Scan(&id, &name, &autoRadio); err != nil {
 			continue
 		}
 		rooms = append(rooms, map[string]any{
-			"id":        id,
-			"name":      name,
+			"id":         id,
+			"name":       name,
+			"auto_radio": autoRadio,
 			"user_count": 0,
 			"track_count": 0,
 			"is_playing": false,

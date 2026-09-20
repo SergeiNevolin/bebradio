@@ -24,5 +24,5 @@ export function tintForId(id: string): string {
 /** The single uppercase glyph shown on placeholder art. */
 export function monoGlyph(title: string): string {
   const first = (title || '').trim()[0]
-  return first ? first.toUpperCase() : '♪'
+  return first ? first.toUpperCase() : 'M'
 }

@@ -1,6 +1,7 @@
 import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
+import { HeartFillIcon, HeartIcon, PauseIcon, PlayIcon } from '../player/icons'
 import styles from './MashupCard.module.css'
 
 interface MashupCardProps {
@@ -63,7 +64,7 @@ export default function MashupCard({
         )}
 
         {ready && (
-          <span className={styles.fab} aria-hidden="true">{playing ? '⏸' : '▶'}</span>
+          <span className={styles.fab} aria-hidden="true">{playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}</span>
         )}
       </button>
 
@@ -107,7 +108,7 @@ export default function MashupCard({
             aria-pressed={!!mashup.liked}
             aria-label={mashup.liked ? `Unlike ${mashup.title}` : `Like ${mashup.title}`}
           >
-            <span className={styles.likeIcon} aria-hidden="true">{mashup.liked ? '♥' : '♡'}</span>
+            <span className={styles.likeIcon} aria-hidden="true">{mashup.liked ? <HeartFillIcon size={15} /> : <HeartIcon size={15} />}</span>
             <span>{mashup.likes}</span>
           </button>
 

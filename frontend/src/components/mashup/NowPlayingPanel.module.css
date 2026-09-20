@@ -142,7 +142,8 @@
 .likeBtnOn { color: var(--danger); }
 
 .heart {
-  font-size: 26px;
+  display: inline-flex;
+  align-items: center;
   line-height: 1;
 }
 

@@ -1,3 +1,5 @@
+import { LockIcon } from '../player/icons'
+
 interface RoomPasswordGateProps {
   roomName: string
   passwordInput: string
@@ -20,7 +22,7 @@ export default function RoomPasswordGate({
   return (
     <div className="loading">
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxWidth: 360 }}>
-        <h2>🔒 {roomName || 'Room'}</h2>
+        <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><LockIcon size={22} /> {roomName || 'Room'}</h2>
         <p style={{ fontSize: 14, textAlign: 'center' }}>This room is password protected.</p>
         <input
           type="password"

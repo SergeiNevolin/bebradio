@@ -1,0 +1,138 @@
+.rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  margin-top: 24px;
+  padding-bottom: 64px;
+  width: 100%;
+}
+
+.roomsHero {
+  background: linear-gradient(135deg, rgba(var(--primary-r),var(--primary-g),var(--primary-b),0.12) 0%, rgba(var(--primary-r),var(--primary-g),var(--primary-b),0.04) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+}
+
+.roomsHeroContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.roomsHeroTitle {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.roomsHeroSub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+.roomsHeroActions {
+  display: flex;
+  gap: 12px;
+}
+
+.btnHero {
+  padding: 12px 32px;
+  font-size: 15px;
+}
+
+.roomsHeroStats {
+  display: flex;
+  gap: 24px;
+  flex-shrink: 0;
+}
+
+.roomsHeroStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.roomsHeroStatNum {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1;
+}
+
+.roomsHeroStatLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.roomsSection {
+  width: 100%;
+}
+
+.roomsSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.roomsSectionTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.roomsLoading {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.roomsEmpty {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--text-muted);
+}
+
+.roomsEmpty p {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.roomsEmptySub {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .rooms {
+    margin-top: 16px;
+    gap: 24px;
+  }
+
+  .roomsHero {
+    flex-direction: column;
+    padding: 28px 20px;
+    gap: 24px;
+  }
+
+  .roomsHeroTitle {
+    font-size: 22px;
+  }
+
+  .roomsHeroActions {
+    flex-direction: column;
+    width: 100%;
+  }
+}
