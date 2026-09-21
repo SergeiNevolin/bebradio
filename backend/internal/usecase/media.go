@@ -66,10 +66,12 @@ func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID string) bool
 		mediaID string
 	}
 	var pending []pendingItem
-	// Current track.
+	// Current track. Only non-library sources (youtube today, future URL
+	// providers too) need Ensure(); library-backed tracks (uploads etc.)
+	// are served locally and never have an empty URL.
 	if ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
 		t := tracks[ps.CurrentIndex]
-		if t.Source != entity.TrackSourceUpload && t.MediaID != "" && t.URL == "" {
+		if !entity.IsLibrarySource(t.Source) && t.MediaID != "" && t.URL == "" {
 			pending = append(pending, pendingItem{ps.CurrentIndex, t.ID, t.MediaID})
 		}
 	}
@@ -77,7 +79,7 @@ func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID string) bool
 	nextIdx := ps.CurrentIndex + 1
 	if nextIdx >= 0 && nextIdx < len(tracks) {
 		t := tracks[nextIdx]
-		if t.Source != entity.TrackSourceUpload && t.MediaID != "" && t.URL == "" {
+		if !entity.IsLibrarySource(t.Source) && t.MediaID != "" && t.URL == "" {
 			pending = append(pending, pendingItem{nextIdx, t.ID, t.MediaID})
 		}
 	}

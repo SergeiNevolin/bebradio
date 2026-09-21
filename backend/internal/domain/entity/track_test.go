@@ -130,6 +130,37 @@ func TestTrackFromYouTubeEmpty(t *testing.T) {
 	}
 }
 
+func TestQueueCopyFromLibrary(t *testing.T) {
+	lib := &Track{
+		ID: "lib1", Source: TrackSourceUpload, Title: "Bootleg",
+		Artist: "DJ", Duration: 200, MediaID: "m1",
+		OwnerID: "o1", Status: TrackStatusReady, HasCover: true,
+	}
+	q := QueueCopyFromLibrary(lib, "Alice")
+	if q.ID != "lib1" || q.Source != TrackSourceUpload {
+		t.Errorf("expected id/source preserved, got %+v", q)
+	}
+	if q.AddedBy != "Alice" || q.Status != TrackStatusReady {
+		t.Errorf("expected queue ownership/ready, got %+v", q)
+	}
+	if q.StreamURL() != "/api/tracks/lib1/audio" {
+		t.Errorf("expected derived audio url, got %q", q.StreamURL())
+	}
+	if !IsQueueableLibraryTrack(lib) {
+		t.Error("ready library row must be queueable")
+	}
+	if IsQueueableLibraryTrack(&Track{ID: "x", Source: TrackSourceUpload, Status: TrackStatusProcessing}) {
+		t.Error("processing row must not be queueable")
+	}
+	// Future library-backed sources are queueable without code changes.
+	if !IsQueueableLibraryTrack(&Track{ID: "s1", Source: "spotify", Status: TrackStatusReady}) {
+		t.Error("ready row of a future source must be queueable")
+	}
+	if IsLibrarySource(TrackSourceYouTube) {
+		t.Error("youtube is url-resolved, not library-backed")
+	}
+}
+
 func TestTrackFromYouTubeFloatDuration(t *testing.T) {
 	info := map[string]any{
 		"duration": 300.5,

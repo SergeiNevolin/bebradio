@@ -9,6 +9,13 @@ import (
 // user-uploaded files transcoded by music-service. One model backs both the
 // room queue and the standalone library: a queue row is just a track with
 // room_id set, a library row has room_id NULL.
+//
+// Adding a new source (e.g. "spotify", "soundcloud") means:
+//   1. adding a TrackSource* constant here,
+//   2. teaching the queue dispatcher (handleAddToQueue/resolveURLTrack) and,
+//      for library-backed sources, the importer that writes tracks rows,
+//   3. no changes to playback, votes or persistence: they key off IDs,
+//      StreamURL and queue order only.
 const (
 	TrackSourceYouTube = "youtube"
 	TrackSourceUpload  = "upload"
@@ -17,6 +24,25 @@ const (
 	TrackStatusProcessing = "processing"
 	TrackStatusFailed     = "failed"
 )
+
+// IsLibrarySource reports whether tracks of this source live in the tracks
+// table and are added to a room by id (uploads today; future imports reuse
+// the same path). URL-resolved sources (YouTube today) return false.
+func IsLibrarySource(source string) bool {
+	switch source {
+	case TrackSourceUpload:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsQueueableLibraryTrack reports whether a stored library row may be copied
+// into a room queue. Any ready row qualifies regardless of source, so future
+// library-backed sources become queueable without handler changes.
+func IsQueueableLibraryTrack(lib *Track) bool {
+	return lib != nil && lib.Status == TrackStatusReady
+}
 
 type Track struct {
 	ID        string    `json:"id"`
@@ -82,15 +108,16 @@ func TrackFromUpload(id, ownerID, title, artist string) *Track {
 	}
 }
 
-// QueueCopyFromUpload snapshots a ready library track into a room queue row
+// QueueCopyFromLibrary snapshots a ready library track into a room queue row
 // under the library id itself (votes are scoped per room, so sharing the id
 // across rooms is safe). AddedBy/AddedAt belong to the queue entry, everything
 // else — to the track. Playable URLs derive from the id, so URL/Thumbnail
 // stay empty here just like on the library row.
-func QueueCopyFromUpload(lib *Track, addedBy string) *Track {
+// Works for every library-backed source (uploads today, new imports tomorrow).
+func QueueCopyFromLibrary(lib *Track, addedBy string) *Track {
 	return &Track{
 		ID:        lib.ID,
-		Source:    TrackSourceUpload,
+		Source:    lib.Source,
 		Title:     lib.Title,
 		Artist:    lib.Artist,
 		Duration:  lib.Duration,
@@ -105,12 +132,24 @@ func QueueCopyFromUpload(lib *Track, addedBy string) *Track {
 	}
 }
 
+// QueueCopyFromUpload is kept for callers written before the generic
+// QueueCopyFromLibrary existed.
+func QueueCopyFromUpload(lib *Track, addedBy string) *Track {
+	return QueueCopyFromLibrary(lib, addedBy)
+}
+
 // StreamURL is the playable URL once the file is ready ("" otherwise).
 // MediaID is never exposed directly, only baked into a non-guessable URL.
 func (t *Track) StreamURL() string {
-	if t.Source == TrackSourceUpload {
+	if IsLibrarySource(t.Source) {
+		// Library-backed sources (uploads today, new imports tomorrow):
+		// playable URL derives from the id; a row carrying its own direct
+		// URL keeps it.
 		if t.Status != TrackStatusReady {
 			return ""
+		}
+		if t.URL != "" {
+			return t.URL
 		}
 		return "/api/tracks/" + t.ID + "/audio"
 	}

@@ -349,6 +349,80 @@ func TestHandleStreamTrackMissing(t *testing.T) {
 	}
 }
 
+func createRoomForQueue(t *testing.T, d *testDeps, token, name string) string {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"name": name})
+	req := httptest.NewRequest("POST", "/api/rooms/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(w, req)
+	var createResp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &createResp)
+	return createResp["id"].(string)
+}
+
+func postQueue(t *testing.T, d *testDeps, roomID, token string, payload map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	queueBody, _ := json.Marshal(payload)
+	qr := httptest.NewRequest("POST", "/api/rooms/"+roomID+"/queue", bytes.NewReader(queueBody))
+	qr.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		qr.Header.Set("Authorization", "Bearer "+token)
+	}
+	qw := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(qw, qr)
+	return qw
+}
+
+// Explicit {"source": "youtube"} behaves like the legacy bare {"url"} form;
+// an unknown source is rejected so future providers have a clear plug-in
+// point (resolveURLTrack) instead of silently misresolving.
+func TestHandleAddToQueueWithExplicitSource(t *testing.T) {
+	d := setupTestServer(t)
+	token := registerUser(t, d, "u@test.com", "user", "pass123")
+	roomID := createRoomForQueue(t, d, token, "Queue Room")
+
+	qw := postQueue(t, d, roomID, token, map[string]string{"source": "youtube", "url": "https://youtu.be/x"})
+	if qw.Code != 200 {
+		t.Fatalf("explicit youtube source: expected 200, got %d: %s", qw.Code, qw.Body.String())
+	}
+	var added map[string]any
+	json.Unmarshal(qw.Body.Bytes(), &added)
+	if added["id"] != "t1" {
+		t.Errorf("expected resolved track t1, got %v", added["id"])
+	}
+
+	qw = postQueue(t, d, roomID, token, map[string]string{"source": "spotify", "url": "https://open.spotify.com/track/x"})
+	if qw.Code != 400 {
+		t.Errorf("unsupported source: expected 400, got %d: %s", qw.Code, qw.Body.String())
+	}
+}
+
+// The library path ignores the source hint: any ready library row is
+// queueable by id (uploads today, future imports without handler changes).
+func TestHandleAddToQueueLibraryIgnoresSourceHint(t *testing.T) {
+	d := setupTestServer(t)
+	token := registerUser(t, d, "u@test.com", "user", "pass123")
+	d.trackRepo.Create(readyUpload("lib9", userIDFromToken(token), "media999"))
+	roomID := createRoomForQueue(t, d, token, "Queue Room")
+
+	qw := postQueue(t, d, roomID, token, map[string]string{"source": "upload", "track_id": "lib9"})
+	if qw.Code != 200 {
+		t.Fatalf("library with source hint: expected 200, got %d: %s", qw.Code, qw.Body.String())
+	}
+	var added map[string]any
+	json.Unmarshal(qw.Body.Bytes(), &added)
+	if added["source"] != "upload" || added["id"] != "lib9" {
+		t.Errorf("unexpected queued entry: %v", added)
+	}
+
+	// Neither url nor track_id -> 400.
+	qw = postQueue(t, d, roomID, token, map[string]string{"source": "youtube"})
+	if qw.Code != 400 {
+		t.Errorf("empty payload: expected 400, got %d", qw.Code)
+	}
+}
 func TestHandleAddToQueueWithTrackID(t *testing.T) {
 	d := setupTestServer(t)
 	token := registerUser(t, d, "u@test.com", "user", "pass123")

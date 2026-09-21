@@ -26,7 +26,7 @@ const tracks: Track[] = [
 describe('Queue', () => {
   it('shows empty message when no tracks', () => {
     render(<Queue queue={[]} currentIndex={0} />)
-    expect(screen.getByText('No tracks yet. Add a YouTube link above.')).toBeInTheDocument()
+    expect(screen.getByText('No tracks yet. Add something above.')).toBeInTheDocument()
   })
 
   it('renders track list', () => {
@@ -64,7 +64,7 @@ describe('Queue', () => {
   it('shows a radio search message instead of the empty hint while searching', () => {
     render(<Queue queue={[]} currentIndex={0} searching />)
     expect(screen.getByText(/radio is finding tracks/i)).toBeInTheDocument()
-    expect(screen.queryByText('No tracks yet. Add a YouTube link above.')).not.toBeInTheDocument()
+    expect(screen.queryByText('No tracks yet. Add something above.')).not.toBeInTheDocument()
   })
 
   it('shows a footer search hint below a non-empty queue while searching', () => {
@@ -75,5 +75,20 @@ describe('Queue', () => {
   it('shows no search hint when not searching', () => {
     render(<Queue queue={tracks} currentIndex={0} />)
     expect(screen.queryByText(/radio is finding/i)).not.toBeInTheDocument()
+  })
+
+  it('shows a badge per track source', () => {
+    const mixed: Track[] = [
+      { ...tracks[0], source: 'youtube' },
+      { ...tracks[1], source: 'upload' },
+    ]
+    render(<Queue queue={mixed} currentIndex={0} />)
+    expect(screen.getByText('YouTube')).toBeInTheDocument()
+    expect(screen.getByText('Mashup')).toBeInTheDocument()
+  })
+
+  it('falls back to the raw source string for future providers', () => {
+    render(<Queue queue={[{ ...tracks[0], source: 'spotify' }]} currentIndex={0} />)
+    expect(screen.getByText('spotify')).toBeInTheDocument()
   })
 })

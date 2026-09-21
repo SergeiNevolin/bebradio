@@ -76,6 +76,7 @@ describe('MashupCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Alpha Bootleg' }))
     expect(onEdit).toHaveBeenCalled()
   })
+
 })
 
 

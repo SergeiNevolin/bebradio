@@ -221,7 +221,7 @@ test.describe('Room Page', () => {
     await page.getByRole('button', { name: 'Create room', exact: true }).click()
     await expect(page).toHaveURL(/\/room\//)
 
-    await expect(page.getByPlaceholder('Search or paste YouTube URL...')).toBeVisible()
+    await expect(page.getByPlaceholder('Search YouTube or bebradio...')).toBeVisible()
   })
 
   test('share button copies room URL', async ({ page }) => {

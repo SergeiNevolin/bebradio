@@ -9,7 +9,50 @@
 .addTrack h3 {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+}
+
+.filterChips {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.filterChip {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.filterChip:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.filterChipActive {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--primary);
+}
+
+.resultBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.resultBadge + .btn {
+  flex-shrink: 0;
 }
 
 .addTrackForm {

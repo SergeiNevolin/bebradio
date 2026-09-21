@@ -109,21 +109,20 @@ export const api = {
     }).catch(() => {}),
 
   // POST /api/rooms/:roomID/queue?access= → track.ToDict()
-  // A track is a track: pass either a YouTube { url } or a library { track_id }.
-  addTrack: (roomId: string, url: string) => {
-    const access = getRoomAccess(roomId)
-    const query = access ? `?access=${encodeURIComponent(access)}` : ''
-    return request<{ id: string }>(
-      `/api/rooms/${roomId}/queue${query}`, { method: 'POST', body: JSON.stringify({ url }) }
-    )
-  },
-  addTrackById: (roomId: string, track_id: string) => {
+  // A track is a track: pass either a YouTube { url } (+ optional { source }
+  // hint for future providers) or a library { track_id } (mashup/upload
+  // today, any library-backed source tomorrow). Old payloads keep working.
+  addToQueue: (roomId: string, payload: { source?: string; url?: string; track_id?: string }) => {
     const access = getRoomAccess(roomId)
     const query = access ? `?access=${encodeURIComponent(access)}` : ''
     return request<Track>(
-      `/api/rooms/${roomId}/queue${query}`, { method: 'POST', body: JSON.stringify({ track_id }) }
+      `/api/rooms/${roomId}/queue${query}`, { method: 'POST', body: JSON.stringify(payload) }
     )
   },
+  addTrack: (roomId: string, url: string) =>
+    api.addToQueue(roomId, { url }),
+  addTrackById: (roomId: string, track_id: string) =>
+    api.addToQueue(roomId, { track_id }),
 
   // PATCH /api/rooms/:roomID → ToDict()
   updateRoom: (roomId: string, settings: Record<string, unknown>) =>

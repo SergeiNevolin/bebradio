@@ -9,7 +9,6 @@ import Queue from '../components/Queue'
 import AddTrack from '../components/AddTrack'
 import Chat from '../components/Chat'
 import { ReactionBar, ReactionsOverlay } from '../components/Reactions'
-import Listeners from '../components/Listeners'
 import ProfileModal from '../components/ProfileModal'
 import RoomHeader from '../components/room/RoomHeader'
 import RoomPasswordGate from '../components/room/RoomPasswordGate'
@@ -64,6 +63,15 @@ export default function Room() {
   const handleAddTrack = async (url: string): Promise<{ success: boolean; error?: string }> => {
     try {
       await api.addTrack(roomId!, url)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
+    }
+  }
+
+  const handleAddMashup = async (trackId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.addTrackById(roomId!, trackId)
       return { success: true }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
@@ -173,9 +181,14 @@ export default function Room() {
         </div>
       )}
 
+      {canAddTrack && (
+        <div className={styles.roomSearch}>
+          <AddTrack onAdd={handleAddTrack} onAddById={handleAddMashup} />
+        </div>
+      )}
+
       <div className={styles.roomContent}>
         <div className={styles.roomMain}>
-          {canAddTrack && <AddTrack onAdd={handleAddTrack} />}
           <div className={styles.playerWrap}>
             <ReactionsOverlay items={reactions} />
             <Player
@@ -208,13 +221,6 @@ export default function Room() {
             onSelectUser={setProfileUserId}
           />
           <ReactionBar onReact={handleReact} />
-        </div>
-        <div className={styles.roomListeners}>
-          <Listeners
-            listeners={room?.listeners ?? []}
-            ownerId={room?.owner_id ?? ''}
-            onSelectUser={setProfileUserId}
-          />
         </div>
       </div>
 

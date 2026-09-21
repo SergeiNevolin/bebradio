@@ -1,4 +1,8 @@
-export type TrackSource = 'youtube' | 'upload'
+// Where a track came from. 'youtube' = resolved external URL, 'upload' =
+// user mashup from the library. New providers (spotify, soundcloud, ...)
+// extend this union; queue/room UI must fall back to the raw string for
+// unknown sources instead of hiding them.
+export type TrackSource = 'youtube' | 'upload' | (string & {})
 
 export type TrackStatus = 'ready' | 'processing' | 'failed'
 

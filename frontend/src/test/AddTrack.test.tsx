@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import AddTrack from '../components/AddTrack'
 import { ToastProvider } from '../context/ToastContext'
@@ -147,5 +147,123 @@ describe('AddTrack', () => {
   it('disables button when input is empty', () => {
     renderWithToast(<AddTrack onAdd={vi.fn()} />)
     expect(screen.getByText('Add')).toBeDisabled()
+  })
+
+  it('stays YouTube-only without onAddById', () => {
+    renderWithToast(<AddTrack onAdd={vi.fn()} />)
+    expect(screen.queryByRole('group', { name: 'Search source filter' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'bebradio' })).not.toBeInTheDocument()
+  })
+
+  it('shows YouTube and bebradio hits in one list with badges', async () => {
+    const ytHit = {
+      id: 'y1', title: 'Tube Song', artist: 'Channel', thumbnail: '',
+      duration: 200, url: 'https://youtube.com/watch?v=y1',
+    }
+    const mashup = {
+      id: 'm1', title: 'Bootleg', artist: 'DJ A', thumbnail: '',
+      duration: 120, url: '/api/tracks/m1/audio', status: 'ready',
+    }
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/search')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([ytHit]) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([mashup]) })
+    })
+    renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(screen.getByPlaceholderText('Search YouTube or bebradio...'), {
+      target: { value: 'boot' },
+    })
+
+    expect(await screen.findByText('Tube Song')).toBeInTheDocument()
+    expect(screen.getByText('Bootleg')).toBeInTheDocument()
+    const dropdown = document.querySelector('div[class*="searchDropdown"]') as HTMLElement
+    const rows = within(dropdown).getAllByText(/Tube Song|Bootleg/)
+    expect(rows).toHaveLength(2)
+    expect(within(dropdown).getByText('YouTube')).toBeInTheDocument()
+    expect(within(dropdown).getByText('bebradio')).toBeInTheDocument()
+  })
+
+  it('source filters narrow the unified list', async () => {
+    const ytHit = {
+      id: 'y1', title: 'Tube Song', artist: 'Channel', thumbnail: '',
+      duration: 200, url: 'https://youtube.com/watch?v=y1',
+    }
+    const mashup = {
+      id: 'm1', title: 'Bootleg', artist: 'DJ A', thumbnail: '',
+      duration: 120, url: '/api/tracks/m1/audio', status: 'ready',
+    }
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/search')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([ytHit]) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([mashup]) })
+    })
+    renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={vi.fn()} />)
+
+    fireEvent.change(screen.getByPlaceholderText('Search YouTube or bebradio...'), {
+      target: { value: 'boot' },
+    })
+    expect(await screen.findByText('Bootleg')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'YouTube' }))
+    expect(screen.queryByText('Bootleg')).not.toBeInTheDocument()
+    expect(screen.getByText('Tube Song')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'bebradio' }))
+    expect(screen.queryByText('Tube Song')).not.toBeInTheDocument()
+    expect(screen.getByText('Bootleg')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'All' }))
+    expect(screen.getByText('Tube Song')).toBeInTheDocument()
+    expect(screen.getByText('Bootleg')).toBeInTheDocument()
+  })
+
+  it('adds a mashup by id from the unified list', async () => {
+    const mashup = {
+      id: 'm1', title: 'Bootleg', artist: 'DJ A', thumbnail: '',
+      duration: 120, url: '/api/tracks/m1/audio', status: 'ready',
+    }
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/search')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([mashup]) })
+    })
+    const onAddById = vi.fn().mockResolvedValue({ success: true })
+    renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={onAddById} />)
+
+    fireEvent.change(screen.getByPlaceholderText('Search YouTube or bebradio...'), {
+      target: { value: 'boot' },
+    })
+    expect(await screen.findByText('Bootleg')).toBeInTheDocument()
+    const addDropdown = document.querySelector('div[class*="searchDropdown"]') as HTMLElement
+    fireEvent.click(within(addDropdown).getByRole('button', { name: 'Add' }))
+    await waitFor(() => {
+      expect(onAddById).toHaveBeenCalledWith('m1')
+    })
+  })
+
+  it('disables Add for mashups that are not ready', async () => {
+    const mashup = {
+      id: 'm2', title: 'Raw Take', artist: 'DJ B', thumbnail: '',
+      duration: 0, url: '', status: 'processing',
+    }
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/search')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([mashup]) })
+    })
+    renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={vi.fn()} />)
+
+    fireEvent.change(screen.getByPlaceholderText('Search YouTube or bebradio...'), {
+      target: { value: 'raw' },
+    })
+    expect(await screen.findByText('Raw Take')).toBeInTheDocument()
+    const disabledDropdown = document.querySelector('div[class*="searchDropdown"]') as HTMLElement
+    expect(within(disabledDropdown).getByRole('button', { name: 'Add' })).toBeDisabled()
   })
 })

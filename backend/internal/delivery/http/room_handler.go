@@ -1,7 +1,9 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -10,6 +12,8 @@ import (
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 )
+
+var errTrackNotAvailable = errors.New("Track not available")
 
 func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	userID, ok := s.getUserRequired(r)
@@ -221,6 +225,19 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, result)
 }
 
+// Queue track sources.
+//
+// POST /api/rooms/:id/queue accepts either form (old clients send only one):
+//   - {"track_id": ...} — library-backed track (mashup/upload today). The row
+//     already exists in the tracks table; any ready row is queueable
+//     regardless of its source (see entity.IsQueueableLibraryTrack).
+//   - {"url": ...} (+ optional {"source": "youtube"}) — external URL resolved
+//     via media-service.
+//
+// To plug a new source in the future:
+//   - library-backed (spotify import, soundcloud, ...): write ready rows into
+//     the tracks table — no queue changes needed;
+//   - url-resolved: add a case to resolveURLTrack below.
 func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	roomID := chi.URLParam(r, "roomID")
 	access := r.URL.Query().Get("access")
@@ -239,6 +256,7 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
+		Source  string `json:"source"`
 		URL     string `json:"url"`
 		TrackID string `json:"track_id"`
 		AddedBy string `json:"added_by"`
@@ -260,80 +278,103 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var track *entity.Track
-	if req.TrackID != "" {
-		lib, err := s.tracks.Get(req.TrackID, userID)
-		if err != nil || lib.Source != entity.TrackSourceUpload || lib.Status != entity.TrackStatusReady {
-			s.writeError(w, 400, "Track not available")
+	switch {
+	case req.TrackID != "":
+		track, err = s.resolveLibraryTrack(req.TrackID, userID, addedBy)
+		if err != nil {
+			s.writeError(w, 400, err.Error())
 			return
 		}
-		// Check for duplicates in Redis queue (under lock: check+append must
-		// be atomic or a double-click appends the same track twice).
-		s.addMu.Lock()
-		queue, _ := redisc.GetQueue(ctx, s.rdb, roomID)
-		for _, t := range queue {
-			if t.ID == lib.ID {
-				s.addMu.Unlock()
-				s.writeJSON(w, 200, t.ToDict())
-				return
-			}
+	case req.URL != "":
+		qtrack, qerr := s.resolveURLTrack(req.Source, req.URL, addedBy)
+		if qerr != nil {
+			s.writeError(w, qerr.code, qerr.msg)
+			return
 		}
-		track = entity.QueueCopyFromUpload(lib, addedBy)
-		redisc.AppendTrack(ctx, s.rdb, roomID, track)
-
-		queueLen, _ := redisc.GetQueueLen(ctx, s.rdb, roomID)
-		if queueLen == 1 {
-			ps, _ := redisc.GetPlayback(ctx, s.rdb, roomID)
-			if ps == nil {
-				ps = &redisc.PlaybackState{}
-			}
-			ps.IsPlaying = true
-			ps.Position = 0
-			ps.LastSyncAt = time.Now()
-			redisc.SetPlayback(ctx, s.rdb, roomID, ps)
-		}
-		s.addMu.Unlock()
-
-		go func() {
-			if err := s.room.SaveTracks(ctx, rm); err != nil {
-				s.log.Error("save tracks failed", "error", err, "room_id", roomID)
-			}
-		}()
-
-		s.manager.Broadcast(roomID, redisc.BuildToDict(ctx, s.rdb, rm))
-		s.writeJSON(w, 200, track.ToDict())
+		track = qtrack
+	default:
+		s.writeError(w, 400, "Provide url or track_id")
 		return
 	}
 
-	info, err := s.media.FetchTrack(req.URL)
+	s.enqueueQueueTrack(w, rm, roomID, track)
+}
+
+// resolveLibraryTrack snapshots a stored library row (mashup/upload today,
+// any ready row tomorrow) into a queue entry.
+func (s *Server) resolveLibraryTrack(trackID, viewerID, addedBy string) (*entity.Track, error) {
+	lib, err := s.tracks.Get(trackID, viewerID)
+	if err != nil || !entity.IsQueueableLibraryTrack(lib) {
+		return nil, errTrackNotAvailable
+	}
+	return entity.QueueCopyFromLibrary(lib, addedBy), nil
+}
+
+type queueResolveError struct {
+	code int
+	msg  string
+}
+
+func (e *queueResolveError) Error() string { return e.msg }
+
+// resolveURLTrack resolves an external URL into a queue entry. source is a
+// hint for forward compat ("" means youtube, the only URL source today).
+// A new URL provider plugs in as a new case here.
+func (s *Server) resolveURLTrack(source, rawURL, addedBy string) (*entity.Track, *queueResolveError) {
+	switch source {
+	case "", entity.TrackSourceYouTube:
+		// youtube — current and only URL-resolved source.
+	default:
+		return nil, &queueResolveError{code: 400, msg: "Unsupported source"}
+	}
+
+	info, err := s.media.FetchTrack(rawURL)
 	if err != nil {
-		s.log.Error("fetch track failed", "error", err, "url", req.URL)
-		s.writeError(w, 400, "Could not fetch video info")
-		return
+		s.log.Error("fetch track failed", "error", err, "url", rawURL)
+		return nil, &queueResolveError{code: 400, msg: "Could not fetch video info"}
 	}
 
 	duration, _ := info["duration"].(float64)
 	if int(duration) > s.config.MaxDuration {
-		s.writeError(w, 400, "Video too long")
-		return
+		return nil, &queueResolveError{code: 400, msg: "Video too long"}
 	}
 
-	track = entity.TrackFromYouTube(info, addedBy)
+	track := entity.TrackFromYouTube(info, addedBy)
 	if track.ID == "" {
-		s.log.Error("resolve returned no track id", "url", req.URL)
-		s.writeError(w, 502, "Music service unavailable, try again")
-		return
+		s.log.Error("resolve returned no track id", "url", rawURL)
+		return nil, &queueResolveError{code: 502, msg: "Music service unavailable, try again"}
 	}
 	if track.SourceURL == "" {
-		track.SourceURL = req.URL
+		track.SourceURL = rawURL
 	}
+	return track, nil
+}
 
-	// Duplicate check (under lock, same as the upload branch): without it a
-	// double-click appends the same video twice and the leftover copy plays
-	// later as if the skipped track "came back".
+// isDuplicateQueueTrack reports whether track is already queued. Library rows
+// dedupe by id; URL-resolved rows additionally by source URL (a double-click
+// must not append the same video twice).
+func isDuplicateQueueTrack(queued, track *entity.Track) bool {
+	if queued.ID == track.ID {
+		return true
+	}
+	if track.SourceURL != "" && queued.SourceURL == track.SourceURL {
+		return true
+	}
+	return false
+}
+
+// enqueueQueueTrack appends track under the add lock (duplicate check + RPush
+// must be atomic, otherwise a double-click adds the same track twice),
+// auto-starts a lone queue, persists and broadcasts.
+func (s *Server) enqueueQueueTrack(w http.ResponseWriter, rm *entity.Room, roomID string, track *entity.Track) {
+	ctx := context.Background()
+
+	// Check for duplicates in Redis queue (under lock: check+append must
+	// be atomic or a double-click appends the same track twice).
 	s.addMu.Lock()
 	queue, _ := redisc.GetQueue(ctx, s.rdb, roomID)
 	for _, t := range queue {
-		if t.ID == track.ID || (track.SourceURL != "" && t.SourceURL == track.SourceURL) {
+		if isDuplicateQueueTrack(t, track) {
 			s.addMu.Unlock()
 			s.writeJSON(w, 200, t.ToDict())
 			return
