@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useState } from 'react'
 import type { Track } from '../types'
 import Karaoke from './Karaoke'
+import TrackArt from './TrackArt'
 import SeekBar from './player/SeekBar'
 import VolumeControl from './player/VolumeControl'
 import { useGaplessPlayer } from '../hooks/useGaplessPlayer'
@@ -116,10 +117,17 @@ function Player({
       ) : (
         <>
           <div className={styles.playerHead}>
-            {track.thumbnail && <img className={styles.playerThumb} src={track.thumbnail} alt="" />}
+            <TrackArt
+              id={track.id}
+              title={track.title}
+              thumbnail={track.thumbnail}
+              size={104}
+              radius={12}
+              className={styles.playerThumb}
+            />
             <div className={styles.playerInfo}>
               <div className={styles.title}>{track.title}</div>
-              <div className={styles.artist}>{track.artist}</div>
+              <div className={styles.artist}>{track.artist || 'Unknown artist'}</div>
               <div className={styles.addedBy}>Added by {track.added_by}</div>
             </div>
           </div>

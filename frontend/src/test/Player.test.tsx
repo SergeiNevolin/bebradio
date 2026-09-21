@@ -51,6 +51,14 @@ describe('Player', () => {
     expect(img.src).toBe('https://example.com/thumb.jpg')
   })
 
+  it('renders placeholder art and Unknown artist when missing', () => {
+    const bare: Track = { ...mockTrack, thumbnail: '', artist: '' }
+    const { container } = render(<Player track={bare} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    expect(container.querySelector('img.playerThumb')).not.toBeInTheDocument()
+    expect(screen.getByText('T')).toBeInTheDocument()
+    expect(screen.getByText('Unknown artist')).toBeInTheDocument()
+  })
+
   it('has audio element', () => {
     render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(document.querySelector('audio')).toBeInTheDocument()

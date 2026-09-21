@@ -93,7 +93,7 @@ async function createRoom(page: Page, name: string): Promise<string> {
 
 /** Adds a mashup to the open room via the unified search in AddTrack. */
 async function addMashupFromRoomTab(page: Page, title: string) {
-  await page.getByPlaceholder('Search YouTube or bebradio...').fill(title)
+    await page.getByPlaceholder('Search', { exact: true }).fill(title)
   const row = page
     .locator('[class*="searchDropdown"] [class*="searchResult"]', { hasText: title })
     .first()
@@ -317,7 +317,7 @@ test.describe('Unified search filters', () => {
     await waitUntilPlayable(page, title)
     await createRoom(page, `Filter Room ${uniqueId()}`)
 
-    await page.getByPlaceholder('Search YouTube or bebradio...').fill(title)
+  await page.getByPlaceholder('Search', { exact: true }).fill(title)
     const row = page
       .locator('[class*="searchDropdown"] [class*="searchResult"]', { hasText: title })
       .first()

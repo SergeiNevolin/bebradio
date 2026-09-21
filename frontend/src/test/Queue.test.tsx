@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
 import Queue from '../components/Queue'
 import type { Track } from '../types'
 
@@ -61,6 +61,19 @@ describe('Queue', () => {
     expect(screen.getByText('Artist B')).toBeInTheDocument()
   })
 
+  it('falls back to placeholder art and Unknown artist', () => {
+    const bare: Track = {
+      id: '9', title: 'No Cover', artist: '', source: 'upload',
+      thumbnail: '', url: '', duration: 0, added_by: '', owner_id: '',
+      size_bytes: 0, status: 'ready', has_cover: false, plays: 0, likes: 0,
+      created_at: '',
+    }
+    const { container } = render(<Queue queue={[bare]} currentIndex={0} />)
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    expect(screen.getByText('N')).toBeInTheDocument()
+    expect(screen.getByText('Unknown artist')).toBeInTheDocument()
+  })
+
   it('shows a radio search message instead of the empty hint while searching', () => {
     render(<Queue queue={[]} currentIndex={0} searching />)
     expect(screen.getByText(/radio is finding tracks/i)).toBeInTheDocument()
@@ -90,5 +103,43 @@ describe('Queue', () => {
   it('falls back to the raw source string for future providers', () => {
     render(<Queue queue={[{ ...tracks[0], source: 'spotify' }]} currentIndex={0} />)
     expect(screen.getByText('spotify')).toBeInTheDocument()
+  })
+
+  it('hides the import button without canImport', () => {
+    render(<Queue queue={tracks} currentIndex={0} onImport={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Save to bebradio' })).not.toBeInTheDocument()
+  })
+
+  it('hides the import button on library tracks', () => {
+    const lib: Track = { ...tracks[0], source: 'upload' }
+    render(<Queue queue={[lib]} currentIndex={0} canImport onImport={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Save to bebradio' })).not.toBeInTheDocument()
+  })
+
+  it('offers import on YouTube tracks for admins and calls back with the id', async () => {
+    const onImport = vi.fn().mockResolvedValue(undefined)
+    render(<Queue queue={tracks} currentIndex={0} canImport onImport={onImport} />)
+    const buttons = screen.getAllByRole('button', { name: 'Save to bebradio' })
+    expect(buttons).toHaveLength(3)
+    fireEvent.click(buttons[0])
+    await waitFor(() => {
+      expect(onImport).toHaveBeenCalledWith('1')
+    })
+  })
+
+  it('disables import buttons while an import is in flight', async () => {
+    let resolveImport: () => void = () => {}
+    const onImport = vi.fn().mockImplementation(() => new Promise<void>((r) => { resolveImport = r }))
+    render(<Queue queue={tracks} currentIndex={0} canImport onImport={onImport} />)
+    fireEvent.click(screen.getAllByRole('button', { name: /Save to bebradio|Saving/ })[0])
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
+    })
+    resolveImport()
+    await waitFor(() => {
+      const buttons = screen.getAllByRole('button', { name: 'Save to bebradio' })
+      expect(buttons).toHaveLength(3)
+      for (const b of buttons) expect(b).not.toBeDisabled()
+    })
   })
 })

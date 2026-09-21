@@ -14,8 +14,15 @@
 
 .filterChips {
   display: flex;
+  align-items: center;
   gap: 6px;
   margin-bottom: 12px;
+}
+
+.filterLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-right: 2px;
 }
 
 .filterChip {
@@ -64,11 +71,6 @@
   flex: 1;
   font-size: 14px;
   padding: 12px 16px;
-}
-
-.addTrackForm .btn {
-  padding: 10px 20px;
-  white-space: nowrap;
 }
 
 .searchWrapper {
@@ -219,31 +221,6 @@
   text-overflow: ellipsis;
 }
 
-.btnContent {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btnSpinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-@media (max-width: 640px) {
-  .addTrackForm {
-    flex-direction: column;
-  }
-
-  .addTrackForm .btn {
-    width: 100%;
-  }
 }

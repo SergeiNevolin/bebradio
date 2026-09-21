@@ -1,10 +1,14 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
@@ -406,6 +410,136 @@ func (s *Server) enqueueQueueTrack(w http.ResponseWriter, rm *entity.Room, roomI
 
 	s.manager.Broadcast(roomID, redisc.BuildToDict(ctx, s.rdb, rm))
 	s.writeJSON(w, 200, track.ToDict())
+}
+
+// handleImportQueueTrack saves a YouTube queue track into the bebradio
+// library (admin only): the cached audio is re-uploaded through music-service
+// together with the track thumbnail as cover. music-service has no
+// import-from-cache endpoint, so the bytes travel through this handler
+// (capped at MashupMaxSize, never buffered twice).
+//
+// The new row starts "processing" (202); the client polls GET /api/tracks/:id
+// until it flips to ready, exactly like a regular upload.
+func (s *Server) handleImportQueueTrack(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomID")
+	trackID := chi.URLParam(r, "trackID")
+	userID, ok := s.getUserRequired(r)
+	if !ok {
+		s.writeError(w, 401, "Not authenticated")
+		return
+	}
+	admin, _ := s.isAdmin(userID)
+	if !admin {
+		s.writeError(w, 403, "Admin only")
+		return
+	}
+
+	ctx := r.Context()
+	if _, err := s.room.GetOrLoadRoom(ctx, roomID); err != nil {
+		s.writeError(w, 404, "Room not found")
+		return
+	}
+
+	queue, _ := redisc.GetQueue(ctx, s.rdb, roomID)
+	var queued *entity.Track
+	for _, t := range queue {
+		if t.ID == trackID {
+			queued = t
+			break
+		}
+	}
+	if queued == nil {
+		s.writeError(w, 404, "Track not in queue")
+		return
+	}
+	if entity.IsLibrarySource(queued.Source) {
+		s.writeError(w, 400, "Track is already in the library")
+		return
+	}
+	if queued.MediaID == "" || queued.SourceURL == "" {
+		s.writeError(w, 400, "Track has no downloadable media")
+		return
+	}
+
+	ready, err := s.media.EnsureMedia([]map[string]any{
+		{"media_id": queued.MediaID, "source_url": queued.SourceURL},
+	})
+	if err != nil {
+		s.log.Error("import ensure failed", "error", err, "track_id", trackID)
+		s.writeError(w, 502, "Music service unavailable, try again")
+		return
+	}
+	ensured := false
+	for _, id := range ready {
+		if id == queued.MediaID {
+			ensured = true
+			break
+		}
+	}
+	if !ensured {
+		s.writeError(w, 502, "Could not fetch track audio")
+		return
+	}
+
+	status, _, audio, err := s.media.StreamContent(queued.MediaID, "")
+	if err != nil || (status != 200 && status != 206) || len(audio) == 0 {
+		s.log.Error("import stream failed", "error", err, "track_id", trackID, "status", status)
+		s.writeError(w, 502, "Could not fetch track audio")
+		return
+	}
+	if int64(len(audio)) > s.config.MashupMaxSize {
+		s.writeError(w, 413, "Track too large to import")
+		return
+	}
+
+	// Cover is best-effort: an unreachable thumbnail never fails the import.
+	var cover io.Reader
+	coverName := ""
+	if data := fetchRemoteImage(queued.Thumbnail, s.config.MashupCoverMaxSize); data != nil {
+		cover = bytes.NewReader(data)
+		coverName = "cover.jpg"
+	} else if queued.Thumbnail != "" {
+		s.log.Warn("queue import cover fetch failed, continuing without cover",
+			"room_id", roomID, "track_id", trackID)
+	}
+
+	imported, err := s.tracks.Import(userID, queued.Title, queued.Artist,
+		fmt.Sprintf("queue-%s.m4a", queued.ID), bytes.NewReader(audio), coverName, cover)
+	if err != nil {
+		if be, ok := err.(*usecase.BusinessError); ok {
+			s.writeError(w, be.Code, be.Message)
+			return
+		}
+		s.log.Error("queue import failed", "error", err, "room_id", roomID, "track_id", trackID)
+		s.writeError(w, 500, "Import failed")
+		return
+	}
+	s.writeJSON(w, 202, imported.ToDict())
+}
+
+// fetchRemoteImage GETs a remote image with a timeout, capping the body at
+// maxSize. Returns nil on any failure (callers treat covers as best-effort).
+func fetchRemoteImage(rawURL string, maxSize int64) []byte {
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		return nil
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(rawURL)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "image/") {
+		return nil
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxSize+1))
+	if err != nil || int64(len(data)) > maxSize {
+		return nil
+	}
+	return data
 }
 
 func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {

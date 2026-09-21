@@ -1,5 +1,6 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import type { Track } from '../types'
+import TrackArt from './TrackArt'
 import styles from './Queue.module.css'
 
 interface QueueProps {
@@ -7,6 +8,9 @@ interface QueueProps {
   currentIndex: number
   /** Auto-radio is fetching related tracks right now. */
   searching?: boolean
+  /** Admin-only: offer "Save to bebradio" on YouTube tracks. */
+  canImport?: boolean
+  onImport?: (trackId: string) => Promise<void>
 }
 
 // Human labels for known queue sources. Unknown (future) sources fall back
@@ -21,7 +25,18 @@ function sourceLabel(source: Track['source']): string | null {
   return SOURCE_LABELS[source] ?? source
 }
 
-function Queue({ queue, currentIndex, searching = false }: QueueProps) {
+function Queue({ queue, currentIndex, searching = false, canImport = false, onImport }: QueueProps) {
+  const [importingId, setImportingId] = useState<string | null>(null)
+
+  const handleImport = async (trackId: string) => {
+    if (!onImport || importingId !== null) return
+    setImportingId(trackId)
+    try {
+      await onImport(trackId)
+    } finally {
+      setImportingId(null)
+    }
+  };
   if (!queue.length) {
     return (
       <div className={styles.queue}>
@@ -52,14 +67,30 @@ function Queue({ queue, currentIndex, searching = false }: QueueProps) {
               className={`${styles.queueItem} ${i === currentIndex ? styles.queueItemActive : ''}`}
             >
               <span className={styles.queueItemNum}>{i + 1}</span>
-              {track.thumbnail && (
-                <img className={styles.queueItemThumb} src={track.thumbnail} alt="" />
-              )}
+              <TrackArt
+                id={track.id}
+                title={track.title}
+                thumbnail={track.thumbnail}
+                size={48}
+                radius={6}
+                className={styles.queueItemThumb}
+              />
               <div className={styles.queueItemInfo}>
                 <div className={styles.title}>{track.title}</div>
-                <div className={styles.artist}>{track.artist}</div>
+                <div className={styles.artist}>{track.artist || 'Unknown artist'}</div>
               </div>
               {badge && <span className={styles.sourceBadge}>{badge}</span>}
+              {canImport && onImport && track.source === 'youtube' && (
+                <button
+                  type="button"
+                  className={styles.importBtn}
+                  disabled={importingId !== null}
+                  onClick={() => handleImport(track.id)}
+                  title="Save track to the bebradio library"
+                >
+                  {importingId === track.id ? 'Saving…' : 'Save to bebradio'}
+                </button>
+              )}
             </div>
           )
         })}
