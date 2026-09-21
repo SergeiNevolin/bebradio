@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { useToast } from '../context/ToastContext'
 import { api } from '../lib/api'
 import { formatTime as formatDuration } from '../lib/format'
+import TrackArt from './TrackArt'
 import type { Track } from '../types'
 import styles from './AddTrack.module.css'
 
@@ -278,6 +279,7 @@ function AddTrack({ onAdd, onAddById }: AddTrackProps) {
       <h3>Add Track</h3>
       {onAddById && (
         <div className={styles.filterChips} role="group" aria-label="Search source filter">
+          <span className={styles.filterLabel} aria-hidden="true">Filters</span>
           {FILTERS.map((f) => (
             <button
               key={f.id}
@@ -296,7 +298,7 @@ function AddTrack({ onAdd, onAddById }: AddTrackProps) {
           <input
             ref={inputRef}
             type="text"
-            placeholder={onAddById ? 'Search YouTube or bebradio...' : 'Search or paste YouTube URL...'}
+            placeholder="Search"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
             onFocus={() => (visible.length > 0 || showNoResults || searching) && setShowDropdown(true)}
@@ -322,15 +324,19 @@ function AddTrack({ onAdd, onAddById }: AddTrackProps) {
                   onClick={() => select(r)}
                   onMouseEnter={() => setActiveIndex(i)}
                 >
-                  {r.thumbnail ? (
-                    <img className={styles.searchResultThumb} src={r.thumbnail} alt="" />
-                  ) : (
-                    <span className={styles.searchResultThumb} aria-hidden="true" />
-                  )}
+                  <TrackArt
+                    id={r.id}
+                    title={r.title}
+                    thumbnail={r.thumbnail}
+                    size={48}
+                    height={36}
+                    radius={4}
+                    className={styles.searchResultThumb}
+                  />
                   <div className={styles.searchResultInfo}>
                     <div className={styles.searchResultTitle}>{r.title}</div>
                     <div className={styles.searchResultMeta}>
-                      {r.artist}
+                      {r.artist || 'Unknown artist'}
                       {r.duration > 0 && <> · {formatDuration(r.duration)}</>}
                       {r.statusNote && <> · {r.statusNote}…</>}
                     </div>
@@ -360,13 +366,6 @@ function AddTrack({ onAdd, onAddById }: AddTrackProps) {
             </div>
           )}
         </div>
-        <button className="btn" type="submit" disabled={adding || !query.trim()}>
-          {adding ? (
-            <span className={styles.btnContent}><span className={styles.btnSpinner} /> Adding...</span>
-          ) : (
-            'Add'
-          )}
-        </button>
       </form>
     </div>
   )

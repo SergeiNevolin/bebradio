@@ -125,6 +125,51 @@ func (uc *TrackUsecase) SetCover(trackID, userID, filename string, body io.Reade
 	return uc.repo.SetCoverUploaded(trackID)
 }
 
+// Import stores already-fetched audio (+ optional cover) as a new library
+// track owned by ownerID — e.g. an admin saving a YouTube queue track into
+// bebradio. It mirrors Create but takes bytes instead of a multipart body:
+// the row starts "processing" and the poller flips it once music-service
+// transcodes. The cover is best-effort: a failed cover never fails the import.
+func (uc *TrackUsecase) Import(ownerID, title, artist, filename string, audio io.Reader, coverName string, cover io.Reader) (*entity.Track, error) {
+	count, err := uc.repo.CountByOwner(ownerID)
+	if err != nil {
+		return nil, err
+	}
+	if count >= uc.config.MashupUserQuota {
+		return nil, ErrTrackQuota
+	}
+
+	res, err := uc.mediaClient.UploadTrack(filename, audio)
+	if err != nil {
+		uc.log.Error("track import to music service failed", "error", err)
+		return nil, ErrTrackUploadFail
+	}
+	rowID, _ := res["id"].(string)
+	mediaID, _ := res["media_id"].(string)
+	if rowID == "" || mediaID == "" {
+		uc.log.Error("import returned no track identity")
+		return nil, ErrTrackUploadFail
+	}
+
+	m := entity.TrackFromUpload(rowID, ownerID, cleanTitle(title, filename),
+		clip(strings.TrimSpace(artist), trackTitleMax))
+	m.MediaID = mediaID
+	if err := uc.repo.Create(m); err != nil {
+		// Don't orphan the file in MinIO when the row can't be stored.
+		_ = uc.mediaClient.DeleteTrack(mediaID)
+		return nil, err
+	}
+
+	if cover != nil {
+		if err := uc.SetCover(m.ID, ownerID, coverName, cover); err != nil {
+			uc.log.Warn("imported track cover upload failed", "track_id", m.ID, "error", err)
+		}
+	}
+
+	go uc.poll(m.ID, m.MediaID)
+	return m, nil
+}
+
 // Create enforces the per-user quota, streams the file to music-service —
 // which mints the track id and the media id along with the data — then
 // inserts the processing row and starts a poller that flips it to
