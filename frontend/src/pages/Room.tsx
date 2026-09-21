@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { setRoomAccess, clearRoomAccess } from '../lib/roomAccess'
 import { useRoomWebSocket } from '../hooks/useRoomWebSocket'
+import { useToast } from '../context/ToastContext'
 import Player from '../components/Player'
 import Queue from '../components/Queue'
 import AddTrack from '../components/AddTrack'
@@ -29,6 +30,7 @@ export default function Room() {
   const [deleteError, setDeleteError] = useState('')
   const [copied, setCopied] = useState(false)
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
+  const { showToast } = useToast()
 
   const {
     room, setRoom, loading, setLoading, error, setError, locked, setLocked,
@@ -75,6 +77,15 @@ export default function Room() {
       return { success: true }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
+    }
+  }
+
+  const handleImportQueueTrack = async (trackId: string): Promise<void> => {
+    try {
+      await api.importQueueTrack(roomId!, trackId)
+      showToast('Saved to bebradio, processing…', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Import failed', 'error')
     }
   }
 
@@ -211,6 +222,8 @@ export default function Room() {
             queue={room?.queue ?? []}
             currentIndex={room?.current_index ?? 0}
             searching={room?.radio_searching ?? false}
+            canImport={isAdmin}
+            onImport={handleImportQueueTrack}
           />
         </div>
         <div className={styles.roomChat}>

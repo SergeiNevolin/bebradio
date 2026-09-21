@@ -12,30 +12,30 @@ describe('AddTrack', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders input and button', () => {
+  it('renders search input without a separate submit button', () => {
     renderWithToast(<AddTrack onAdd={vi.fn()} />)
-    expect(screen.getByPlaceholderText('Search or paste YouTube URL...')).toBeInTheDocument()
-    expect(screen.getByText('Add')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument()
   })
 
   it('calls onAdd with url on submit', async () => {
     const onAdd = vi.fn().mockResolvedValue({ success: true })
-    renderWithToast(<AddTrack onAdd={onAdd} />)
+    const { container } = renderWithToast(<AddTrack onAdd={onAdd} />)
 
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
     fireEvent.change(input, { target: { value: 'https://youtube.com/watch?v=123' } })
-    fireEvent.click(screen.getByText('Add'))
+    fireEvent.submit(container.querySelector('form')!)
 
     expect(onAdd).toHaveBeenCalledWith('https://youtube.com/watch?v=123')
   })
 
   it('clears input on success and shows toast', async () => {
     const onAdd = vi.fn().mockResolvedValue({ success: true })
-    renderWithToast(<AddTrack onAdd={onAdd} />)
+    const { container } = renderWithToast(<AddTrack onAdd={onAdd} />)
 
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
     fireEvent.change(input, { target: { value: 'https://youtube.com/watch?v=123' } })
-    fireEvent.click(screen.getByText('Add'))
+    fireEvent.submit(container.querySelector('form')!)
 
     expect(await screen.findByText('Added!')).toBeInTheDocument()
     expect(input).toHaveValue('')
@@ -43,19 +43,19 @@ describe('AddTrack', () => {
 
   it('shows error toast on failure', async () => {
     const onAdd = vi.fn().mockResolvedValue({ success: false, error: 'Failed to add track' })
-    renderWithToast(<AddTrack onAdd={onAdd} />)
+    const { container } = renderWithToast(<AddTrack onAdd={onAdd} />)
 
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
     fireEvent.change(input, { target: { value: 'https://youtube.com/watch?v=bad' } })
-    fireEvent.click(screen.getByText('Add'))
+    fireEvent.submit(container.querySelector('form')!)
 
     expect(await screen.findByText('Failed to add track')).toBeInTheDocument()
   })
 
   it('does not submit empty url', () => {
     const onAdd = vi.fn()
-    renderWithToast(<AddTrack onAdd={onAdd} />)
-    fireEvent.click(screen.getByText('Add'))
+    const { container } = renderWithToast(<AddTrack onAdd={onAdd} />)
+    fireEvent.submit(container.querySelector('form')!)
     expect(onAdd).not.toHaveBeenCalled()
   })
 
@@ -63,26 +63,25 @@ describe('AddTrack', () => {
     const onAdd = vi.fn().mockResolvedValue({ success: true })
     const { container } = renderWithToast(<AddTrack onAdd={onAdd} />)
 
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
     fireEvent.change(input, { target: { value: 'https://youtube.com/watch?v=123' } })
     fireEvent.submit(container.querySelector('form')!)
 
     expect(onAdd).toHaveBeenCalledWith('https://youtube.com/watch?v=123')
   })
 
-  it('disables input and button while adding', async () => {
+  it('disables input while adding', async () => {
     let resolveAdd: (v: { success: boolean }) => void
     const onAdd = vi.fn().mockImplementation(() => new Promise((r) => { resolveAdd = r }))
-    renderWithToast(<AddTrack onAdd={onAdd} />)
+    const { container } = renderWithToast(<AddTrack onAdd={onAdd} />)
 
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
     fireEvent.change(input, { target: { value: 'https://youtube.com/watch?v=123' } })
-    fireEvent.click(screen.getByText('Add'))
+    fireEvent.submit(container.querySelector('form')!)
 
     await waitFor(() => {
       expect(input).toBeDisabled()
     })
-    expect(screen.getByText('Adding...')).toBeInTheDocument()
 
     resolveAdd!({ success: true })
     await waitFor(() => {
@@ -92,7 +91,7 @@ describe('AddTrack', () => {
 
   it('shows clear button when input has text', () => {
     renderWithToast(<AddTrack onAdd={vi.fn()} />)
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
 
     expect(screen.queryByRole('button', { name: '×' })).not.toBeInTheDocument()
 
@@ -102,7 +101,7 @@ describe('AddTrack', () => {
 
   it('clears input when clear button is clicked', () => {
     renderWithToast(<AddTrack onAdd={vi.fn()} />)
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
 
     fireEvent.change(input, { target: { value: 'test query' } })
     fireEvent.click(screen.getByText('×'))
@@ -118,7 +117,7 @@ describe('AddTrack', () => {
     )
 
     renderWithToast(<AddTrack onAdd={vi.fn()} />)
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
 
     fireEvent.change(input, { target: { value: 'rock music' } })
     await vi.advanceTimersByTimeAsync(400)
@@ -135,7 +134,7 @@ describe('AddTrack', () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve([]) })
 
     renderWithToast(<AddTrack onAdd={vi.fn()} />)
-    const input = screen.getByPlaceholderText('Search or paste YouTube URL...')
+    const input = screen.getByPlaceholderText('Search')
 
     fireEvent.change(input, { target: { value: 'xyznonexistent' } })
     await vi.advanceTimersByTimeAsync(500)
@@ -144,9 +143,10 @@ describe('AddTrack', () => {
     vi.useRealTimers()
   })
 
-  it('disables button when input is empty', () => {
-    renderWithToast(<AddTrack onAdd={vi.fn()} />)
-    expect(screen.getByText('Add')).toBeDisabled()
+  it('shows the Filters label above the source chips', () => {
+    renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={vi.fn()} />)
+    expect(screen.getByText('Filters')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Search source filter' })).toBeInTheDocument()
   })
 
   it('stays YouTube-only without onAddById', () => {
@@ -173,7 +173,7 @@ describe('AddTrack', () => {
     renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.change(screen.getByPlaceholderText('Search YouTube or bebradio...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search'), {
       target: { value: 'boot' },
     })
 
@@ -203,7 +203,7 @@ describe('AddTrack', () => {
     })
     renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={vi.fn()} />)
 
-    fireEvent.change(screen.getByPlaceholderText('Search YouTube or bebradio...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search'), {
       target: { value: 'boot' },
     })
     expect(await screen.findByText('Bootleg')).toBeInTheDocument()
@@ -235,7 +235,7 @@ describe('AddTrack', () => {
     const onAddById = vi.fn().mockResolvedValue({ success: true })
     renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={onAddById} />)
 
-    fireEvent.change(screen.getByPlaceholderText('Search YouTube or bebradio...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search'), {
       target: { value: 'boot' },
     })
     expect(await screen.findByText('Bootleg')).toBeInTheDocument()
@@ -259,7 +259,7 @@ describe('AddTrack', () => {
     })
     renderWithToast(<AddTrack onAdd={vi.fn()} onAddById={vi.fn()} />)
 
-    fireEvent.change(screen.getByPlaceholderText('Search YouTube or bebradio...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search'), {
       target: { value: 'raw' },
     })
     expect(await screen.findByText('Raw Take')).toBeInTheDocument()

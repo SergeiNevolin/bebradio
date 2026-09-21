@@ -94,6 +94,7 @@ func (s *Server) setupRoutes() {
 			r.Delete("/{roomID}", s.handleDeleteRoom)
 			r.Post("/{roomID}/join", s.handleJoinRoom)
 			r.Post("/{roomID}/queue", s.handleAddToQueue)
+			r.Post("/{roomID}/queue/{trackID}/import", s.handleImportQueueTrack)
 			r.Post("/{roomID}/visit", s.handleRecordVisit)
 			r.Get("/{roomID}/lyrics", s.handleGetLyrics)
 		})

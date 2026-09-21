@@ -124,6 +124,17 @@ export const api = {
   addTrackById: (roomId: string, track_id: string) =>
     api.addToQueue(roomId, { track_id }),
 
+  // POST /api/rooms/:roomID/queue/:trackID/import → 202 Track.ToDict()
+  // Admin only: saves a YouTube queue track into the bebradio library
+  // (audio + cover). The row starts "processing", poll getTrack for readiness.
+  importQueueTrack: (roomId: string, trackId: string) => {
+    const access = getRoomAccess(roomId)
+    const query = access ? `?access=${encodeURIComponent(access)}` : ''
+    return request<Track>(
+      `/api/rooms/${roomId}/queue/${trackId}/import${query}`, { method: 'POST' }
+    )
+  },
+
   // PATCH /api/rooms/:roomID → ToDict()
   updateRoom: (roomId: string, settings: Record<string, unknown>) =>
     request<Record<string, unknown>>(
