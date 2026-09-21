@@ -204,7 +204,7 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, err := s.room.JoinRoom(rm, req.Password)
+	access, err := s.room.JoinRoom(rm, req.Password, s.getUserOptional(r))
 	if err != nil {
 		if be, ok := err.(*usecase.BusinessError); ok {
 			s.writeError(w, be.Code, be.Message)

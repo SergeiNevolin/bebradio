@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -104,13 +105,22 @@ func main() {
 		roomID := chi.URLParam(r, "roomID")
 		access := r.URL.Query().Get("access")
 
+		var userID string
+		if auth := r.Header.Get("Authorization"); auth != "" {
+			token := strings.TrimPrefix(auth, "Bearer ")
+			uid, err := authService.DecodeToken(token)
+			if err == nil {
+				userID = uid
+			}
+		}
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Error("websocket upgrade failed", "error", err)
 			return
 		}
 
-		wsHandler.HandleWebSocket(conn, roomID, access)
+		wsHandler.HandleWebSocket(conn, roomID, access, userID)
 	})
 
 	// Start background workers

@@ -134,11 +134,23 @@ func (uc *RoomUsecase) HasRoomAccess(rm *entity.Room, userID, access string) boo
 	if userID != "" && userID == rm.OwnerID {
 		return true
 	}
+	if userID != "" {
+		user, err := uc.userRepo.FindByID(userID)
+		if err == nil && user.IsAdmin() {
+			return true
+		}
+	}
 	return uc.auth.VerifyRoomToken(access, rm.ID)
 }
 
-func (uc *RoomUsecase) JoinRoom(rm *entity.Room, password string) (string, error) {
+func (uc *RoomUsecase) JoinRoom(rm *entity.Room, password string, userID string) (string, error) {
 	if rm.PasswordHash != nil {
+		if userID != "" {
+			user, err := uc.userRepo.FindByID(userID)
+			if err == nil && user.IsAdmin() {
+				return uc.auth.CreateRoomToken(rm.ID)
+			}
+		}
 		if !uc.auth.VerifyPassword(password, *rm.PasswordHash) {
 			return "", ErrWrongPassword
 		}

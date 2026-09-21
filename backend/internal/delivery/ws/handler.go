@@ -56,7 +56,7 @@ func NewHandler(
 	}
 }
 
-func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access string) {
+func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access, userID string) {
 	roomID = toUpper(roomID)
 	ctx := context.Background()
 
@@ -68,7 +68,7 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access string) {
 	}
 
 	if rm.PasswordHash != nil {
-		if !h.room.HasRoomAccess(rm, "", access) {
+		if !h.room.HasRoomAccess(rm, userID, access) {
 			h.sendError(conn, "Password required")
 			conn.Close()
 			return

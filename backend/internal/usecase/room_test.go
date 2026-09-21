@@ -227,7 +227,7 @@ func TestJoinRoomNoPassword(t *testing.T) {
 
 	rm := entity.NewRoom("X", "R", "O")
 
-	token, err := uc.JoinRoom(rm, "")
+	token, err := uc.JoinRoom(rm, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestJoinRoomCorrectPassword(t *testing.T) {
 	rm := entity.NewRoom("X", "R", "O")
 	rm.PasswordHash = &hash
 
-	token, err := uc.JoinRoom(rm, "secret123")
+	token, err := uc.JoinRoom(rm, "secret123", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -273,7 +273,7 @@ func TestJoinRoomWrongPassword(t *testing.T) {
 	rm := entity.NewRoom("X", "R", "O")
 	rm.PasswordHash = &hash
 
-	_, err := uc.JoinRoom(rm, "wrongpassword")
+	_, err := uc.JoinRoom(rm, "wrongpassword", "")
 	if err == nil {
 		t.Fatal("expected error for wrong password")
 	}
