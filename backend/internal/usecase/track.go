@@ -108,6 +108,32 @@ func (uc *TrackUsecase) Unlike(trackID, userID string) (map[string]any, error) {
 	return map[string]any{"likes": n, "liked": false}, nil
 }
 
+// UpdateMetadata changes the title and artist of a library track.
+// Owner-only (admins can bypass via DeleteAsAdmin + re-import).
+func (uc *TrackUsecase) UpdateMetadata(trackID, userID, title, artist string) (*entity.Track, error) {
+	title = strings.TrimSpace(title)
+	artist = strings.TrimSpace(artist)
+	if title == "" {
+		return nil, &BusinessError{Code: 422, Message: "Title cannot be empty"}
+	}
+	if len([]rune(title)) > trackTitleMax {
+		return nil, &BusinessError{Code: 422, Message: "Title too long"}
+	}
+	m, err := uc.repo.FindByID(trackID)
+	if err != nil {
+		return nil, ErrTrackNotFound
+	}
+	if m.OwnerID != userID {
+		return nil, ErrTrackNotOwner
+	}
+	if err := uc.repo.UpdateMetadata(trackID, title, artist); err != nil {
+		return nil, err
+	}
+	m.Title = title
+	m.Artist = artist
+	return m, nil
+}
+
 // SetCover streams a cover image through music-service (owner only) and flips
 // has_cover / cover_updated_at on the row.
 func (uc *TrackUsecase) SetCover(trackID, userID, filename string, body io.Reader) error {

@@ -178,6 +178,14 @@ func (r *TrackRepo) CountByOwner(ownerID string) (int, error) {
 	return count, err
 }
 
+func (r *TrackRepo) UpdateMetadata(id, title, artist string) error {
+	_, err := r.pool.Exec(context.Background(),
+		`UPDATE tracks SET title = $1, artist = $2 WHERE id = $3`,
+		title, artist, id,
+	)
+	return err
+}
+
 func (r *TrackRepo) ListProcessing() ([]*entity.Track, error) {
 	rows, err := r.pool.Query(context.Background(),
 		`SELECT `+trackColumns+` FROM tracks t WHERE `+libraryFilter+` AND t.status = 'processing' ORDER BY t.added_at`)

@@ -280,6 +280,16 @@ export default function Mashups() {
     }
   }
 
+  const handleSaveMeta = async (m: Track, title: string, artist: string) => {
+    try {
+      await api.updateTrack(m.id, { title, artist })
+      patchAll(m.id, (x) => ({ ...x, title, artist }))
+      showToast('Metadata updated', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not update metadata', 'error')
+    }
+  }
+
   const activeId = player.current?.id
   const isAdmin = !!user && user.role === 'admin'
 
@@ -427,7 +437,9 @@ export default function Mashups() {
         <EditMashupModal
           mashup={editing}
           canManageCover={!!user && (user.id === editing.owner_id || isAdmin)}
+          canEditMeta={!!user && user.id === editing.owner_id}
           canDelete={!!user && (user.id === editing.owner_id || isAdmin)}
+          onSaveMeta={(title, artist) => handleSaveMeta(editing, title, artist)}
           onChangeCover={(file) => handleChangeCover(editing, file)}
           onDelete={() => handleDelete(editing)}
           onClose={() => setEditingId(null)}

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
@@ -7,7 +7,9 @@ import styles from './EditMashupModal.module.css'
 interface EditMashupModalProps {
   mashup: Track
   canManageCover: boolean
+  canEditMeta: boolean
   canDelete: boolean
+  onSaveMeta: (title: string, artist: string) => Promise<void>
   onChangeCover: (file: File) => void
   onDelete: () => void
   onClose: () => void
@@ -20,12 +22,32 @@ interface EditMashupModalProps {
 export default function EditMashupModal({
   mashup,
   canManageCover,
+  canEditMeta,
   canDelete,
+  onSaveMeta,
   onChangeCover,
   onDelete,
   onClose,
 }: EditMashupModalProps) {
   const coverInputRef = useRef<HTMLInputElement>(null)
+  const [title, setTitle] = useState(mashup.title)
+  const [artist, setArtist] = useState(mashup.artist)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const metaDirty = title !== mashup.title || artist !== mashup.artist
+
+  const handleSaveMeta = async () => {
+    if (!metaDirty || saving) return
+    setSaving(true)
+    try {
+      await onSaveMeta(title.trim(), artist.trim())
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const stats = [
     mashup.status === 'ready' ? formatTime(mashup.duration) : mashup.status,
@@ -61,6 +83,42 @@ export default function EditMashupModal({
               <div className={styles.stats}>{stats}</div>
             </div>
           </div>
+
+          {canEditMeta && (
+            <section className={styles.section}>
+              <h4 className={styles.sectionTitle}>Metadata</h4>
+              <label className={styles.fieldLabel}>
+                Title
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={200}
+                />
+              </label>
+              <label className={styles.fieldLabel}>
+                Artist
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={artist}
+                  onChange={(e) => setArtist(e.target.value)}
+                  maxLength={200}
+                />
+              </label>
+              <div className={styles.metaActions}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!metaDirty || saving}
+                  onClick={handleSaveMeta}
+                >
+                  {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
+                </button>
+              </div>
+            </section>
+          )}
 
           {canManageCover && (
             <section className={styles.section}>
@@ -117,4 +175,3 @@ export default function EditMashupModal({
     </div>
   )
 }
-

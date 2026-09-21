@@ -437,6 +437,16 @@ func (m *MockTrackRepo) ListProcessing() ([]*entity.Track, error) {
 	return out, nil
 }
 
+func (m *MockTrackRepo) UpdateMetadata(id, title, artist string) error {
+	v, ok := m.Items[id]
+	if !ok {
+		return ErrNotFound
+	}
+	v.Title = title
+	v.Artist = artist
+	return nil
+}
+
 type MockAuthBridge struct {
 	HashPasswordFn      func(password string) (string, error)
 	VerifyPasswordFn    func(password, hash string) bool

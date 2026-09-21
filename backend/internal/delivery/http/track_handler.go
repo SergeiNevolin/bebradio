@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -82,6 +83,34 @@ func (s *Server) toggleLike(w http.ResponseWriter, r *http.Request, like bool) {
 	s.writeJSON(w, 200, res)
 }
 
+func (s *Server) handleUpdateTrack(w http.ResponseWriter, r *http.Request) {
+	userID, ok := s.getUserRequired(r)
+	if !ok {
+		s.writeError(w, 401, "Not authenticated")
+		return
+	}
+	trackID := chi.URLParam(r, "trackID")
+	var body struct {
+		Title  string `json:"title"`
+		Artist string `json:"artist"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.writeError(w, 400, "Invalid JSON")
+		return
+	}
+	m, err := s.tracks.UpdateMetadata(trackID, userID, body.Title, body.Artist)
+	if err != nil {
+		if be, ok := err.(*usecase.BusinessError); ok {
+			s.writeError(w, be.Code, be.Message)
+			return
+		}
+		s.log.Error("update track metadata failed", "error", err, "track_id", trackID)
+		s.writeError(w, 500, "Failed to update track")
+		return
+	}
+	s.writeJSON(w, 200, m.ToDict())
+}
+
 func (s *Server) handleMyTracks(w http.ResponseWriter, r *http.Request) {
 	userID, ok := s.getUserRequired(r)
 	if !ok {
@@ -114,7 +143,8 @@ func (s *Server) handleUploadTrackCover(w http.ResponseWriter, r *http.Request) 
 		s.writeError(w, 401, "Not authenticated")
 		return
 	}
-	if !s.uploadLimiter.Allow(userID) {
+	admin, _ := s.isAdmin(userID)
+	if !admin && !s.uploadLimiter.Allow(userID) {
 		w.Header().Set("Retry-After", "3600")
 		s.writeError(w, 429, "Upload rate limit reached, try again later")
 		return
@@ -192,7 +222,8 @@ func (s *Server) handleUploadTrack(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, 401, "Not authenticated")
 		return
 	}
-	if !s.uploadLimiter.Allow(userID) {
+	admin, _ := s.isAdmin(userID)
+	if !admin && !s.uploadLimiter.Allow(userID) {
 		w.Header().Set("Retry-After", "3600")
 		s.writeError(w, 429, "Upload rate limit reached, try again later")
 		return

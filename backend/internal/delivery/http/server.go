@@ -113,6 +113,7 @@ func (s *Server) setupRoutes() {
 			r.Post("/{trackID}/like", s.handleLikeTrack)        // auth
 			r.Delete("/{trackID}/like", s.handleUnlikeTrack)    // auth
 			r.Put("/{trackID}/cover", s.handleUploadTrackCover) // auth + owner, multipart: file
+			r.Patch("/{trackID}", s.handleUpdateTrack)          // auth + owner, JSON: {title, artist}
 		})
 
 		r.Route("/users", func(r chi.Router) {

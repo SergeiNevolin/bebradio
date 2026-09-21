@@ -223,6 +223,13 @@ export const api = {
       }
     }),
 
+  // PATCH /api/tracks/:id → Track.ToDict()  (auth + owner)
+  updateTrack: (id: string, data: { title: string; artist: string }) =>
+    request<Track>(`/api/tracks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
   // POST /api/tracks (multipart) → 202 Track.ToDict()
   // XHR rather than fetch so the upload exposes progress; the browser sets the
   // multipart boundary, so we must NOT force a Content-Type here.

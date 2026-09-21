@@ -26,6 +26,7 @@ type TrackRepository interface {
 	ListLikedByUser(userID string, limit, offset int) ([]*entity.Track, error)
 	CountByOwner(ownerID string) (int, error)
 	ListProcessing() ([]*entity.Track, error)
+	UpdateMetadata(id, title, artist string) error
 	// Like/Unlike are idempotent and return the fresh like count.
 	Like(trackID, userID string) (int, error)
 	Unlike(trackID, userID string) (int, error)
