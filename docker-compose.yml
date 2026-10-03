@@ -101,7 +101,7 @@ services:
       - app-net
 
   karaoke-service:
-    image: ${KARAOKE_IMAGE:-ghcr.io/serginevolin/karaoke:local}
+    image: ${KARAOKE_IMAGE:-ghcr.io/sergeinevolin/karaoke:local}
     build:
       context: ${KARAOKE_SRC:-../karaoke}
       dockerfile: Dockerfile

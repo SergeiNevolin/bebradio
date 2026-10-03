@@ -37,7 +37,7 @@ Nginx проксирует `/karaoke/` на сервис; аплоады иду�
 - локально: `docker compose up --build` — сервис собирается из соседнего
   `../karaoke` (override — `KARAOKE_SRC`), тег образа — `KARAOKE_IMAGE`;
 - прод: готовый образ из GHCR (`KARAOKE_IMAGE`, дефолт
-  `ghcr.io/serginevolin/karaoke:main`); деплой-джоб логинится в GHCR токеном
+  `ghcr.io/sergeinevolin/karaoke:main`); деплой-джоб логинится в GHCR токеном
   workflow и пишет `KARAOKE_IMAGE`/`KARAOKE_ML_SERVICE_URL` в `.env`;
 - `KARAOKE_ML_SERVICE_URL` — адрес GPU-микросервиса караоке (в `.env` прода
   обязателен; dev-дефолт `host.docker.internal:8001`);

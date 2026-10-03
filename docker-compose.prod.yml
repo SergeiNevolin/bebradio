@@ -51,7 +51,7 @@ services:
       - app-net
 
   music-service:
-    image: ghcr.io/serginevolin/bebradio-music-service:${IMAGE_TAG:-main}
+    image: ghcr.io/sergeinevolin/bebradio-music-service:${IMAGE_TAG:-main}
     build: ./music-service
     environment:
       - S3_ENDPOINT=http://silo:9000
@@ -70,7 +70,7 @@ services:
       - app-net
 
   backend:
-    image: ghcr.io/serginevolin/bebradio-backend:${IMAGE_TAG:-main}
+    image: ghcr.io/sergeinevolin/bebradio-backend:${IMAGE_TAG:-main}
     build: ./backend
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/bebradio
@@ -94,7 +94,7 @@ services:
 
   karaoke-service:
     # живём с образом из GHCR (см. docker-compose.yml, CI публикует ветки/теги/sha)
-    image: ${KARAOKE_IMAGE:-ghcr.io/serginevolin/karaoke:main}
+    image: ${KARAOKE_IMAGE:-ghcr.io/sergeinevolin/karaoke:main}
     restart: unless-stopped
     environment:
       - AUTH_JWT_SECRET=${SECRET_KEY:?Set SECRET_KEY in .env}
@@ -115,7 +115,7 @@ services:
       - app-net
 
   frontend:
-    image: ghcr.io/serginevolin/bebradio-frontend:${IMAGE_TAG:-main}
+    image: ghcr.io/sergeinevolin/bebradio-frontend:${IMAGE_TAG:-main}
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
