@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -806,5 +807,171 @@ func TestHandleGetLyricsUsesMediaID(t *testing.T) {
 	}
 	if _, ok := got["cues"].([]any); !ok {
 		t.Errorf("expected cues array, got %T", got["cues"])
+	}
+}
+
+// === Refresh / Logout ===
+
+func loginRefreshCookie(t *testing.T, d *testDeps) string {
+	t.Helper()
+	registerUser(t, d, "test@test.com", "testuser", "pass123")
+	body, _ := json.Marshal(map[string]string{"email": "test@test.com", "password": "pass123"})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("login: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "bebradio_refresh" && c.Value != "" {
+			return c.Value
+		}
+	}
+	t.Fatal("refresh cookie not set on login")
+	return ""
+}
+
+func postRefresh(t *testing.T, d *testDeps, cookieVal string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/api/auth/refresh", nil)
+	if cookieVal != "" {
+		req.AddCookie(&http.Cookie{Name: "bebradio_refresh", Value: cookieVal})
+	}
+	w := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(w, req)
+	return w
+}
+
+func TestLoginSetsRefreshCookie(t *testing.T) {
+	d := setupTestServer(t)
+	body, _ := json.Marshal(map[string]string{"email": "a@a.com", "username": "alice", "password": "pass123"})
+	rr := httptest.NewRequest("POST", "/api/auth/register", bytes.NewReader(body))
+	rr.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(w, rr)
+	if w.Code != 200 {
+		t.Fatalf("register: expected 200, got %d", w.Code)
+	}
+
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "bebradio_refresh" {
+			cookie = c
+		}
+	}
+	if cookie == nil || cookie.Value == "" {
+		t.Fatal("expected non-empty bebradio_refresh cookie")
+	}
+	if !cookie.HttpOnly {
+		t.Error("cookie must be HttpOnly")
+	}
+	if cookie.Path != "/api/auth" {
+		t.Errorf("cookie path must be /api/auth, got %q", cookie.Path)
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Errorf("cookie SameSite must be Lax, got %v", cookie.SameSite)
+	}
+	if cookie.MaxAge <= 0 {
+		t.Errorf("cookie MaxAge must be > 0, got %d", cookie.MaxAge)
+	}
+}
+
+func TestRefreshRotatesSession(t *testing.T) {
+	d := setupTestServer(t)
+	c1 := loginRefreshCookie(t, d)
+
+	w1 := postRefresh(t, d, c1)
+	if w1.Code != 200 {
+		t.Fatalf("refresh #1: expected 200, got %d: %s", w1.Code, w1.Body.String())
+	}
+	var resp1 map[string]any
+	json.Unmarshal(w1.Body.Bytes(), &resp1)
+	access, _ := resp1["token"].(string)
+	if access == "" {
+		t.Fatal("expected new access token")
+	}
+
+	var c2 string
+	for _, c := range w1.Result().Cookies() {
+		if c.Name == "bebradio_refresh" {
+			if !c.HttpOnly {
+				t.Error("rotated cookie must be HttpOnly")
+			}
+			c2 = c.Value
+		}
+	}
+	if c2 == "" {
+		t.Fatal("expected rotated refresh cookie")
+	}
+	if c2 == c1 {
+		t.Error("refresh must be rotated (new value)")
+	}
+
+	// ротированный работает
+	if w2 := postRefresh(t, d, c2); w2.Code != 200 {
+		t.Errorf("refresh #2 (rotated): expected 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+	// старый отозван
+	if w3 := postRefresh(t, d, c1); w3.Code != 401 {
+		t.Errorf("refresh #3 (old, revoked): expected 401, got %d", w3.Code)
+	}
+}
+
+func TestRefreshWithoutCookie(t *testing.T) {
+	d := setupTestServer(t)
+	if w := postRefresh(t, d, ""); w.Code != 401 {
+		t.Errorf("expected 401 without cookie, got %d", w.Code)
+	}
+}
+
+func TestRefreshRejectsAccessTokenAsCookie(t *testing.T) {
+	d := setupTestServer(t)
+	token := registerUser(t, d, "test@test.com", "testuser", "pass123")
+
+	w := postRefresh(t, d, token) // access-токен вместо refresh
+	if w.Code != 401 {
+		t.Errorf("access token as cookie must be 401, got %d", w.Code)
+	}
+}
+
+func TestRefreshUnknownJTI(t *testing.T) {
+	d := setupTestServer(t)
+	if w := postRefresh(t, d, "refresh_someone#9999"); w.Code != 401 {
+		t.Errorf("unknown jti must be 401, got %d", w.Code)
+	}
+}
+
+func TestLogoutRevokesRefresh(t *testing.T) {
+	d := setupTestServer(t)
+	c1 := loginRefreshCookie(t, d)
+
+	req := httptest.NewRequest("POST", "/api/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "bebradio_refresh", Value: c1})
+	w := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("logout: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	// кука очищена
+	cleared := false
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "bebradio_refresh" && (c.Value == "" || c.MaxAge < 0) {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Error("logout must clear refresh cookie")
+	}
+	// отозван — прежний refresh мёртв
+	if w2 := postRefresh(t, d, c1); w2.Code != 401 {
+		t.Errorf("refresh after logout must be 401, got %d", w2.Code)
+	}
+	// идемпотентен без куки
+	req2 := httptest.NewRequest("POST", "/api/auth/logout", nil)
+	w3 := httptest.NewRecorder()
+	d.server.Router.ServeHTTP(w3, req2)
+	if w3.Code != 200 {
+		t.Errorf("logout without cookie: expected 200, got %d", w3.Code)
 	}
 }

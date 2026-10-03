@@ -1,6 +1,7 @@
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { AuthProvider, useAuth } from '../context/AuthContext'
+import { setRefreshForbidden } from '../lib/api'
 
 function TestConsumer() {
   const { user, token, loading, login, register, logout, authHeaders } = useAuth()
@@ -31,10 +32,13 @@ function renderWithAuth() {
 describe('AuthContext', () => {
   beforeEach(() => {
     localStorage.clear()
-    vi.stubGlobal('fetch', vi.fn())
+    setRefreshForbidden(false)
+    // неожиданные вызовы (bootstrap refresh и т.п.) — отказ, не молчание
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Unexpected fetch')))
   })
   afterEach(() => {
     vi.unstubAllGlobals()
+    setRefreshForbidden(false)
   })
 
   it('starts in loading state with no token', async () => {
@@ -57,13 +61,52 @@ describe('AuthContext', () => {
     })
   })
 
-  it('clears token on invalid response', async () => {
+  it('clears token on 401 after failed refresh', async () => {
     localStorage.setItem('token', 'bad')
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: false } as Response)
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ error: 'Not authenticated' }),
+      } as Response) // /me
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ error: 'Not authenticated' }),
+      } as Response) // refresh
     renderWithAuth()
     await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
     expect(screen.getByTestId('user').textContent).toBe('null')
     expect(localStorage.getItem('token')).toBeNull()
+    expect(vi.mocked(fetch).mock.calls.some(([u]) => String(u).includes('/api/auth/refresh'))).toBe(true)
+  })
+
+  it('keeps token on server error', async () => {
+    localStorage.setItem('token', 'tok500')
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ error: 'Internal server error' }),
+    } as Response)
+    renderWithAuth()
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
+    expect(screen.getByTestId('user').textContent).toBe('null')
+    expect(localStorage.getItem('token')).toBe('tok500')
+  })
+
+  it('restores session from refresh cookie when no local token', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ token: 'restored' }),
+      } as Response) // bootstrap refresh
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: { id: '1', email: 'a@b.com', username: 'alice' } }),
+      } as Response) // /me
+    renderWithAuth()
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('alice'))
+    expect(localStorage.getItem('token')).toBe('restored')
   })
 
   it('login stores token and sets user', async () => {
@@ -131,12 +174,17 @@ describe('AuthContext', () => {
     expect(localStorage.getItem('token')).toBe('regtok')
   })
 
-  it('logout clears token and user', async () => {
+  it('logout clears token, user and revokes refresh', async () => {
     localStorage.setItem('token', 'tok')
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ user: { id: '1', email: 'a@b.com', username: 'alice' } }),
-    } as Response)
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: { id: '1', email: 'a@b.com', username: 'alice' } }),
+      } as Response) // /me
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ ok: true }),
+      } as Response) // POST /api/auth/logout
     renderWithAuth()
     await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('alice'))
 
@@ -145,6 +193,7 @@ describe('AuthContext', () => {
     })
     expect(screen.getByTestId('user').textContent).toBe('null')
     expect(localStorage.getItem('token')).toBeNull()
+    expect(vi.mocked(fetch).mock.calls.some(([u]) => String(u) === '/api/auth/logout')).toBe(true)
   })
 
   it('authHeaders returns bearer when token exists', async () => {

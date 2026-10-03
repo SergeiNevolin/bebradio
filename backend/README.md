@@ -37,7 +37,11 @@ migrations/          - SQL migrations
 | `MUSIC_SERVICE_URL` | `http://127.0.0.1:8100` | Music service URL |
 | `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins (comma-separated) |
 | `PORT` | `8000` | Server port |
-| `JWT_EXPIRE_HOURS` | `72` | JWT token expiry |
+| `ROOM_TOKEN_EXPIRE_HOURS` | `72` (fallback: `JWT_EXPIRE_HOURS`) | Room link tokens (`roomAccess`) expiry |
+| `JWT_EXPIRE_HOURS` | `72` | Deprecated alias for `ROOM_TOKEN_EXPIRE_HOURS` |
+| `JWT_ACCESS_EXPIRE_MINUTES` | `15` | Access token (Bearer) expiry — refreshed silently by the SPA |
+| `JWT_REFRESH_EXPIRE_DAYS` | `30` | Refresh session TTL (httpOnly cookie `bebradio_refresh`, rotation on every use) |
+| `AUTH_COOKIE_SECURE` | `false` | Set the `Secure` flag on the refresh cookie (enable behind HTTPS) |
 | `MAX_DURATION` | `3600` | Max track duration (seconds) |
 
 ## Build & Run

@@ -19,6 +19,8 @@ type AuthBridge interface {
 	VerifyPassword(password, hash string) bool
 	CreateToken(userID string) (string, error)
 	DecodeToken(token string) (string, error)
+	CreateRefreshToken(userID string) (string, error)
+	DecodeRefreshToken(token string) (sub string, jti string, err error)
 	CreateRoomToken(roomID string) (string, error)
 	VerifyRoomToken(token string, roomID string) bool
 }
@@ -84,6 +86,19 @@ func (uc *AuthUsecase) GetUserByID(id string) (*entity.User, error) {
 
 func (uc *AuthUsecase) DecodeToken(token string) (string, error) {
 	return uc.auth.DecodeToken(token)
+}
+
+// CreateToken — новый access (для refresh-ротации, см. handleRefresh).
+func (uc *AuthUsecase) CreateToken(userID string) (string, error) {
+	return uc.auth.CreateToken(userID)
+}
+
+func (uc *AuthUsecase) CreateRefreshToken(userID string) (string, error) {
+	return uc.auth.CreateRefreshToken(userID)
+}
+
+func (uc *AuthUsecase) DecodeRefreshToken(token string) (string, string, error) {
+	return uc.auth.DecodeRefreshToken(token)
 }
 
 var (

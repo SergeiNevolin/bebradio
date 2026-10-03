@@ -13,8 +13,12 @@ type Config struct {
 	RedisURL      string
 	CORSOrigins   []string
 
-	JWTExpireHours int
-	MaxDuration    int
+	JWTAccessMinutes int    // access-токен: короткий, ротируется через /api/auth/refresh
+	JWTRefreshDays   int    // refresh-кука: долгоживущая (дни)
+	RoomTokenExpireHours int // токены доступа в комнату по ссылке (room_access)
+	AuthCookieSecure bool   // флаг Secure для refresh-куки (true на https)
+
+	MaxDuration     int
 	MaxChatMessages int
 
 	AutoAdvanceInterval float64
@@ -45,9 +49,12 @@ func Load() *Config {
 		RedisURL:       getEnv("REDIS_URL", "redis://localhost:6379"),
 		CORSOrigins:    strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000"), ","),
 
-		JWTExpireHours:  getEnvInt("JWT_EXPIRE_HOURS", 72),
-		MaxDuration:     getEnvInt("MAX_DURATION", 3600),
-		MaxChatMessages: 100,
+		JWTAccessMinutes: getEnvInt("JWT_ACCESS_EXPIRE_MINUTES", 15),
+		JWTRefreshDays:   getEnvInt("JWT_REFRESH_EXPIRE_DAYS", 30),
+		RoomTokenExpireHours: getEnvInt("ROOM_TOKEN_EXPIRE_HOURS", getEnvInt("JWT_EXPIRE_HOURS", 72)),
+		AuthCookieSecure:     getEnvBool("AUTH_COOKIE_SECURE", false),
+		MaxDuration:          getEnvInt("MAX_DURATION", 3600),
+		MaxChatMessages:      100,
 
 		AutoAdvanceInterval: 2.0,
 		AutoAdvanceGrace:    2.5,
@@ -91,6 +98,15 @@ func getEnvInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
 			return i
+		}
+	}
+	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
 		}
 	}
 	return fallback

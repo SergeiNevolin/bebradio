@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync/atomic"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
@@ -448,16 +449,19 @@ func (m *MockTrackRepo) UpdateMetadata(id, title, artist string) error {
 }
 
 type MockAuthBridge struct {
-	HashPasswordFn      func(password string) (string, error)
-	VerifyPasswordFn    func(password, hash string) bool
-	CreateTokenFn       func(userID string) (string, error)
-	DecodeTokenFn       func(token string) (string, error)
-	CreateRoomTokenFn   func(roomID string) (string, error)
-	VerifyRoomTokenFn   func(token string, roomID string) bool
+	HashPasswordFn        func(password string) (string, error)
+	VerifyPasswordFn      func(password, hash string) bool
+	CreateTokenFn         func(userID string) (string, error)
+	DecodeTokenFn         func(token string) (string, error)
+	CreateRefreshTokenFn  func(userID string) (string, error)
+	DecodeRefreshTokenFn  func(token string) (string, string, error)
+	CreateRoomTokenFn     func(roomID string) (string, error)
+	VerifyRoomTokenFn     func(token string, roomID string) bool
+	refreshSeq            atomic.Int64
 }
 
 func NewMockAuthBridge() *MockAuthBridge {
-	return &MockAuthBridge{
+	m := &MockAuthBridge{
 		HashPasswordFn: func(p string) (string, error) { return "hashed_" + p, nil },
 		VerifyPasswordFn: func(p, h string) bool { return h == "hashed_"+p },
 		CreateTokenFn: func(uid string) (string, error) { return "token_" + uid, nil },
@@ -465,6 +469,22 @@ func NewMockAuthBridge() *MockAuthBridge {
 		CreateRoomTokenFn: func(rid string) (string, error) { return "room_token_" + rid, nil },
 		VerifyRoomTokenFn: func(t, rid string) bool { return t == "room_token_"+rid },
 	}
+	// refresh-токены детерминированы, но уникальны на выдачу (ротация в тестах):
+	// "refresh_<uid>#<seq>"; jti = всё значение целиком
+	m.CreateRefreshTokenFn = func(uid string) (string, error) {
+		return fmt.Sprintf("refresh_%s#%d", uid, m.refreshSeq.Add(1)), nil
+	}
+	m.DecodeRefreshTokenFn = func(t string) (string, string, error) {
+		if !strings.HasPrefix(t, "refresh_") {
+			return "", "", errors.New("invalid refresh token")
+		}
+		body := strings.TrimPrefix(t, "refresh_")
+		if i := strings.IndexByte(body, '#'); i >= 0 {
+			body = body[:i]
+		}
+		return body, t, nil
+	}
+	return m
 }
 
 func (m *MockAuthBridge) HashPassword(password string) (string, error) {
@@ -493,6 +513,20 @@ func (m *MockAuthBridge) DecodeToken(token string) (string, error) {
 		return m.DecodeTokenFn(token)
 	}
 	return "", nil
+}
+
+func (m *MockAuthBridge) CreateRefreshToken(userID string) (string, error) {
+	if m.CreateRefreshTokenFn != nil {
+		return m.CreateRefreshTokenFn(userID)
+	}
+	return "", nil
+}
+
+func (m *MockAuthBridge) DecodeRefreshToken(token string) (string, string, error) {
+	if m.DecodeRefreshTokenFn != nil {
+		return m.DecodeRefreshTokenFn(token)
+	}
+	return "", "", errors.New("invalid refresh token")
 }
 
 func (m *MockAuthBridge) CreateRoomToken(roomID string) (string, error) {

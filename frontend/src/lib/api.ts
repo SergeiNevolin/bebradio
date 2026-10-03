@@ -2,9 +2,30 @@ import { getRoomAccess } from './roomAccess'
 import type { Track } from '../types'
 
 let authToken: string | null = null
+let refreshPromise: Promise<string | null> | null = null
+let unauthorizedHandler: (() => void) | null = null
+let tokenRefreshedHandler: ((token: string) => void) | null = null
+// после явного logout refresh запрещён: гонка «logout пришёл раньше refresh»
+// иначе могла бы ротировать уже отозванную сессию обратно
+let refreshForbidden = false
+
+// для тестов / повторного входа
+export function setRefreshForbidden(value: boolean) {
+  refreshForbidden = value
+}
 
 export function setAuthToken(token: string | null) {
   authToken = token
+}
+
+// 401 без возможности обновиться → AuthContext разлогинивает
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler
+}
+
+// ротированный access → AuthContext синкает state
+export function setTokenRefreshedHandler(handler: ((token: string) => void) | null) {
+  tokenRefreshedHandler = handler
 }
 
 function authHeaders(): Record<string, string> {
@@ -18,20 +39,90 @@ export class ApiError extends Error {
   }
 }
 
+// авторизационные мутации: на их 401 refresh не запускаем (иначе логин/логаут
+// при неверном пароле ушёл бы в бесконечный refresh)
+function isAuthMutation(url: string): boolean {
+  const path = url.split('?')[0]
+  return (
+    path.startsWith('/api/auth/login') ||
+    path.startsWith('/api/auth/register') ||
+    path.startsWith('/api/auth/refresh') ||
+    path.startsWith('/api/auth/logout')
+  )
+}
+
+// single-flight: параллельные 401 делят один POST /api/auth/refresh
+export function refreshAuth(): Promise<string | null> {
+  if (refreshForbidden) return Promise.resolve(null)
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const res = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          credentials: 'same-origin',
+        })
+        if (!res.ok) return null
+        const data = (await res.json()) as { token?: string }
+        if (!data.token) return null
+        authToken = data.token
+        localStorage.setItem('token', data.token)
+        tokenRefreshedHandler?.(data.token)
+        return data.token
+      } catch {
+        return null
+      } finally {
+        refreshPromise = null
+      }
+    })()
+  }
+  return refreshPromise
+}
+
+// 401 → refresh (одна попытка) → повтор; при неудаче refresh — unauthorizedHandler
+async function withRefresh(fetcher: () => Promise<Response>, url: string): Promise<Response> {
+  let res = await fetcher()
+  if (res.status === 401 && !isAuthMutation(url)) {
+    const fresh = await refreshAuth()
+    if (fresh) {
+      res = await fetcher()
+    } else {
+      unauthorizedHandler?.()
+    }
+  }
+  return res
+}
+
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(),
-      ...options.headers,
-    },
-  })
+  const res = await withRefresh(
+    () =>
+      fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(),
+          ...options.headers,
+        },
+      }),
+    url,
+  )
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string }
     throw new ApiError(res.status, body.error || `Request failed (${res.status})`)
   }
   return res.json()
+}
+
+// не-JSON запросы с авторизацией (visit/delete/cover) — тот же 401→refresh→retry
+async function authFetch(url: string, options: RequestInit, fallbackError: string): Promise<Response> {
+  const res = await withRefresh(
+    () => fetch(url, { ...options, headers: authHeaders() }),
+    url,
+  )
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new ApiError(res.status, body.error || fallbackError)
+  }
+  return res
 }
 
 // Auth
@@ -55,19 +146,35 @@ interface UserProfileWithEmail extends UserProfile {
 export const api = {
   // ── Auth ────────────────────────────────────────────────────────────
   // POST /api/auth/login → { token, user: ProfileWithEmail() }
-  login: (email: string, password: string) =>
-    request<{ user: UserProfileWithEmail; token: string }>(
+  login: async (email: string, password: string) => {
+    const data = await request<{ user: UserProfileWithEmail; token: string }>(
       '/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }
-    ),
+    )
+    refreshForbidden = false
+    return data
+  },
 
   // POST /api/auth/register → { token, user: ProfileWithEmail() }
-  register: (email: string, username: string, password: string) =>
-    request<{ user: UserProfileWithEmail; token: string }>(
+  register: async (email: string, username: string, password: string) => {
+    const data = await request<{ user: UserProfileWithEmail; token: string }>(
       '/api/auth/register', { method: 'POST', body: JSON.stringify({ email, username, password }) }
-    ),
+    )
+    refreshForbidden = false
+    return data
+  },
 
   // GET /api/auth/me → { user: ProfileWithEmail() }
   getMe: () => request<{ user: UserProfileWithEmail }>('/api/auth/me'),
+
+  // POST /api/auth/logout → { ok } (отзыв refresh на сервере, best-effort)
+  logout: async () => {
+    refreshForbidden = true // с этого момента refresh не пытаемся
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+    } catch {
+      // сессию всё равно чистим локально
+    }
+  },
 
   // ── Rooms ───────────────────────────────────────────────────────────
   // GET /api/rooms → []map  (raw array, not { rooms: [] })
@@ -103,10 +210,7 @@ export const api = {
 
   // POST /api/rooms/:roomID/visit → { ok: true }
   visitRoom: (roomId: string) =>
-    fetch(`/api/rooms/${roomId}/visit`, {
-      method: 'POST',
-      headers: authHeaders(),
-    }).catch(() => {}),
+    authFetch(`/api/rooms/${roomId}/visit`, { method: 'POST' }, 'Failed to visit room').catch(() => {}),
 
   // POST /api/rooms/:roomID/queue?access= → track.ToDict()
   // A track is a track: pass either a YouTube { url } (+ optional { source }
@@ -143,15 +247,7 @@ export const api = {
 
   // DELETE /api/rooms/:roomID → { ok: true }
   deleteRoom: (roomId: string) =>
-    fetch(`/api/rooms/${roomId}`, {
-      method: 'DELETE',
-      headers: authHeaders(),
-    }).then(async (res) => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        throw new ApiError(res.status, body.error || 'Failed to delete room')
-      }
-    }),
+    authFetch(`/api/rooms/${roomId}`, { method: 'DELETE' }, 'Failed to delete room').then(() => {}),
 
   // ── Search ──────────────────────────────────────────────────────────
   // POST /api/search → []map  (raw array, not { results: [] })
@@ -213,26 +309,12 @@ export const api = {
   uploadTrackCover: (id: string, cover: File) => {
     const form = new FormData()
     form.append('file', cover)
-    return fetch(`/api/tracks/${id}/cover`, {
-      method: 'PUT',
-      headers: authHeaders(),
-      body: form,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new ApiError(res.status, body.error || 'Failed to upload cover')
-      }
-    })
+    return authFetch(`/api/tracks/${id}/cover`, { method: 'PUT', body: form }, 'Failed to upload cover').then(() => {})
   },
 
   // DELETE /api/tracks/:id → { ok: true }  (auth + owner)
   deleteTrack: (id: string) =>
-    fetch(`/api/tracks/${id}`, { method: 'DELETE', headers: authHeaders() }).then(async (res) => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        throw new ApiError(res.status, body.error || 'Failed to delete track')
-      }
-    }),
+    authFetch(`/api/tracks/${id}`, { method: 'DELETE' }, 'Failed to delete track').then(() => {}),
 
   // PATCH /api/tracks/:id → Track.ToDict()  (auth + owner)
   updateTrack: (id: string, data: { title: string; artist: string }) =>

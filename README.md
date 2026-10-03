@@ -12,6 +12,18 @@ listen together
 
 Для локального запуска достаточно `docker compose up --build`. URL music-service настраивается через `MUSIC_SERVICE_URL`, доступ к Silo — через `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, а лимиты кеша — через `MUSIC_TTL`, `MUSIC_MAX_SIZE` и `MAX_DOWNLOADS`. Консоль Silo доступна на `http://localhost:9001` (dev).
 
+### Авторизация
+
+Вход — через основной backend. Короткий access-токен (Bearer,
+`JWT_ACCESS_EXPIRE_MINUTES`, по умолчанию 15 минут) плюс refresh-сессия в
+httpOnly-куке `bebradio_refresh` (`JWT_REFRESH_EXPIRE_DAYS`, 30 дней, путь
+`/api/auth`, `Secure` — через `AUTH_COOKIE_SECURE`). При 401 SPA молча зовёт
+`POST /api/auth/refresh` и повторяет запрос: refresh ротируется (старый отзывается
+в Redis), ротированный access записывается в localStorage `token` — его же читает
+iframe караоке. Активный пользователь не разлогинивается, а `POST /api/auth/logout`
+отзывает куку на сервере. Отдельно живут room-токены ссылок
+(`ROOM_TOKEN_EXPIRE_HOURS`, 72 часа) — на access/refresh они не влияют.
+
 ### Мэшапы
 
 Раздел `/mashup` — самостоятельная витрина пользовательских аудиофайлов, не привязанная к комнатам. Загруженный файл потоком уходит в music-service, где `ffmpeg` перекодирует его в `m4a` 192k с нормализацией громкости (`loudnorm`, EBU R128) и кладёт результат в Silo (`uploads/`). Загрузки лежат отдельно от кеша треков (`tracks/`), поэтому TTL-очистка их не трогает; истина о состоянии обработки — строка в Postgres, music-service остаётся stateless-исполнителем. Плеер живёт только на странице `/mashup` и останавливается при уходе.
@@ -29,10 +41,11 @@ listen together
 (Demucs/Whisper/CREPE) идёт на внешнем GPU-микросервисе.
 
 Nginx проксирует `/karaoke/` на сервис; аплоады идут через
-`/karaoke/api/upload` с лимитом тела 1 ГБ и без буферизации. Авторизация
-общая с bebradio: `AUTH_JWT_SECRET` = `SECRET_KEY` (JWT HS256, клеймы
-`sub`+`exp`), фронт караоке шлёт Bearer из localStorage `token`. `/healthz`
-и SPA-раздача без токена не закрыты.
+`/karaoke/api/upload` с лимитом тела 1 ГБ и без буферизации. Караоке
+доступно без регистрации: каталог, стриминг, `/healthz` и SPA открыты,
+а загрузка песен и правка текстов требуют общей авторизации
+(`AUTH_JWT_SECRET` = `SECRET_KEY`, JWT HS256, клеймы `sub`+`exp`),
+фронт караоке шлёт Bearer из localStorage `token`.
 
 - локально: `docker compose up --build` — сервис собирается из соседнего
   `../karaoke` (override — `KARAOKE_SRC`), тег образа — `KARAOKE_IMAGE`;

@@ -52,7 +52,7 @@ func main() {
 	}
 	defer rdb.Close()
 
-	authService := auth.New(cfg.SecretKey, cfg.JWTExpireHours)
+	authService := auth.New(cfg.SecretKey, cfg.RoomTokenExpireHours, cfg.JWTAccessMinutes, cfg.JWTRefreshDays)
 	mediaSvc := media.NewClient(cfg.MusicServiceURL)
 
 	userRepo := postgres.NewUserRepo(db.Pool)

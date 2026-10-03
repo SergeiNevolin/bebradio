@@ -11,6 +11,7 @@ import (
 	"github.com/bebradio/backend-go/internal/delivery/ws"
 	"github.com/bebradio/backend-go/internal/pkg/ratelimit"
 	"github.com/bebradio/backend-go/internal/usecase"
+	authsvc "github.com/bebradio/backend-go/internal/infrastructure/auth"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/redis/go-redis/v9"
@@ -29,6 +30,7 @@ type Server struct {
 	tracks        *usecase.TrackUsecase
 	manager       *ws.ConnectionManager
 	rdb           *redis.Client
+	refresh       *authsvc.RefreshStore
 	uploadLimiter *ratelimit.SlidingWindowLimiter
 	// addMu serializes the check-and-append critical section of handleAddToQueue
 	// (duplicate check + RPush must be atomic, otherwise a double-click adds
@@ -67,6 +69,7 @@ func NewServer(
 		tracks:        tracks,
 		manager:       manager,
 		rdb:           rdb,
+		refresh:       authsvc.NewRefreshStore(rdb, config.JWTRefreshDays),
 		uploadLimiter: ratelimit.New(uploadLimit, 3600),
 	}
 	s.setupRoutes()
@@ -83,6 +86,8 @@ func (s *Server) setupRoutes() {
 			r.Post("/register", s.handleRegister)
 			r.Post("/login", s.handleLogin)
 			r.Get("/me", s.handleMe)
+			r.Post("/refresh", s.handleRefresh) // кука refresh → новый access (ротация)
+			r.Post("/logout", s.handleLogout)   // отзыв refresh + очистка куки
 		})
 
 		r.Route("/rooms", func(r chi.Router) {

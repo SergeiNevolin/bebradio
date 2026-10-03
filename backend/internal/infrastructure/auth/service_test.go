@@ -6,7 +6,7 @@ import (
 )
 
 func TestHashPassword(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	hash, err := svc.HashPassword("mypassword")
 	if err != nil {
@@ -21,7 +21,7 @@ func TestHashPassword(t *testing.T) {
 }
 
 func TestVerifyPassword(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	hash, _ := svc.HashPassword("correct_password")
 
@@ -34,7 +34,7 @@ func TestVerifyPassword(t *testing.T) {
 }
 
 func TestVerifyPasswordDifferentHashes(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	hash1, _ := svc.HashPassword("pass1")
 	hash2, _ := svc.HashPassword("pass2")
@@ -48,7 +48,7 @@ func TestVerifyPasswordDifferentHashes(t *testing.T) {
 }
 
 func TestCreateToken(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	token, err := svc.CreateToken("user123")
 	if err != nil {
@@ -65,7 +65,7 @@ func TestCreateToken(t *testing.T) {
 }
 
 func TestDecodeToken(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	token, _ := svc.CreateToken("user123")
 
@@ -79,8 +79,8 @@ func TestDecodeToken(t *testing.T) {
 }
 
 func TestDecodeTokenWrongKey(t *testing.T) {
-	svc1 := New("secret1", 72)
-	svc2 := New("secret2", 72)
+	svc1 := New("secret1", 72, 15, 30)
+	svc2 := New("secret2", 72, 15, 30)
 
 	token, _ := svc1.CreateToken("user123")
 
@@ -91,7 +91,7 @@ func TestDecodeTokenWrongKey(t *testing.T) {
 }
 
 func TestDecodeTokenExpired(t *testing.T) {
-	svc := New("secret", -1) // expired 1 hour ago
+	svc := New("secret", 72, -1, 30) // access истёк минуту назад
 
 	token, _ := svc.CreateToken("user123")
 
@@ -102,7 +102,7 @@ func TestDecodeTokenExpired(t *testing.T) {
 }
 
 func TestDecodeTokenInvalid(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	_, err := svc.DecodeToken("not.a.valid.token")
 	if err != ErrInvalidToken {
@@ -111,7 +111,7 @@ func TestDecodeTokenInvalid(t *testing.T) {
 }
 
 func TestDecodeTokenEmpty(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	_, err := svc.DecodeToken("")
 	if err != ErrInvalidToken {
@@ -120,7 +120,7 @@ func TestDecodeTokenEmpty(t *testing.T) {
 }
 
 func TestCreateRoomToken(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	token, err := svc.CreateRoomToken("ROOM1")
 	if err != nil {
@@ -132,7 +132,7 @@ func TestCreateRoomToken(t *testing.T) {
 }
 
 func TestVerifyRoomToken(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	token, _ := svc.CreateRoomToken("ROOM1")
 
@@ -142,7 +142,7 @@ func TestVerifyRoomToken(t *testing.T) {
 }
 
 func TestVerifyRoomTokenWrongRoom(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	token, _ := svc.CreateRoomToken("ROOM1")
 
@@ -152,7 +152,7 @@ func TestVerifyRoomTokenWrongRoom(t *testing.T) {
 }
 
 func TestVerifyRoomTokenEmpty(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	if svc.VerifyRoomToken("", "ROOM1") {
 		t.Error("expected false for empty token")
@@ -160,7 +160,7 @@ func TestVerifyRoomTokenEmpty(t *testing.T) {
 }
 
 func TestVerifyRoomTokenInvalid(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	if svc.VerifyRoomToken("garbage", "ROOM1") {
 		t.Error("expected false for invalid token")
@@ -168,7 +168,7 @@ func TestVerifyRoomTokenInvalid(t *testing.T) {
 }
 
 func TestVerifyRoomTokenUserToken(t *testing.T) {
-	svc := New("secret", 72)
+	svc := New("secret", 72, 15, 30)
 
 	// A user token (not a room token) should not verify
 	userToken, _ := svc.CreateToken("user1")
@@ -179,7 +179,7 @@ func TestVerifyRoomTokenUserToken(t *testing.T) {
 }
 
 func TestTokenExpiry(t *testing.T) {
-	svc := New("secret", 1) // 1 hour
+	svc := New("secret", 72, 1, 30) // 1 minute
 
 	token, _ := svc.CreateToken("user1")
 	userID, err := svc.DecodeToken(token)
@@ -188,5 +188,72 @@ func TestTokenExpiry(t *testing.T) {
 	}
 	if userID != "user1" {
 		t.Errorf("expected 'user1', got '%s'", userID)
+	}
+}
+
+func TestCreateRefreshTokenRoundtrip(t *testing.T) {
+	svc := New("secret", 72, 15, 30)
+
+	token, err := svc.CreateRefreshToken("user123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	sub, jti, err := svc.DecodeRefreshToken(token)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sub != "user123" {
+		t.Errorf("expected sub 'user123', got %q", sub)
+	}
+	if jti == "" {
+		t.Error("expected non-empty jti")
+	}
+}
+
+func TestDecodeRefreshTokenRejectsAccessToken(t *testing.T) {
+	svc := New("secret", 72, 15, 30)
+
+	access, _ := svc.CreateToken("user123")
+	if _, _, err := svc.DecodeRefreshToken(access); err != ErrInvalidToken {
+		t.Errorf("access token must not pass as refresh, got %v", err)
+	}
+
+	room, _ := svc.CreateRoomToken("ROOM1")
+	if _, _, err := svc.DecodeRefreshToken(room); err != ErrInvalidToken {
+		t.Errorf("room token must not pass as refresh, got %v", err)
+	}
+}
+
+func TestDecodeRefreshTokenWrongKey(t *testing.T) {
+	svc1 := New("secret1", 72, 15, 30)
+	svc2 := New("secret2", 72, 15, 30)
+
+	token, _ := svc1.CreateRefreshToken("user123")
+	if _, _, err := svc2.DecodeRefreshToken(token); err != ErrInvalidToken {
+		t.Errorf("expected ErrInvalidToken, got %v", err)
+	}
+}
+
+func TestDecodeRefreshTokenExpired(t *testing.T) {
+	svc := New("secret", 72, 15, -1) // refresh истёк
+
+	token, _ := svc.CreateRefreshToken("user123")
+	if _, _, err := svc.DecodeRefreshToken(token); err != ErrInvalidToken {
+		t.Errorf("expected ErrInvalidToken for expired refresh, got %v", err)
+	}
+}
+
+func TestRefreshJTIUnique(t *testing.T) {
+	svc := New("secret", 72, 15, 30)
+
+	token1, _ := svc.CreateRefreshToken("u")
+	token2, _ := svc.CreateRefreshToken("u")
+	_, jti1, err := svc.DecodeRefreshToken(token1)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	_, jti2, _ := svc.DecodeRefreshToken(token2)
+	if jti1 == jti2 {
+		t.Error("jti must be unique per token")
 	}
 }
