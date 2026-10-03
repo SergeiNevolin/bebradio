@@ -32,10 +32,11 @@ describe('Navbar', () => {
     expect(screen.getByText('bebradio')).toHaveAttribute('href', '/')
   })
 
-  it('links to Rooms and Mashups pages', () => {
+  it('links to Rooms, Mashups and Karaoke pages', () => {
     renderNavbar()
     expect(screen.getByText('Комнаты')).toHaveAttribute('href', '/rooms')
     expect(screen.getByText('Мэшапы')).toHaveAttribute('href', '/mashup')
+    expect(screen.getByText('Караоке')).toHaveAttribute('href', '/karaoke')
   })
 
   it('shows Sign In and Register when logged out', () => {

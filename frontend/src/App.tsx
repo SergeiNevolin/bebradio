@@ -14,6 +14,7 @@ const Mashups = lazy(() => import('./pages/Mashups'))
 const Room = lazy(() => import('./pages/Room'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Settings = lazy(() => import('./pages/Settings'))
+const KaraokePage = lazy(() => import('./pages/KaraokePage'))
 
 function NotFound() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
                 <Route path="/room/:roomId" element={<Room />} />
                 <Route path="/user/:userId" element={<Profile />} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                <Route path="/karaoke" element={<ProtectedRoute><KaraokePage /></ProtectedRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

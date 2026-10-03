@@ -5,6 +5,11 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
 
+  # e2e не про караоке: сервис выключен (профиль), иначе CI собирал бы
+  # ../karaoke, которого нет в чекауте bebradio
+  karaoke-service:
+    profiles: ["karaoke"]
+
   music-service:
     ports: !reset []
 

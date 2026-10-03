@@ -126,6 +126,9 @@ jobs:
     runs-on: prod-runner
     needs: [e2e-tests]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
   
     steps:
       - uses: actions/checkout@v5
@@ -138,6 +141,15 @@ jobs:
           echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
           echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
           echo "ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}" >> .env
+          echo "KARAOKE_ML_SERVICE_URL=${{ secrets.KARAOKE_ML_SERVICE_URL }}" >> .env
+          echo "KARAOKE_IMAGE=${{ secrets.KARAOKE_IMAGE }}" >> .env
+
+      - name: Log in to GHCR (караоке-образ тянется оттуда)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Write TLS certificates
         env:

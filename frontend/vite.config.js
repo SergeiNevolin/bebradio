@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react'
 const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000'
 const backendWs = process.env.BACKEND_WS || 'ws://localhost:8000'
 const musicUrl = process.env.MUSIC_URL || process.env.MEDIA_URL || 'http://localhost:8100'
+// караоке под префиксом: слэш на конце обязателен — точный маршрут /karaoke
+// (сам SPA bebradio) не должен уходить в прокси
+const karaokeUrl = process.env.KARAOKE_URL || 'http://localhost:5173'
 
 export default defineConfig({
   plugins: [react()],
@@ -20,6 +23,10 @@ export default defineConfig({
       '/ws': {
         target: backendWs,
         ws: true,
+      },
+      '/karaoke/': {
+        target: karaokeUrl,
+        rewrite: (path) => path.replace(/^\/karaoke/, ''),
       },
     },
   },

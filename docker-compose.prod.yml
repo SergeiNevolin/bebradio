@@ -90,6 +90,28 @@ services:
     networks:
       - app-net
 
+  karaoke-service:
+    # живём с образом из GHCR (см. docker-compose.yml, CI публикует ветки/теги/sha)
+    image: ${KARAOKE_IMAGE:-ghcr.io/serginevolin/karaoke:main}
+    restart: unless-stopped
+    environment:
+      - AUTH_JWT_SECRET=${SECRET_KEY:?Set SECRET_KEY in .env}
+      - KARAOKE_ML_SERVICE_URL=${KARAOKE_ML_SERVICE_URL:?Set KARAOKE_ML_SERVICE_URL in .env}
+      - LOG_LEVEL=${KARAOKE_LOG_LEVEL:-INFO}
+      - MAX_UPLOAD_MB=${KARAOKE_MAX_UPLOAD_MB:-1024}
+      # хранилище песен — общий MinIO стека (бакет karaoke создаётся на старте)
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${KARAOKE_S3_BUCKET:-karaoke}
+    depends_on:
+      minio:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-net
+
   frontend:
     build:
       context: ./frontend
