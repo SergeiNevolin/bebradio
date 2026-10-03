@@ -23,7 +23,7 @@ services:
       - app-net
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: pgsty/silo:latest
     command: server /data --console-address ":9001"
     volumes:
       - miniodata:/data
