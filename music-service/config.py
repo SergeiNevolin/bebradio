@@ -30,8 +30,8 @@ class Settings:
     def from_env(cls) -> "Settings":
         return cls(
             s3_endpoint=os.getenv("S3_ENDPOINT", "http://localhost:9000"),
-            s3_access_key=os.getenv("S3_ACCESS_KEY", "minioadmin"),
-            s3_secret_key=os.getenv("S3_SECRET_KEY", "minioadmin"),
+            s3_access_key=os.getenv("S3_ACCESS_KEY", "siloadmin"),
+            s3_secret_key=os.getenv("S3_SECRET_KEY", "siloadmin"),
             s3_bucket=os.getenv("S3_BUCKET", "music"),
             s3_region=os.getenv("S3_REGION", "us-east-1"),
             work_dir=Path(os.getenv("WORK_DIR", "/tmp/music-work")),

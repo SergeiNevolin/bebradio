@@ -181,7 +181,7 @@ func (uc *TrackUsecase) Import(ownerID, title, artist, filename string, audio io
 		clip(strings.TrimSpace(artist), trackTitleMax))
 	m.MediaID = mediaID
 	if err := uc.repo.Create(m); err != nil {
-		// Don't orphan the file in MinIO when the row can't be stored.
+		// Don't orphan the file in Silo when the row can't be stored.
 		_ = uc.mediaClient.DeleteTrack(mediaID)
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (uc *TrackUsecase) Create(ownerID, title, artist, filename string, body io.
 		clip(strings.TrimSpace(artist), trackTitleMax))
 	m.MediaID = mediaID
 	if err := uc.repo.Create(m); err != nil {
-		// Don't orphan the file in MinIO when the row can't be stored.
+		// Don't orphan the file in Silo when the row can't be stored.
 		_ = uc.mediaClient.DeleteTrack(mediaID)
 		return nil, err
 	}

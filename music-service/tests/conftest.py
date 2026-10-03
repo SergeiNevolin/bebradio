@@ -88,7 +88,7 @@ def settings(tmp_path):
     from config import Settings
 
     return Settings(
-        s3_endpoint="http://minio:9000",
+        s3_endpoint="http://silo:9000",
         s3_access_key="test",
         s3_secret_key="test",
         s3_bucket="music",

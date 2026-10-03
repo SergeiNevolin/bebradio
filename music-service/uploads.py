@@ -2,7 +2,7 @@
 
 Unlike :mod:`storage`, this module never expires files by TTL: uploads are
 user-owned uploads whose lifetime is decided by the Go backend (Postgres row).
-Finished audio/covers live in MinIO under ``uploads/``; local disk only holds
+Finished audio/covers live in Silo under ``uploads/``; local disk only holds
 in-progress uploads and ffmpeg scratch files inside ``work_dir``.
 """
 

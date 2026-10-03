@@ -13,7 +13,7 @@ services:
   music-service:
     ports: !reset []
 
-  minio:
+  silo:
     ports: !reset []
 
   redis:

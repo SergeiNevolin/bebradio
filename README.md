@@ -6,26 +6,26 @@ listen together
 
 ## Архитектура
 
-Работа с YouTube и аудиофайлами вынесена в отдельный `music-service`. Основной backend отвечает за комнаты, очередь, авторизацию и синхронизацию, а music-service — за поиск, metadata, загрузку, captions и Range-раздачу аудио. Всё persistent-хранение (кеш треков, субтитры, мэшапы, обложки) живёт в MinIO (S3 API, бакет `music`: префиксы `tracks/` (кеш YouTube) и `uploads/` (загрузки); локальный диск music-service — только scratch для `yt-dlp` и `ffmpeg`. В production `/api/music/*` проксируется напрямую в music-service, MinIO наружу не торчит.
+Работа с YouTube и аудиофайлами вынесена в отдельный `music-service`. Основной backend отвечает за комнаты, очередь, авторизацию и синхронизацию, а music-service — за поиск, metadata, загрузку, captions и Range-раздачу аудио. Всё persistent-хранение (кеш треков, субтитры, мэшапы, обложки) живёт в Silo (community-форк MinIO; S3 API, бакет `music`: префиксы `tracks/` (кеш YouTube) и `uploads/` (загрузки); локальный диск music-service — только scratch для `yt-dlp` и `ffmpeg`. В production `/api/music/*` проксируется напрямую в music-service, Silo наружу не торчит.
 
-Внутри music-service слои разделены по ответственности: `api.py` содержит HTTP-контракты, `service.py` координирует операции, `providers/youtube.py` изолирует `yt-dlp`, `s3store.py` — тонкий клиент MinIO, `storage.py` (кеш треков) и `uploads.py` (загрузки) отвечают за объекты, locks, cleanup и лимиты, а `schemas.py` содержит входные модели.
+Внутри music-service слои разделены по ответственности: `api.py` содержит HTTP-контракты, `service.py` координирует операции, `providers/youtube.py` изолирует `yt-dlp`, `s3store.py` — тонкий клиент Silo, `storage.py` (кеш треков) и `uploads.py` (загрузки) отвечают за объекты, locks, cleanup и лимиты, а `schemas.py` содержит входные модели.
 
-Для локального запуска достаточно `docker compose up --build`. URL music-service настраивается через `MUSIC_SERVICE_URL`, доступ к MinIO — через `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, а лимиты кеша — через `MUSIC_TTL`, `MUSIC_MAX_SIZE` и `MAX_DOWNLOADS`. Консоль MinIO доступна на `http://localhost:9001` (dev).
+Для локального запуска достаточно `docker compose up --build`. URL music-service настраивается через `MUSIC_SERVICE_URL`, доступ к Silo — через `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, а лимиты кеша — через `MUSIC_TTL`, `MUSIC_MAX_SIZE` и `MAX_DOWNLOADS`. Консоль Silo доступна на `http://localhost:9001` (dev).
 
 ### Мэшапы
 
-Раздел `/mashup` — самостоятельная витрина пользовательских аудиофайлов, не привязанная к комнатам. Загруженный файл потоком уходит в music-service, где `ffmpeg` перекодирует его в `m4a` 192k с нормализацией громкости (`loudnorm`, EBU R128) и кладёт результат в MinIO (`uploads/`). Загрузки лежат отдельно от кеша треков (`tracks/`), поэтому TTL-очистка их не трогает; истина о состоянии обработки — строка в Postgres, music-service остаётся stateless-исполнителем. Плеер живёт только на странице `/mashup` и останавливается при уходе.
+Раздел `/mashup` — самостоятельная витрина пользовательских аудиофайлов, не привязанная к комнатам. Загруженный файл потоком уходит в music-service, где `ffmpeg` перекодирует его в `m4a` 192k с нормализацией громкости (`loudnorm`, EBU R128) и кладёт результат в Silo (`uploads/`). Загрузки лежат отдельно от кеша треков (`tracks/`), поэтому TTL-очистка их не трогает; истина о состоянии обработки — строка в Postgres, music-service остаётся stateless-исполнителем. Плеер живёт только на странице `/mashup` и останавливается при уходе.
 
 Переменные окружения music-service: `MASHUP_MAX_SIZE` (лимит размера файла, по умолчанию 60 МБ), `MASHUP_MAX_DURATION` (900 с), `MASHUP_TOTAL_LIMIT` (20 ГБ на весь префикс `uploads/`), `MASHUP_MAX_JOBS` (2 параллельных транскода). На стороне Go-бэкенда: `MASHUP_USER_QUOTA` (сколько мэшапов на пользователя, 20) и `RATE_LIMIT_UPLOAD` (загрузок в час, 5).
 
-> Миграция со старого volume `musicdata`: persistent-данные раньше лежали в `/app/music`; теперь они в MinIO. Треки перекешируются сами (это YouTube-кеш), а мэшапы из старого volume нужно однократно залить в бакет `music` под префикс `uploads/` (например через `mc cp` или консоль MinIO), иначе старые загрузки пропадут. Треки единой модели (`tracks` в Postgres, `source=youtube|upload`) можно добавлять в очередь комнат и по URL, и по `track_id`.
+> Миграция со старого volume `musicdata`: persistent-данные раньше лежали в `/app/music`; теперь они в Silo. Треки перекешируются сами (это YouTube-кеш), а мэшапы из старого volume нужно однократно залить в бакет `music` под префикс `uploads/` (например через `mc cp` или консоль Silo), иначе старые загрузки пропадут. Треки единой модели (`tracks` в Postgres, `source=youtube|upload`) можно добавлять в очередь комнат и по URL, и по `track_id`.
 
 ### Караоке
 
 Раздел `/karaoke` — отдельное караоке-приложение (свой репозиторий, CI и образ,
 см. репо караоке) в iframe на весь экран. Оно тянет свой сервис `karaoke-service`
 (FastAPI: каталог, аплоад, редактор текста, плеер + своя статика в образе) и
-хранит песни в MinIO (бакет `karaoke`); тяжёлый пайплайн
+хранит песни в Silo (бакет `karaoke`); тяжёлый пайплайн
 (Demucs/Whisper/CREPE) идёт на внешнем GPU-микросервисе.
 
 Nginx проксирует `/karaoke/` на сервис; аплоады идут через

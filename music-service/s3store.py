@@ -1,4 +1,4 @@
-"""Persistent object storage for all music files, backed by MinIO (S3 API).
+"""Persistent object storage for all music files, backed by Silo (S3 API).
 
 Layout inside the bucket::
 
@@ -72,7 +72,7 @@ class S3Store:
         )
 
     def ensure_bucket(self, retries: int = 30) -> None:
-        """Create the bucket if missing; retry while MinIO is still booting."""
+        """Create the bucket if missing; retry while Silo is still booting."""
         from botocore.exceptions import BotoCoreError, ClientError
 
         for attempt in range(retries):

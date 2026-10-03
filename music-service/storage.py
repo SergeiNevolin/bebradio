@@ -1,4 +1,4 @@
-"""Cache of YouTube audio + subtitles in MinIO (S3).
+"""Cache of YouTube audio + subtitles in Silo (S3).
 
 Local disk is only scratch space: yt-dlp downloads into ``work_dir`` and the
 finished files are uploaded to ``tracks/`` in the bucket. TTL/size cleanup

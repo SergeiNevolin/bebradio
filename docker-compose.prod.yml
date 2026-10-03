@@ -22,14 +22,14 @@ services:
     networks:
       - app-net
 
-  minio:
+  silo:
     image: pgsty/silo:latest
     command: server /data --console-address ":9001"
     volumes:
       - miniodata:/data
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-siloadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-siloadmin}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
@@ -51,11 +51,12 @@ services:
       - app-net
 
   music-service:
+    image: ghcr.io/serginevolin/bebradio-music-service:${IMAGE_TAG:-main}
     build: ./music-service
     environment:
-      - S3_ENDPOINT=http://minio:9000
-      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
-      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_ENDPOINT=http://silo:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-siloadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-siloadmin}
       - S3_BUCKET=${S3_BUCKET:-music}
       - MASHUP_MAX_SIZE=${MASHUP_MAX_SIZE:-62914560}
       - MASHUP_COVER_MAX_SIZE=${MASHUP_COVER_MAX_SIZE:-5242880}
@@ -63,12 +64,13 @@ services:
     depends_on:
       bgutil-provider:
         condition: service_started
-      minio:
+      silo:
         condition: service_healthy
     networks:
       - app-net
 
   backend:
+    image: ghcr.io/serginevolin/bebradio-backend:${IMAGE_TAG:-main}
     build: ./backend
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/bebradio
@@ -99,13 +101,13 @@ services:
       - KARAOKE_ML_SERVICE_URL=${KARAOKE_ML_SERVICE_URL:?Set KARAOKE_ML_SERVICE_URL in .env}
       - LOG_LEVEL=${KARAOKE_LOG_LEVEL:-INFO}
       - MAX_UPLOAD_MB=${KARAOKE_MAX_UPLOAD_MB:-1024}
-      # хранилище песен — общий MinIO стека (бакет karaoke создаётся на старте)
-      - S3_ENDPOINT=http://minio:9000
-      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
-      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      # хранилище песен — общий Silo стека (бакет karaoke создаётся на старте)
+      - S3_ENDPOINT=http://silo:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-siloadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-siloadmin}
       - S3_BUCKET=${KARAOKE_S3_BUCKET:-karaoke}
     depends_on:
-      minio:
+      silo:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -113,6 +115,7 @@ services:
       - app-net
 
   frontend:
+    image: ghcr.io/serginevolin/bebradio-frontend:${IMAGE_TAG:-main}
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod

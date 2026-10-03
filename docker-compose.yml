@@ -24,7 +24,7 @@ services:
     networks:
       - app-net
 
-  minio:
+  silo:
     image: pgsty/silo:latest
     command: server /data --console-address ":9001"
     ports:
@@ -33,8 +33,8 @@ services:
     volumes:
       - miniodata:/data
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=siloadmin
+      - MINIO_ROOT_PASSWORD=siloadmin
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
@@ -62,16 +62,16 @@ services:
     ports:
       - "8100:8100"
     environment:
-      - S3_ENDPOINT=http://minio:9000
-      - S3_ACCESS_KEY=minioadmin
-      - S3_SECRET_KEY=minioadmin
+      - S3_ENDPOINT=http://silo:9000
+      - S3_ACCESS_KEY=siloadmin
+      - S3_SECRET_KEY=siloadmin
       - S3_BUCKET=music
       - MASHUP_COVER_MAX_SIZE=5242880
       - BGUTIL_BASE_URL=http://bgutil-provider:4416
     depends_on:
       bgutil-provider:
         condition: service_started
-      minio:
+      silo:
         condition: service_healthy
     networks:
       - app-net
@@ -115,13 +115,13 @@ services:
       - KARAOKE_ML_SERVICE_URL=${KARAOKE_ML_SERVICE_URL:-http://host.docker.internal:8001}
       - LOG_LEVEL=${KARAOKE_LOG_LEVEL:-INFO}
       - MAX_UPLOAD_MB=${KARAOKE_MAX_UPLOAD_MB:-1024}
-      # хранилище песен — общий MinIO (бакет karaoke создаётся на старте)
-      - S3_ENDPOINT=http://minio:9000
-      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
-      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      # хранилище песен — общий Silo (бакет karaoke создаётся на старте)
+      - S3_ENDPOINT=http://silo:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-siloadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-siloadmin}
       - S3_BUCKET=${KARAOKE_S3_BUCKET:-karaoke}
     depends_on:
-      minio:
+      silo:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"

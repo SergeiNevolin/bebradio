@@ -121,10 +121,49 @@ jobs:
         if: always()
         run: docker compose -p bebradio-e2e -f docker-compose.yml -f docker-compose.e2e.yml down -v --remove-orphans
 
+  build-images:
+    name: Build Images
+    runs-on: ubuntu-latest
+    needs: [e2e-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create .env file
+        run: |
+          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
+          echo "ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}" >> .env
+          echo "KARAOKE_ML_SERVICE_URL=${{ secrets.KARAOKE_ML_SERVICE_URL }}" >> .env
+          echo "KARAOKE_IMAGE=${{ secrets.KARAOKE_IMAGE }}" >> .env
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (sha tag)
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker compose -f docker-compose.prod.yml build backend frontend music-service
+          docker compose -f docker-compose.prod.yml push backend frontend music-service
+
+      - name: Build and push (main tag)
+        run: |
+          docker compose -f docker-compose.prod.yml build backend frontend music-service
+          docker compose -f docker-compose.prod.yml push backend frontend music-service
+
   deploy:
     name: Deploy to Production
     runs-on: prod-runner
-    needs: [e2e-tests]
+    needs: [build-images]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: read
@@ -143,6 +182,7 @@ jobs:
           echo "ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}" >> .env
           echo "KARAOKE_ML_SERVICE_URL=${{ secrets.KARAOKE_ML_SERVICE_URL }}" >> .env
           echo "KARAOKE_IMAGE=${{ secrets.KARAOKE_IMAGE }}" >> .env
+          echo "IMAGE_TAG=${{ github.sha }}" >> .env
 
       - name: Log in to GHCR (караоке-образ тянется оттуда)
         uses: docker/login-action@v3
@@ -161,8 +201,8 @@ jobs:
           printf '%s\n' "$SSL_KEY" > frontend/ssl/server.key
           printf '%s\n' "$SSL_CERTIFICATE" > frontend/ssl/server.crt
   
-      - name: Build new images
-        run: docker compose -p bebradio -f docker-compose.prod.yml build
+      - name: Pull images
+        run: docker compose -p bebradio -f docker-compose.prod.yml pull backend frontend music-service karaoke-service
       
       - name: Start new containers
         run: docker compose -p bebradio -f docker-compose.prod.yml up -d
