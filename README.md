@@ -54,6 +54,10 @@ Nginx проксирует `/karaoke/` на сервис; аплоады иду�
   workflow и пишет `KARAOKE_IMAGE`/`KARAOKE_ML_SERVICE_URL` в `.env`;
 - `KARAOKE_ML_SERVICE_URL` — адрес GPU-микросервиса караоке (в `.env` прода
   обязателен; dev-дефолт `host.docker.internal:8001`);
+- `DATABASE_URL` караоке — общий контейнер `postgres`, отдельная БД `karaoke`
+  (создаётся разово скриптом `../karaoke/infra/pg-karaoke.sql`; каталог песен
+  и реестр задач; без PostgreSQL сервис не стартует). Переопределение —
+  непустое `KARAOKE_DATABASE_URL` (на проде URL собирается из `POSTGRES_*`);
 - в e2e караоке выключен профилем `karaoke` (в CI нет исходников соседнего
   репо, а e2e его не проверяет);
 - локальный `npm run dev` (vite, без докера): запросы `/karaoke/` уходят в

@@ -106,7 +106,11 @@ services:
       - S3_ACCESS_KEY=${MINIO_ROOT_USER:-siloadmin}
       - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-siloadmin}
       - S3_BUCKET=${KARAOKE_S3_BUCKET:-karaoke}
+      # каталог песен и реестр задач (БД создаётся infra/pg-karaoke.sql репо караоке)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/karaoke
     depends_on:
+      postgres:
+        condition: service_healthy
       silo:
         condition: service_healthy
     extra_hosts:
