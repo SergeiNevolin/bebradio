@@ -1,20 +1,20 @@
 .card {
-  flex: 0 0 160px;
+  flex: 0 0 180px;
   scroll-snap-align: start;
   background: var(--surface);
   border: 1px solid transparent;
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   cursor: pointer;
-  transition: background-color 0.2s, transform 0.15s;
+  transition: background-color 0.15s, transform 0.15s;
   min-width: 0;
 }
 
 .card:hover {
-  background: color-mix(in srgb, var(--surface) 55%, var(--primary) 12%);
+  background: var(--surface-hover);
   transform: translateY(-2px);
 }
 
@@ -49,15 +49,38 @@
 
 .pos {
   position: absolute;
-  bottom: 6px;
+  top: 6px;
   left: 8px;
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 900;
   font-style: italic;
   line-height: 1;
   color: rgba(255, 255, 255, 0.95);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
   letter-spacing: -1px;
+}
+
+.fab {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.card:hover .fab {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .body {

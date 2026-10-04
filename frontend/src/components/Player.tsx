@@ -26,6 +26,8 @@ interface PlayerProps {
   skipVoters: string[]
   currentUserId: string
   roomId?: string
+  /** Voting UI (likes/dislikes/skip). Streams disable it. */
+  canVote?: boolean
 }
 
 function Player({
@@ -42,6 +44,7 @@ function Player({
   skipVoters,
   currentUserId,
   roomId,
+  canVote = true,
 }: PlayerProps) {
   const [showKaraoke, setShowKaraoke] = useState(false)
 
@@ -152,51 +155,55 @@ function Player({
                 <MicIcon size={14} /> Karaoke
               </button>
             )}
-            <button
-              type="button"
-              className={`${styles.playerChip}${hasVoted ? ` ${styles.playerChipOn}` : ''}`}
-              onClick={onSkipVote}
-              title="Vote to skip"
-            >
-              <SkipIcon size={14} /> Skip{skipCount > 0 ? ` (${skipCount})` : ''}
-            </button>
+            {canVote && (
+              <button
+                type="button"
+                className={`${styles.playerChip}${hasVoted ? ` ${styles.playerChipOn}` : ''}`}
+                onClick={onSkipVote}
+                title="Vote to skip"
+              >
+                <SkipIcon size={14} /> Skip{skipCount > 0 ? ` (${skipCount})` : ''}
+              </button>
+            )}
           </div>
 
           {roomId && showKaraoke && (
             <Karaoke roomId={roomId} trackId={track.id} currentTime={localPos} />
           )}
 
-          <div className="vote-buttons">
-            <button
-              type="button"
-              className={`vote-btn ${userVote === 1 ? 'vote-btn-active' : ''}`}
-              onClick={() => onVote(track.id, userVote === 1 ? 0 : 1)}
-              aria-label="Like this track"
-            >
-              <ThumbUpIcon size={14} /> {likes}
-            </button>
-            <div className="vote-scale">
-              <div className="vote-bar">
-                {likes > 0 && (
-                  <div className="vote-bar-like" style={{ width: `${(likes / voteTotal) * 100}%` }} />
-                )}
-                {dislikes > 0 && (
-                  <div
-                    className="vote-bar-dislike"
-                    style={{ width: `${(dislikes / voteTotal) * 100}%` }}
-                  />
-                )}
+          {canVote && (
+            <div className="vote-buttons">
+              <button
+                type="button"
+                className={`vote-btn ${userVote === 1 ? 'vote-btn-active' : ''}`}
+                onClick={() => onVote(track.id, userVote === 1 ? 0 : 1)}
+                aria-label="Like this track"
+              >
+                <ThumbUpIcon size={14} /> {likes}
+              </button>
+              <div className="vote-scale">
+                <div className="vote-bar">
+                  {likes > 0 && (
+                    <div className="vote-bar-like" style={{ width: `${(likes / voteTotal) * 100}%` }} />
+                  )}
+                  {dislikes > 0 && (
+                    <div
+                      className="vote-bar-dislike"
+                      style={{ width: `${(dislikes / voteTotal) * 100}%` }}
+                    />
+                  )}
+                </div>
               </div>
+              <button
+                type="button"
+                className={`vote-btn ${userVote === -1 ? 'vote-btn-active-down' : ''}`}
+                onClick={() => onVote(track.id, userVote === -1 ? 0 : -1)}
+                aria-label="Dislike this track"
+              >
+                <ThumbDownIcon size={14} /> {dislikes}
+              </button>
             </div>
-            <button
-              type="button"
-              className={`vote-btn ${userVote === -1 ? 'vote-btn-active-down' : ''}`}
-              onClick={() => onVote(track.id, userVote === -1 ? 0 : -1)}
-              aria-label="Dislike this track"
-            >
-              <ThumbDownIcon size={14} /> {dislikes}
-            </button>
-          </div>
+          )}
         </>
       )}
     </div>

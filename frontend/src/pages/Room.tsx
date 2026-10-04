@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usePlayer } from '../context/PlayerContext'
 import { api } from '../lib/api'
 import { setRoomAccess, clearRoomAccess } from '../lib/roomAccess'
 import { useRoomWebSocket } from '../hooks/useRoomWebSocket'
@@ -31,6 +32,13 @@ export default function Room() {
   const [copied, setCopied] = useState(false)
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
   const { showToast } = useToast()
+  const { player: sharedPlayer } = usePlayer()
+
+  // Эфир комнаты и общий плеер не должны звучать одновременно.
+  const pauseSharedPlayer = sharedPlayer.pause
+  useEffect(() => {
+    pauseSharedPlayer()
+  }, [pauseSharedPlayer])
 
   const {
     room, setRoom, loading, setLoading, error, setError, locked, setLocked,
@@ -41,7 +49,9 @@ export default function Room() {
   const isOwner = user && room && user.id === room.owner_id
   const isAdmin = !!user && user.role === 'admin'
   const canManage = isOwner || isAdmin
-  const canAddTrack = user || room?.allow_anonymous_add
+  const isStream = !!room?.is_stream
+  // Streams are admin-curated: only admins feed the queue, no voting.
+  const canAddTrack = isStream ? isAdmin : (user || room?.allow_anonymous_add)
 
   const handleUnlock = async () => {
     if (!passwordInput) return
@@ -188,7 +198,11 @@ export default function Room() {
 
       {!canAddTrack && (
         <div className={styles.authBanner}>
-          <span>Sign in to add tracks to the queue</span>
+          <span>
+            {isStream
+              ? 'Поток — треки добавляет админ, голосования нет'
+              : 'Sign in to add tracks to the queue'}
+          </span>
         </div>
       )}
 
@@ -216,6 +230,7 @@ export default function Room() {
               onSkipVote={handleSkipVote}
               skipVoters={room?.skip_voters ?? []}
               currentUserId={user?.id || ''}
+              canVote={!isStream}
             />
           </div>
           <Queue

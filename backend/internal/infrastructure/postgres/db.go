@@ -161,6 +161,8 @@ func (db *DB) Migrate() error {
 		`DROP TABLE IF EXISTS track_votes`,
 		// 008: admin role
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`,
+		// 009: stream rooms
+		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_stream BOOLEAN NOT NULL DEFAULT FALSE`,
 	}
 
 	for _, m := range migrations {

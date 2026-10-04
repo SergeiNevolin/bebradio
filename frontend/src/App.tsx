@@ -2,9 +2,12 @@ import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import { PlayerProvider } from './context/PlayerContext'
 import { applyAccent, getStoredAccent } from './lib/theme'
 import Navbar from './components/Navbar'
+import MobileTabBar from './components/MobileTabBar'
 import ProtectedRoute from './components/ProtectedRoute'
+import { GlobalPlayerBar, GlobalPlayerOverlays } from './components/player/GlobalPlayerUI'
 
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
@@ -42,6 +45,7 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
+        <PlayerProvider>
         <div className="app-root">
           <Navbar />
           <div className="app">
@@ -55,12 +59,16 @@ export default function App() {
                 <Route path="/room/:roomId" element={<Room />} />
                 <Route path="/user/:userId" element={<Profile />} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                <Route path="/karaoke" element={<ProtectedRoute><KaraokePage /></ProtectedRoute>} />
+                <Route path="/karaoke" element={<KaraokePage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
           </div>
         </div>
+        <GlobalPlayerBar />
+        <GlobalPlayerOverlays />
+        <MobileTabBar />
+        </PlayerProvider>
       </ToastProvider>
     </AuthProvider>
   )

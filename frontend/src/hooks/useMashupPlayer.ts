@@ -170,6 +170,10 @@ export function useMashupPlayer() {
     else el.pause()
   }, [current])
 
+  const pause = useCallback(() => {
+    audioRef.current?.pause()
+  }, [])
+
   const seek = useCallback((seconds: number) => {
     const el = audioRef.current
     if (!el) return
@@ -371,6 +375,7 @@ export function useMashupPlayer() {
     play,
     playAt,
     toggle,
+    pause,
     next,
     prev,
     seek,

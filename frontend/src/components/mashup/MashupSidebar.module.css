@@ -127,7 +127,6 @@
   height: 44px;
   flex-shrink: 0;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
   object-fit: cover;
   display: flex;
   align-items: center;
@@ -179,7 +178,7 @@
 
 .rowTitle {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -9,8 +9,11 @@ interface NowPlayingPanelProps {
   queue: Track[]
   loading: boolean
   onPlayFromQueue: (m: Track) => void
-  onToggleLike: (m: Track) => void
+  onToggleLike?: (m: Track) => void
   onOpenProfile?: (userId: string) => void
+  onClose?: () => void
+  /** Видна ли нижняя плашка плеера — под неё резервируем место внизу. */
+  playerVisible?: boolean
 }
 
 function Art({ mashup, className }: { mashup: Track; className: string }) {
@@ -31,12 +34,26 @@ export default function NowPlayingPanel({
   onPlayFromQueue,
   onToggleLike,
   onOpenProfile,
+  onClose,
+  playerVisible = false,
 }: NowPlayingPanelProps) {
   return (
-    <aside className={styles.panel} aria-label="Now playing">
-      <div className={styles.head}>
-        <h2>Now playing</h2>
-      </div>
+    <aside
+      className={`${styles.panel} ${playerVisible ? styles.withPlayer : ''}`}
+      aria-label="Now playing"
+    >
+      {onClose && (
+        <div className={styles.head}>
+          <button
+            type="button"
+            className={styles.closeBtn}
+            onClick={onClose}
+            aria-label="Close now playing"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className={styles.scroll}>
         {loading && (
@@ -77,16 +94,18 @@ export default function NowPlayingPanel({
             </div>
 
             <div className={styles.row}>
-              <button
-                type="button"
-                className={`${styles.likeBtn} ${current.liked ? styles.likeBtnOn : ''}`}
-                onClick={() => onToggleLike(current)}
-                aria-pressed={!!current.liked}
-                aria-label={current.liked ? `Unlike ${current.title}` : `Like ${current.title}`}
-              >
-                <span className={styles.heart} aria-hidden="true">{current.liked ? <HeartFillIcon size={18} /> : <HeartIcon size={18} />}</span>
-                {current.likes}
-              </button>
+              {onToggleLike && (
+                <button
+                  type="button"
+                  className={`${styles.likeBtn} ${current.liked ? styles.likeBtnOn : ''}`}
+                  onClick={() => onToggleLike(current)}
+                  aria-pressed={!!current.liked}
+                  aria-label={current.liked ? `Unlike ${current.title}` : `Like ${current.title}`}
+                >
+                  <span className={styles.heart} aria-hidden="true">{current.liked ? <HeartFillIcon size={18} /> : <HeartIcon size={18} />}</span>
+                  {current.likes}
+                </button>
+              )}
               {current.status === 'ready' && (
                 <span className={styles.dur}>{formatTime(current.duration)}</span>
               )}

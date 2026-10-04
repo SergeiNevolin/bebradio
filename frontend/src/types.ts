@@ -44,6 +44,8 @@ export interface RoomListItem {
   // True for autodj rooms (auto_radio). Exposed by GET /api/rooms so the
   // home page can shelf them as radio stations.
   auto_radio?: boolean
+  // True for admin-run streams: only admins add tracks, no voting.
+  is_stream?: boolean
 }
 
 export interface RoomState {
@@ -60,6 +62,8 @@ export interface RoomState {
   allow_anonymous_add: boolean
   is_private: boolean
   auto_radio?: boolean
+  // Admin-run stream: only admins add tracks, voting is disabled.
+  is_stream?: boolean
   // True while auto-radio is fetching related tracks in the background.
   radio_searching?: boolean
   has_password: boolean

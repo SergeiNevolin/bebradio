@@ -505,6 +505,7 @@ func BuildToDict(ctx context.Context, rdb *redis.Client, rm *entity.Room) map[st
 		"allow_anonymous_add": rm.AllowAnonymousAdd,
 		"is_private":          rm.IsPrivate,
 		"auto_radio":          rm.AutoRadio,
+		"is_stream":           rm.IsStream,
 		"radio_searching":     ps.RadioFilling,
 		"has_password":        rm.PasswordHash != nil,
 		"track_votes":         map[string]int{"likes": trackVotes[0], "dislikes": trackVotes[1]},

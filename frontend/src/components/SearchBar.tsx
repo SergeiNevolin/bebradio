@@ -79,7 +79,7 @@ export default function SearchBar() {
       <input
         type="text"
         className={styles.searchBarInput}
-        placeholder="Поиск комнат и мэшапов..."
+        placeholder="Поиск..."
         value={query}
         onChange={(e) => {
           setQuery(e.target.value)

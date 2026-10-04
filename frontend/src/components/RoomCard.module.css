@@ -1,25 +1,23 @@
 .card {
-  flex: 0 0 200px;
+  flex: 0 0 180px;
   scroll-snap-align: start;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  overflow: hidden;
   cursor: pointer;
-  transition: transform 0.15s, border-color 0.15s, box-shadow 0.2s;
+  transition: background 0.2s;
   min-width: 0;
 }
 
 .card:hover {
-  border-color: var(--primary);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  background: var(--surface);
 }
 
 .card:active {
-  transform: scale(0.99);
+  transform: scale(0.98);
 }
 
 .card:focus-visible {
@@ -29,7 +27,8 @@
 
 .art {
   position: relative;
-  height: 110px;
+  aspect-ratio: 1;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -37,10 +36,8 @@
   overflow: hidden;
 }
 
-
-
 .glyph {
-  font-size: 40px;
+  font-size: 56px;
   font-weight: 900;
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
   user-select: none;
@@ -92,10 +89,10 @@
 
 .play {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  width: 32px;
-  height: 32px;
+  right: 8px;
+  bottom: 8px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -103,10 +100,9 @@
   background: var(--primary);
   color: #fff;
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(6px);
   transition: opacity 0.15s, transform 0.15s;
   z-index: 1;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .card:hover .play {
@@ -117,8 +113,7 @@
 .body {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px 12px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -135,25 +130,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .code {
-  font-size: 11px;
-  font-family: monospace;
-  color: var(--text-muted);
-  opacity: 0.6;
-  letter-spacing: 1px;
+  display: none;
 }
 
 @media (max-width: 640px) {
   .card {
-    flex-basis: 170px;
-  }
-
-  .art {
-    height: 96px;
+    flex-basis: 150px;
   }
 }

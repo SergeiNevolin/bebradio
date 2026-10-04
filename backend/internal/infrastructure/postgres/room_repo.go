@@ -27,30 +27,31 @@ func NewRoomRepo(pool *pgxpool.Pool) *RoomRepo {
 
 func (r *RoomRepo) Save(room *entity.Room) error {
 	_, err := r.pool.Exec(context.Background(),
-		`INSERT INTO rooms (id, name, owner_id, allow_anonymous_add, is_private, password_hash, auto_radio, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO rooms (id, name, owner_id, allow_anonymous_add, is_private, password_hash, auto_radio, is_stream, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			allow_anonymous_add = EXCLUDED.allow_anonymous_add,
 			is_private = EXCLUDED.is_private,
 			password_hash = EXCLUDED.password_hash,
-			auto_radio = EXCLUDED.auto_radio`,
+			auto_radio = EXCLUDED.auto_radio,
+			is_stream = EXCLUDED.is_stream`,
 		room.ID, room.Name, room.OwnerID, room.AllowAnonymousAdd, room.IsPrivate,
-		room.PasswordHash, room.AutoRadio, room.CreatedAt,
+		room.PasswordHash, room.AutoRadio, room.IsStream, room.CreatedAt,
 	)
 	return err
 }
 
 func (r *RoomRepo) FindByID(id string) (*entity.Room, error) {
 	row := r.pool.QueryRow(context.Background(),
-		`SELECT id, name, owner_id, allow_anonymous_add, is_private, password_hash, auto_radio, created_at
+		`SELECT id, name, owner_id, allow_anonymous_add, is_private, password_hash, auto_radio, is_stream, created_at
 		 FROM rooms WHERE id = $1`, id,
 	)
 
 	rm := &entity.Room{}
 	var passwordHash *string
 	err := row.Scan(&rm.ID, &rm.Name, &rm.OwnerID, &rm.AllowAnonymousAdd, &rm.IsPrivate,
-		&passwordHash, &rm.AutoRadio, &rm.CreatedAt)
+		&passwordHash, &rm.AutoRadio, &rm.IsStream, &rm.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("room not found: %w", err)
 	}
@@ -81,7 +82,7 @@ func (r *RoomRepo) Delete(id string) error {
 
 func (r *RoomRepo) ListPublic() ([]map[string]any, error) {
 	rows, err := r.pool.Query(context.Background(),
-		`SELECT id, name, auto_radio FROM rooms WHERE is_private = false ORDER BY created_at DESC`,
+		`SELECT id, name, auto_radio, is_stream FROM rooms WHERE is_private = false ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -91,14 +92,15 @@ func (r *RoomRepo) ListPublic() ([]map[string]any, error) {
 	var rooms []map[string]any
 	for rows.Next() {
 		var id, name string
-		var autoRadio bool
-		if err := rows.Scan(&id, &name, &autoRadio); err != nil {
+		var autoRadio, isStream bool
+		if err := rows.Scan(&id, &name, &autoRadio, &isStream); err != nil {
 			continue
 		}
 		rooms = append(rooms, map[string]any{
 			"id":         id,
 			"name":       name,
 			"auto_radio": autoRadio,
+			"is_stream":  isStream,
 			"user_count": 0,
 			"track_count": 0,
 			"is_playing": false,
@@ -185,7 +187,7 @@ func (r *RoomRepo) RecordVisit(userID, roomID string) error {
 
 func (r *RoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, error) {
 	rows, err := r.pool.Query(context.Background(),
-		`SELECT r.id, r.name, v.visited_at
+		`SELECT r.id, r.name, r.is_stream, v.visited_at
 		 FROM user_room_visits v
 		 JOIN rooms r ON r.id = v.room_id
 		 WHERE v.user_id = $1 AND r.is_private = false
@@ -200,13 +202,15 @@ func (r *RoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, erro
 	var rooms []map[string]any
 	for rows.Next() {
 		var id, name string
+		var isStream bool
 		var visitedAt interface{}
-		if err := rows.Scan(&id, &name, &visitedAt); err != nil {
+		if err := rows.Scan(&id, &name, &isStream, &visitedAt); err != nil {
 			continue
 		}
 		rooms = append(rooms, map[string]any{
-			"id":   id,
-			"name": name,
+			"id":        id,
+			"name":      name,
+			"is_stream": isStream,
 		})
 	}
 	return rooms, nil

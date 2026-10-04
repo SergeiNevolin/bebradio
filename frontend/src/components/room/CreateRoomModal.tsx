@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
 import { setRoomAccess } from '../../lib/roomAccess'
 
 export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [roomName, setRoomName] = useState('')
   const [roomPassword, setRoomPassword] = useState('')
+  const [isStream, setIsStream] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -15,7 +19,9 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
     setLoading(true)
     setError('')
     try {
-      const data = await api.createRoom(roomName.trim(), roomPassword.trim() || undefined)
+      const data = await api.createRoom(roomName.trim(), roomPassword.trim() || undefined, {
+        is_stream: isAdmin && isStream || undefined,
+      })
       if (data.access) setRoomAccess(data.id, data.access)
       onClose()
       navigate(`/room/${data.id}`)
@@ -58,6 +64,19 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
           <p style={{ marginTop: 8, fontSize: 13, opacity: 0.7 }}>
             With a password, listeners must enter it before they can open the room.
           </p>
+          {isAdmin && (
+            <label className="settings-toggle" style={{ marginTop: 8 }}>
+              <input
+                type="checkbox"
+                checked={isStream}
+                onChange={(e) => setIsStream(e.target.checked)}
+              />
+              <span className="toggle-slider" aria-hidden="true" />
+              <span className="toggle-label">
+                Поток — только админы добавляют треки, без голосования
+              </span>
+            </label>
+          )}
           {error && <div className="error-msg" style={{ marginTop: 12 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
             <button className="btn" onClick={handleCreate} disabled={loading || !roomName.trim()} style={{ flex: 1 }}>

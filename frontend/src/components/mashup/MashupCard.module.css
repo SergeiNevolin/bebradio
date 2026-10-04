@@ -1,18 +1,17 @@
 .card {
   position: relative;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 11px;
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  gap: 8px;
+  transition: background 0.15s ease;
 }
 
 .card:hover {
   background: var(--surface);
-  border-color: var(--border);
 }
 
 .cardReady {
@@ -20,16 +19,17 @@
 }
 
 .cardActive {
-  border-color: var(--primary);
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
 }
 
 .art {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: none;
   padding: 0;
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
   background: var(--surface-hover);
@@ -49,9 +49,10 @@
 }
 
 .glyph {
-  font-size: 34px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.92);
+  font-size: 52px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
 }
 
 /* Play / pause affordance, bottom-right, revealed on hover or when active. */
@@ -59,16 +60,16 @@
   position: absolute;
   right: 8px;
   bottom: 8px;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 50%;
   background: var(--primary);
   color: #fff;
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(6px);
   transition: opacity 0.15s ease, transform 0.15s ease;
   pointer-events: none;
 }
@@ -111,8 +112,8 @@
 }
 
 .title {
-  font-weight: 600;
-  font-size: 15px;
+  font-weight: 700;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

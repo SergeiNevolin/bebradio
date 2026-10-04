@@ -66,8 +66,9 @@ func (uc *RoomUsecase) GetOrLoadRoom(ctx context.Context, roomID string) (*entit
 	return rm, nil
 }
 
-func (uc *RoomUsecase) CreateRoom(ctx context.Context, name, ownerID, password string) (*entity.Room, string, error) {
+func (uc *RoomUsecase) CreateRoom(ctx context.Context, name, ownerID, password string, isStream bool) (*entity.Room, string, error) {
 	rm := entity.NewRoom(id.New(6), name, ownerID)
+	rm.IsStream = isStream
 
 	if password != "" {
 		hash, err := uc.auth.HashPassword(password)

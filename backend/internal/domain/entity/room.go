@@ -17,6 +17,9 @@ type Room struct {
 	IsPrivate         bool      `json:"is_private"`
 	PasswordHash      *string   `json:"-"`
 	AutoRadio         bool      `json:"auto_radio"`
+	// IsStream marks an admin-run stream: only admins add tracks,
+	// voting is disabled, everyone else listens.
+	IsStream          bool      `json:"is_stream"`
 }
 
 type PresenceInfo struct {

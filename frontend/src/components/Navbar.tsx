@@ -64,7 +64,9 @@ export default function Navbar() {
             Караоке
           </Link>
         </div>
-        <SearchBar />
+        <div className={styles.navbarSearchWrap}>
+          <SearchBar />
+        </div>
         <div className={styles.navbarRight}>
           {user ? (
             <div className={styles.navbarUserMenu} ref={menuRef}>

@@ -29,14 +29,24 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name     string `json:"name"`
 		Password string `json:"password"`
+		IsStream bool   `json:"is_stream"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.Name == "" {
 		req.Name = "My Room"
 	}
 
+	// Streams are admin-run: only admins may create them.
+	if req.IsStream {
+		admin, _ := s.isAdmin(userID)
+		if !admin {
+			s.writeError(w, 403, "Only admins can create streams")
+			return
+		}
+	}
+
 	ctx := r.Context()
-	rm, access, err := s.room.CreateRoom(ctx, req.Name, userID, req.Password)
+	rm, access, err := s.room.CreateRoom(ctx, req.Name, userID, req.Password, req.IsStream)
 	if err != nil {
 		s.log.Error("create room failed", "error", err, "user_id", userID)
 		s.writeError(w, 500, "Failed to create room")
@@ -257,6 +267,15 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	if !s.room.HasRoomAccess(rm, userID, access) {
 		s.writeError(w, 403, "This room is password protected")
 		return
+	}
+
+	// Streams are admin-curated: only admins feed the queue.
+	if rm.IsStream {
+		admin, _ := s.isAdmin(userID)
+		if !admin {
+			s.writeError(w, 403, "Only admins can add tracks to streams")
+			return
+		}
 	}
 
 	var req struct {

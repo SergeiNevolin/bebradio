@@ -1,0 +1,47 @@
+.tabbar {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 90;
+    display: flex;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    /* Bar above the iPhone home indicator. */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 9px 0 8px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-family: inherit;
+    /* 44px+ tap target. */
+    min-height: 60px;
+    justify-content: center;
+  }
+
+  .tab:active {
+    transform: scale(0.96);
+  }
+
+  .tabActive {
+    color: var(--primary);
+  }
+
+  .tabLabel {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+  }
+}

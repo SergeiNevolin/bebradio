@@ -2,6 +2,8 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import Mashups from '../pages/Mashups'
+import { GlobalPlayerBar, GlobalPlayerOverlays } from '../components/player/GlobalPlayerUI'
+import { PlayerProvider } from '../context/PlayerContext'
 import type { Track } from '../types'
 
 const {
@@ -59,7 +61,15 @@ function mashup(over: Partial<Track> = {}): Track {
 }
 
 function renderPage() {
-  return render(<MemoryRouter><Mashups /></MemoryRouter>)
+  return render(
+    <MemoryRouter>
+      <PlayerProvider>
+        <Mashups />
+        <GlobalPlayerBar />
+        <GlobalPlayerOverlays />
+      </PlayerProvider>
+    </MemoryRouter>,
+  )
 }
 
 describe('Mashups page', () => {
@@ -163,6 +173,8 @@ describe('Mashups page', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Queue' }))
     expect(panel()).toHaveLength(1)
+    // Панель знает о видимой плашке и резервирует место под неё.
+    expect(panel()[0].className).toMatch(/withPlayer/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Queue' }))
     expect(panel()).toHaveLength(0)

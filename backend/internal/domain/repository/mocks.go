@@ -142,6 +142,7 @@ func (m *MockRoomRepo) ListPublic() ([]map[string]any, error) {
 				"id":         r.ID,
 				"name":       r.Name,
 				"auto_radio": r.AutoRadio,
+				"is_stream":  r.IsStream,
 			})
 		}
 	}

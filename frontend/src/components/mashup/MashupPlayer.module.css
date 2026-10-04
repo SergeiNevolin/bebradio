@@ -264,6 +264,13 @@
   }
 }
 
+/* Phones: the bar docks above the bottom tab bar (60px + home indicator). */
+@media (max-width: 640px) {
+  .bar {
+    bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .playBtn:hover {
     transform: none;

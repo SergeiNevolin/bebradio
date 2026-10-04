@@ -3,15 +3,11 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { api } from '../lib/api'
 import type { Track } from '../types'
-import { useMashupPlayer } from '../hooks/useMashupPlayer'
+import { usePlayer } from '../context/PlayerContext'
 import MashupCard from '../components/mashup/MashupCard'
-import MashupPlayer from '../components/mashup/MashupPlayer'
 import MashupSidebar from '../components/mashup/MashupSidebar'
-import NowPlayingPanel from '../components/mashup/NowPlayingPanel'
-import NowPlayingModal from '../components/mashup/NowPlayingModal'
 import UploadMashupModal from '../components/mashup/UploadMashupModal'
 import EditMashupModal from '../components/mashup/EditMashupModal'
-import ProfileModal from '../components/ProfileModal'
 import styles from './Mashups.module.css'
 
 const RECENT_LIMIT = 12
@@ -20,8 +16,14 @@ const TOP_PAGE = 24
 export default function Mashups() {
   const { user } = useAuth()
   const { showToast } = useToast()
-  const player = useMashupPlayer()
-  const { setList } = player
+  const {
+    player,
+    registerTracks,
+    toggleTrack,
+    toggleLike: ctxToggleLike,
+    applyLike,
+    setProfileUserId,
+  } = usePlayer()
 
   useEffect(() => {
     const previousTitle = document.title
@@ -45,9 +47,6 @@ export default function Mashups() {
 
   const [showUpload, setShowUpload] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [profileUserId, setProfileUserId] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState(false)
-  const [queueOpen, setQueueOpen] = useState(false)
 
   const [recent, setRecent] = useState<Track[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
@@ -187,8 +186,8 @@ export default function Mashups() {
   }, [recent, top, liked, mine])
 
   useEffect(() => {
-    setList(playerList)
-  }, [playerList, setList])
+    registerTracks(playerList)
+  }, [playerList, registerTracks])
 
   // The mashup open in the settings dialog, resolved live so cover changes made
   // inside it show up without a reopen.
@@ -237,7 +236,8 @@ export default function Mashups() {
       showToast('Sign in to like mashups', 'error')
       return
     }
-    const nextLiked = !m.liked
+    const view = applyLike(m)
+    const nextLiked = !view.liked
     const optimistic = (x: Track): Track => ({
       ...x,
       liked: nextLiked,
@@ -250,22 +250,21 @@ export default function Mashups() {
       }
       return prev.filter((x) => x.id !== m.id)
     })
-    try {
-      const res = nextLiked ? await api.likeTrack(m.id) : await api.unlikeTrack(m.id)
+    const res = await ctxToggleLike(m)
+    if (res) {
       const settle = (x: Track): Track => ({ ...x, liked: res.liked, likes: res.likes })
       patchAll(m.id, settle)
       setLiked((prev) => prev.map((x) => (x.id === m.id ? settle(x) : x)))
-    } catch (err) {
-      const revert = (x: Track): Track => ({ ...x, liked: m.liked, likes: m.likes })
+    } else {
+      const revert = (x: Track): Track => ({ ...x, liked: view.liked, likes: view.likes })
       patchAll(m.id, revert)
       setLiked((prev) =>
-        m.liked
+        view.liked
           ? prev.some((x) => x.id === m.id)
             ? prev
-            : [{ ...m }, ...prev]
+            : [{ ...view }, ...prev]
           : prev.filter((x) => x.id !== m.id),
       )
-      showToast(err instanceof Error ? err.message : 'Could not update like', 'error')
     }
   }
 
@@ -293,20 +292,23 @@ export default function Mashups() {
   const activeId = player.current?.id
   const isAdmin = !!user && user.role === 'admin'
 
-  const renderCard = (m: Track) => (
-    <div key={m.id} className={styles.railItem}>
-      <MashupCard
-        mashup={m}
-        active={m.id === activeId}
-        isPlaying={player.isPlaying}
-        canEdit={!!user && (user.id === m.owner_id || isAdmin)}
-        onPlay={() => (m.id === activeId ? player.toggle() : player.play(m))}
-        onToggleLike={() => handleToggleLike(m)}
-        onEdit={() => setEditingId(m.id)}
-        onOpenProfile={setProfileUserId}
-      />
-    </div>
-  )
+  const renderCard = (m: Track) => {
+    const view = applyLike(m)
+    return (
+      <div key={m.id} className={styles.railItem}>
+        <MashupCard
+          mashup={view}
+          active={m.id === activeId}
+          isPlaying={player.isPlaying}
+          canEdit={!!user && (user.id === m.owner_id || isAdmin)}
+          onPlay={() => toggleTrack(view)}
+          onToggleLike={() => handleToggleLike(view)}
+          onEdit={() => setEditingId(m.id)}
+          onOpenProfile={setProfileUserId}
+        />
+      </div>
+    )
+  }
 
   const skeletonRail = (
     <div className={styles.rail}>
@@ -315,9 +317,6 @@ export default function Mashups() {
       ))}
     </div>
   )
-
-  const queue =
-    player.index >= 0 ? playerList.slice(player.index + 1, player.index + 4) : []
 
   const hint = recentLoading
     ? 'Loading mashups…'
@@ -348,14 +347,14 @@ export default function Mashups() {
     <div className={styles.page}>
       <div className={styles.shell}>
         <MashupSidebar
-          items={playerList}
-          likedItems={liked}
-          mineItems={mine}
+          items={playerList.map(applyLike)}
+          likedItems={liked.map(applyLike)}
+          mineItems={mine.map(applyLike)}
           signedIn={!!user}
           activeId={activeId}
           isPlaying={player.isPlaying}
           loading={recentLoading}
-          onPlay={(m) => (m.id === activeId ? player.toggle() : player.play(m))}
+          onPlay={(m) => toggleTrack(m)}
         />
 
         <div className={styles.main}>
@@ -395,36 +394,7 @@ export default function Mashups() {
             </div>
           </div>
         </div>
-
-        {queueOpen && (
-          <NowPlayingPanel
-            current={player.current}
-            queue={queue}
-            loading={recentLoading && !player.current}
-            onPlayFromQueue={(m) => player.play(m)}
-            onToggleLike={handleToggleLike}
-            onOpenProfile={setProfileUserId}
-          />
-        )}
       </div>
-
-      <MashupPlayer
-        player={player}
-        onToggleLike={handleToggleLike}
-        onExpand={() => setExpanded(true)}
-        queueOpen={queueOpen}
-        onToggleQueue={() => setQueueOpen((v) => !v)}
-      />
-
-      {expanded && player.current && (
-        <NowPlayingModal
-          player={player}
-          queue={queue}
-          onToggleLike={handleToggleLike}
-          onOpenProfile={setProfileUserId}
-          onClose={() => setExpanded(false)}
-        />
-      )}
 
       {showUpload && (
         <UploadMashupModal
@@ -446,9 +416,6 @@ export default function Mashups() {
         />
       )}
 
-      {profileUserId && (
-        <ProfileModal userId={profileUserId} onClose={() => setProfileUserId(null)} />
-      )}
     </div>
   )
 }

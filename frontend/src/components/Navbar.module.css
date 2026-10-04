@@ -60,6 +60,11 @@
   justify-self: end;
 }
 
+/* Search wrapper is transparent on desktop so the grid stays 3-column. */
+.navbarSearchWrap {
+  display: contents;
+}
+
 .navbarUserMenu {
   position: relative;
 }
@@ -201,9 +206,28 @@
 
 @media (max-width: 640px) {
   .navbarInner {
-    padding: 12px 14px;
-    grid-template-columns: auto 1fr auto;
+    padding: 10px 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
     gap: 10px;
+    align-items: center;
+  }
+
+  /* Section links move to the bottom tab bar on phones. */
+  .navbarLeft .navbarLink {
+    display: none;
+  }
+
+  .navbarBrand {
+    font-size: 18px;
+    padding: 6px 8px;
+    margin: -6px -8px;
+  }
+
+  /* Search stays in the single top row, squeezed between brand and avatar. */
+  .navbarSearchWrap {
+    display: block;
+    min-width: 0;
   }
 
   .navbarRight {

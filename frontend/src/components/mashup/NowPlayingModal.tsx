@@ -21,7 +21,7 @@ import styles from './NowPlayingModal.module.css'
 interface NowPlayingModalProps {
   player: MashupPlayer
   queue: Track[]
-  onToggleLike: (m: Track) => void
+  onToggleLike?: (m: Track) => void
   onOpenProfile?: (userId: string) => void
   onClose: () => void
 }
@@ -118,16 +118,18 @@ export default function NowPlayingModal({
             </div>
 
             <div className={styles.statline}>
-              <button
-                type="button"
-                className={`${styles.likeBtn} ${current.liked ? styles.likeBtnOn : ''}`}
-                onClick={() => onToggleLike(current)}
-                aria-pressed={!!current.liked}
-                aria-label={current.liked ? `Unlike ${current.title}` : `Like ${current.title}`}
-              >
-                {current.liked ? <HeartFillIcon size={20} /> : <HeartIcon size={20} />}
-                {current.likes}
-              </button>
+              {onToggleLike && (
+                <button
+                  type="button"
+                  className={`${styles.likeBtn} ${current.liked ? styles.likeBtnOn : ''}`}
+                  onClick={() => onToggleLike(current)}
+                  aria-pressed={!!current.liked}
+                  aria-label={current.liked ? `Unlike ${current.title}` : `Like ${current.title}`}
+                >
+                  {current.liked ? <HeartFillIcon size={20} /> : <HeartIcon size={20} />}
+                  {current.likes}
+                </button>
+              )}
               {current.status === 'ready' && (
                 <span className={styles.dur}>{formatTime(current.duration)}</span>
               )}

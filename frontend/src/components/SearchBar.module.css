@@ -103,4 +103,10 @@
     max-width: 100%;
     min-width: 0;
   }
+
+  /* 16px prevents iOS Safari auto-zoom on focus. */
+  .searchBarInput {
+    font-size: 16px;
+    padding: 7px 10px 7px 32px;
+  }
 }

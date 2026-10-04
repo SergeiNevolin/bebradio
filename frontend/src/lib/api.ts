@@ -179,16 +179,17 @@ export const api = {
   // ── Rooms ───────────────────────────────────────────────────────────
   // GET /api/rooms → []map  (raw array, not { rooms: [] })
   getRooms: () =>
-    request<Array<{ id: string; name: string; user_count: number; track_count: number; is_playing: boolean; has_password: boolean; auto_radio: boolean }>>('/api/rooms'),
+    request<Array<{ id: string; name: string; user_count: number; track_count: number; is_playing: boolean; has_password: boolean; auto_radio: boolean; is_stream: boolean }>>('/api/rooms'),
 
   // GET /api/rooms/recent → []map
   getRecentRooms: () =>
-    request<Array<{ id: string; name: string; user_count: number; track_count: number; is_playing: boolean; has_password: boolean }>>('/api/rooms/recent'),
+    request<Array<{ id: string; name: string; user_count: number; track_count: number; is_playing: boolean; has_password: boolean; is_stream: boolean }>>('/api/rooms/recent'),
 
   // POST /api/rooms → ToDict() + { access }
-  createRoom: (name: string, password?: string) =>
+  // is_stream marks an admin-run stream (admins only, enforced server-side).
+  createRoom: (name: string, password?: string, opts?: { is_stream?: boolean }) =>
     request<{ id: string; name: string; access?: string }>(
-      '/api/rooms', { method: 'POST', body: JSON.stringify({ name, password: password || undefined }) }
+      '/api/rooms', { method: 'POST', body: JSON.stringify({ name, password: password || undefined, is_stream: opts?.is_stream || undefined }) }
     ),
 
   // GET /api/rooms/:roomID → ToDict() or { id, name, locked, has_password }

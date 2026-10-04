@@ -216,6 +216,10 @@ func (h *Handler) handleChat(ctx context.Context, rm *entity.Room, conn *websock
 }
 
 func (h *Handler) handleVote(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
+	// Streams have no voting: listeners only listen.
+	if rm.IsStream {
+		return
+	}
 	userID := h.manager.GetUserID(roomID, conn)
 	trackID, _ := msg["track_id"].(string)
 	voteVal, _ := msg["vote"].(float64)
@@ -228,6 +232,10 @@ func (h *Handler) handleVote(ctx context.Context, rm *entity.Room, conn *websock
 }
 
 func (h *Handler) handleSkipVote(ctx context.Context, rm *entity.Room, conn *websocket.Conn, roomID string) {
+	// Streams have no voting: listeners only listen.
+	if rm.IsStream {
+		return
+	}
 	userID := h.manager.GetUserID(roomID, conn)
 	if userID == "" {
 		return

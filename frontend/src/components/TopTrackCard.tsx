@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { Track } from '../types'
 import { monoGlyph, tintForId } from '../lib/mashupArt'
-import { HeartFillIcon } from './player/icons'
+import { HeartFillIcon, PlayIcon } from './player/icons'
 import styles from './TopTrackCard.module.css'
 
 interface TopTrackCardProps {
@@ -31,6 +31,7 @@ function TopTrackCard({ track, position, onOpen }: TopTrackCardProps) {
           <span className={styles.glyph} aria-hidden="true">{monoGlyph(track.title)}</span>
         )}
         <span className={styles.pos} aria-hidden="true">{position}</span>
+        <span className={styles.fab} aria-hidden="true"><PlayIcon size={16} /></span>
       </div>
       <div className={styles.body}>
         <div className={styles.title}>{track.title}</div>

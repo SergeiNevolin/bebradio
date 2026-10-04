@@ -1,0 +1,130 @@
+/* Панель превью караоке: та же full-height рейка справа, что и очередь. */
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 100vw);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border: none;
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.25);
+}
+
+.head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 80px 12px 4px;
+}
+
+.closeBtn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.closeBtn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.bodyPad {
+  padding: 4px 16px 20px;
+}
+
+.bigArt {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.bigTitle {
+  margin-top: 14px;
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bigMeta {
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.actions .btn {
+  width: 100%;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    left: 0;
+    width: auto;
+    border-left: none;
+  }
+
+  .head {
+    padding: 62px 12px 4px;
+  }
+
+  .closeBtn {
+    width: 40px;
+    height: 40px;
+    font-size: 26px;
+  }
+
+  .bodyPad {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .withPlayer .bodyPad {
+    padding-bottom: calc(216px + env(safe-area-inset-bottom) + env(safe-area-inset-bottom));
+  }
+}
+
+/* Десктоп: резерв под 80px плашку плеера. */
+.withPlayer .bodyPad {
+  padding-bottom: 100px;
+}

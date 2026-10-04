@@ -1,5 +1,6 @@
-/* Spotify-style three-panel shell: library rail, centre shelves, now-playing
-   rail, and a fixed wide player bar underneath. */
+/* Spotify-style shell: library rail + centre shelves. The player bar,
+   queue drawer and Now Playing overlay are global (see App) and live
+   outside this layout. */
 /* Break out of the app's centred 1400px column and span the whole viewport. */
 .page {
   display: flex;
@@ -69,9 +70,9 @@
 }
 
 .title {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
 }
 
 .counter {
@@ -95,22 +96,23 @@
   color: var(--text-muted);
 }
 
-/* ── Shelves ──────────────────────────────────────────────────────── */
+/* ── Shelves (same language as Home) ──────────────────────────── */
 .shelf {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .shelfTitle {
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 10px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 14px;
 }
 
 .rail {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   overflow-x: auto;
-  padding-bottom: 6px;
+  padding: 4px 0 8px;
   scrollbar-width: thin;
 }
 
@@ -124,7 +126,7 @@
 }
 
 .railItem {
-  width: 196px;
+  width: 176px;
   flex-shrink: 0;
 }
 
@@ -169,7 +171,7 @@
 /* Skeleton card placeholder — matches a card's footprint. */
 .skeletonCard {
   height: 240px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
@@ -184,13 +186,7 @@
   to { background-position: -200% 0; }
 }
 
-/* ── Responsive: drop the side rails as width tightens ─────────────── */
-@media (max-width: 1180px) {
-  .shell > :last-child {
-    display: none; /* now-playing rail */
-  }
-}
-
+/* ── Responsive: drop the library rail as width tightens ──────────── */
 @media (max-width: 940px) {
   .shell > :first-child {
     display: none; /* library rail */

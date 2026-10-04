@@ -9,7 +9,7 @@ const STORAGE_KEY = 'accent'
 
 // The stylesheet's light-theme --primary. Used only as the swatch colour for
 // the "default" preset in the picker.
-export const DEFAULT_ACCENT = '#16a34a'
+export const DEFAULT_ACCENT = '#1db954'
 
 export interface AccentPreset {
   name: string
@@ -58,7 +58,7 @@ const THEME_KEY = 'theme'
 export function getStoredTheme(): Theme {
   const stored = localStorage.getItem(THEME_KEY)
   if (stored === 'dark' || stored === 'light') return stored
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return 'dark'
 }
 
 export function applyTheme(theme: Theme) {
