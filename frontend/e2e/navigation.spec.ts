@@ -11,7 +11,7 @@ test.describe('Navigation', () => {
   test('home page shows discovery sections', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Комнаты' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Топ мэшапов' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Мешапы' })).toBeVisible()
   })
 
   test('shows 404 for unknown routes', async ({ page }) => {
