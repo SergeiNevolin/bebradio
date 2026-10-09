@@ -37,25 +37,31 @@
   --danger: #ef4444;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   font-family: 'Inter', -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
   transition: background 0.2s, color 0.2s;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 #root {
-  min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .app-root {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   --sidebar-w: 0px;
 }
 
@@ -95,12 +101,14 @@ input:focus {
 .app {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   margin: 0 auto;
   padding: 0 40px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   width: 100%;
+  /* Единственный скролл страницы: шапка и сайдбар стоят, едет контент. */
+  overflow-y: auto;
 }
 
 /* Строка контента под шапкой: сайдбар + страница. */
@@ -448,17 +456,6 @@ input:focus {
 }
 
 @media (max-width: 640px) {
-  body {
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
-  #root,
-  .app-root {
-    height: auto;
-    min-height: 100vh;
-  }
-
   /* Clearance for the fixed bottom tab bar. */
   .app-root {
     padding-bottom: calc(60px + env(safe-area-inset-bottom));

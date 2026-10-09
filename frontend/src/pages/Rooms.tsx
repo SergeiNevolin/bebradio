@@ -61,11 +61,11 @@ export default function Rooms() {
           <>
             <div className={styles.heroStat}>
               <span className={styles.heroStatNum}>{rooms.length}</span>
-              <span className={styles.heroStatLabel}>rooms</span>
+              <span className={styles.roomsHeroStatLabel}>rooms</span>
             </div>
             <div className={styles.heroStat}>
               <span className={styles.heroStatNum}>{totalListeners}</span>
-              <span className={styles.heroStatLabel}>listening</span>
+              <span className={styles.roomsHeroStatLabel}>listening</span>
             </div>
           </>
         }

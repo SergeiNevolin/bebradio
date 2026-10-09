@@ -17,7 +17,7 @@ export default function Hero({ title, sub, actions, stats }: HeroProps) {
   return (
     <div className={styles.hero}>
       <div className={styles.main}>
-        <div className={styles.title}>{title}</div>
+        <h1 className={styles.title}>{title}</h1>
         {sub && <p className={styles.sub}>{sub}</p>}
         {actions && <div className={styles.actions}>{actions}</div>}
       </div>
