@@ -27,6 +27,14 @@ HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
 HTMLMediaElement.prototype.pause = vi.fn()
 HTMLMediaElement.prototype.load = vi.fn()
 
+// jsdom не реализует Object URL API — караоке создаёт/ревокает blob-URL аудио
+if (typeof URL.createObjectURL === 'undefined') {
+  URL.createObjectURL = () => 'blob:mock'
+}
+if (typeof URL.revokeObjectURL === 'undefined') {
+  URL.revokeObjectURL = () => {}
+}
+
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class {
     observe() {}

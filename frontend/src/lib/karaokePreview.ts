@@ -1,6 +1,6 @@
 import type { Track } from '../types'
 
-/** Строка манифеста караоке (/karaoke/api/songs) с полями для превью. */
+/** Строка манифеста караоке (/api/karaoke/api/songs) с полями для превью. */
 export interface KaraokePreview {
   id: string
   title: string
@@ -12,10 +12,10 @@ export interface KaraokePreview {
   original?: string | null
 }
 
-/** Превью — оригинал с вокалом, иначе минус; пути резолвятся через прокси /karaoke/. */
+/** Превью — оригинал с вокалом, иначе минус; пути резолвятся через прокси /api/karaoke/. */
 export function karaokePreviewUrl(song: KaraokePreview): string {
   const rel = song.original || song.audio || `songs/${song.id}/minus.mp3`
-  return `/karaoke/${rel}`
+  return `/api/karaoke/${rel}`
 }
 
 /** Превью как элемент общей очереди: играет в глобальном плеере. */

@@ -66,7 +66,7 @@ export default function Home() {
 
   useEffect(() => {
     let alive = true
-    fetch('/karaoke/api/songs')
+    fetch('/api/karaoke/api/songs')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (alive && Array.isArray(data?.songs)) setKaraokeSongs(data.songs)

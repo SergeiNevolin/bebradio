@@ -63,7 +63,7 @@ function mockHomeApis(roomList = rooms, songList: unknown[] = karaokeSongs) {
   mockFetch((url) => {
     if (url === '/api/rooms') return roomList
     if (url.startsWith('/api/tracks/')) return tracks
-    if (url === '/karaoke/api/songs') return { songs: songList }
+    if (url === '/api/karaoke/api/songs') return { songs: songList }
     return []
   })
 }

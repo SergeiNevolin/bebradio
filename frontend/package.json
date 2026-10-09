@@ -15,12 +15,17 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "framer-motion": "^13.4.0",
+    "lucide-react": "^1.47.0",
+    "pitchy": "^4.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.0"
+    "react-router-dom": "^6.26.0",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.4.1",
@@ -29,6 +34,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "@vitest/coverage-v8": "^2.1.9",
     "jsdom": "^30.0.1",
+    "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^5.4.0",
     "vitest": "^2.1.9"
