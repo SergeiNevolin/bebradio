@@ -264,13 +264,6 @@ export const api = {
       '/api/search', { method: 'POST', body: JSON.stringify({ query }) }
     ),
 
-  // ── Lyrics ──────────────────────────────────────────────────────────
-  // GET /api/rooms/:roomID/lyrics?access=&lang= → { available, track_id, lang, auto, cues }
-  getLyrics: (roomId: string) =>
-    request<{ available: boolean; track_id: string; lang: string; auto: boolean; cues: Array<{ start: number; dur: number; text: string }> }>(
-      `/api/rooms/${roomId}/lyrics`
-    ),
-
   // ── Users ───────────────────────────────────────────────────────────
   // GET /api/users/me → { user: ProfileWithEmail() }
   getMeProfile: () => request<{ user: UserProfileWithEmail }>('/api/users/me'),

@@ -1,12 +1,11 @@
-import { memo, useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect } from 'react'
 import type { Track } from '../types'
-import Karaoke from './Karaoke'
 import TrackArt from './TrackArt'
 import SeekBar from './player/SeekBar'
 import VolumeControl from './player/VolumeControl'
 import { useGaplessPlayer } from '../hooks/useGaplessPlayer'
 import { useVolume } from '../hooks/useVolume'
-import { MicIcon, PlayIcon, SkipIcon, ThumbDownIcon, ThumbUpIcon } from './player/icons'
+import { PlayIcon, SkipIcon, ThumbDownIcon, ThumbUpIcon } from './player/icons'
 import styles from './Player.module.css'
 
 /** Seconds of overlap between tracks. 0 would disable crossfading. */
@@ -25,7 +24,6 @@ interface PlayerProps {
   onSkipVote: () => void
   skipVoters: string[]
   currentUserId: string
-  roomId?: string
   /** Voting UI (likes/dislikes/skip). Streams disable it. */
   canVote?: boolean
 }
@@ -43,11 +41,8 @@ function Player({
   onSkipVote,
   skipVoters,
   currentUserId,
-  roomId,
   canVote = true,
 }: PlayerProps) {
-  const [showKaraoke, setShowKaraoke] = useState(false)
-
   const onEnded = useCallback(() => onPlayback('next'), [onPlayback])
   const onSync = useCallback(
     (p: number) => onPlayback('sync', { position: p }),
@@ -145,16 +140,6 @@ function Player({
               onToggleMute={toggleMute}
             />
             <div className={styles.playerControlsGap} />
-            {roomId && (
-              <button
-                type="button"
-                className={`${styles.playerChip}${showKaraoke ? ` ${styles.playerChipOn}` : ''}`}
-                aria-pressed={showKaraoke}
-                onClick={() => setShowKaraoke((v) => !v)}
-              >
-                <MicIcon size={14} /> Karaoke
-              </button>
-            )}
             {canVote && (
               <button
                 type="button"
@@ -166,10 +151,6 @@ function Player({
               </button>
             )}
           </div>
-
-          {roomId && showKaraoke && (
-            <Karaoke roomId={roomId} trackId={track.id} currentTime={localPos} />
-          )}
 
           {canVote && (
             <div className="vote-buttons">

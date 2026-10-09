@@ -217,7 +217,6 @@ export default function Room() {
           <div className={styles.playerWrap}>
             <ReactionsOverlay items={reactions} />
             <Player
-              roomId={roomId}
               track={room?.current_track ?? null}
               nextTrack={room?.queue?.[(room?.current_index ?? 0) + 1] ?? null}
               isPlaying={room?.is_playing ?? false}

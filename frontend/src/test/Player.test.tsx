@@ -377,38 +377,6 @@ describe('Player sync', () => {
   })
 })
 
-describe('Player karaoke toggle', () => {
-  beforeEach(() => {
-    Element.prototype.scrollIntoView = vi.fn()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ cues: [], available: false, auto: false }) }),
-    )
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('hides the karaoke button when no roomId is given', () => {
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
-    expect(screen.queryByRole('button', { name: /karaoke/i })).not.toBeInTheDocument()
-  })
-
-  it('shows the karaoke button and opens the panel on click', async () => {
-    render(
-      <Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} roomId="ROOM1" />
-    )
-    const btn = screen.getByRole('button', { name: /karaoke/i })
-    expect(btn).toHaveAttribute('aria-pressed', 'false')
-    fireEvent.click(btn)
-    expect(btn).toHaveAttribute('aria-pressed', 'true')
-    expect(await screen.findByText(/no lyrics for this track/i)).toBeInTheDocument()
-    expect(fetch).toHaveBeenCalledWith('/api/rooms/ROOM1/lyrics', {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  })
-})
-
 describe('Player seeking', () => {
   it('renders a Skip chip in the control row that votes to skip', () => {
     const onSkipVote = vi.fn()
