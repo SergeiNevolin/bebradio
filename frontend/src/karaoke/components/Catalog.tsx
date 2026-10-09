@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ArrowLeft, Disc3, Heart, LayoutGrid, ListMusic, MicVocal, Plus, Search } from 'lucide-react'
 import { TrackList, TrackRow } from '../../components/media/TrackRows'
 import Shelf from '../../components/media/Shelf'
+import Hero from '../../components/media/Hero'
 import MediaCard from '../../components/media/MediaCard'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import { groupArtists, parseSong, rankSongs, totalPlays } from '../lib/artists'
-import { apiAvailable, hasAuthToken } from '../lib/api'
+import { apiAvailable, hasAuthToken, BASE } from '../lib/api'
 import { loadSong } from '../lib/songs'
 import { formatTime } from '../lib/songs'
 import { hasLocalLyrics, loadManifest, plural } from '../lib/songs'
@@ -236,16 +238,39 @@ export default function Catalog() {
 
   return (
     <div className="w-full px-10 pb-16 max-sm:px-3.5">
-      <div className="flex items-center gap-2 pt-4">
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {canUpload && (
-            <button onClick={() => setUploadOpen(true)} title="Загрузить свою песню (аудио или клип)"
-              className="btn shrink-0 gap-1.5">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Загрузить</span>
-            </button>
-          )}
-        </div>
+      <div className="mt-4">
+        {hasAuthToken() ? (
+          <Hero
+            title="Загрузи свою песню"
+            sub="Загрузи песню, отредактируй текст и пой."
+            actions={
+              canUpload ? (
+                <button onClick={() => setUploadOpen(true)} title="Загрузить свою песню (аудио или клип)"
+                  className="btn shrink-0 gap-1.5">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Загрузить</span>
+                </button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <Hero
+            title="Регистрируйся и загружай своё"
+            sub="Петь можно без входа, а загрузка песен — для своих."
+            actions={
+              BASE ? (
+                <>
+                  <Link className="btn btn-sm" to="/register">
+                    Регистрация
+                  </Link>
+                  <Link className="btn btn-secondary btn-sm" to="/login">
+                    Войти
+                  </Link>
+                </>
+              ) : undefined
+            }
+          />
+        )}
       </div>
 
       {artistEntry ? (
@@ -280,7 +305,6 @@ export default function Catalog() {
       ) : (
         <>
           {songs.length > 0 && (
-            <div className="mt-4">
               <Shelf title="Популярное">
                 {popular.map((s) => {
                   const parsed = parseSong(s.title)
@@ -302,10 +326,8 @@ export default function Catalog() {
                   )
                 })}
               </Shelf>
-            </div>
           )}
           {recentOrdered.length > 0 && (
-            <div className="mt-4">
               <Shelf title="Недавние">
                 {recentOrdered.slice(0, 8).map((s) => {
                   const parsed = parseSong(s.title)
@@ -327,10 +349,8 @@ export default function Catalog() {
                   )
                 })}
               </Shelf>
-            </div>
           )}
           {artists.length > 0 && (
-            <div className="mt-4">
               <Shelf title="Исполнители">
                 {artists.map((a) => (
                   <MediaCard
@@ -349,7 +369,6 @@ export default function Catalog() {
                   />
                 ))}
               </Shelf>
-            </div>
           )}
           <h2 className="mt-5 text-xl font-extrabold tracking-tight text-text">
             Все песни

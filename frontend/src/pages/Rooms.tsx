@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useRoomEntry } from '../hooks/useRoomEntry'
 import RoomCard from '../components/RoomCard'
 import Shelf from '../components/media/Shelf'
+import Hero from '../components/media/Hero'
 import { type RoomListItem } from '../types'
 import styles from './Rooms.module.css'
 
@@ -43,32 +44,33 @@ export default function Rooms() {
 
   return (
     <div className={styles.rooms}>
-      {/* Hero */}
-      <div className={styles.roomsHero}>
-        <div className={styles.roomsHeroContent}>
-          <h1 className={styles.roomsHeroTitle}>Слушать музыку вместе с друзьями</h1>
-          <p className={styles.roomsHeroSub}>Создайте музыкальную комнату и слушайте треки вместе онлайн в синхронном режиме.</p>
-          <div className={styles.roomsHeroActions}>
-            <button className={`btn ${styles.btnHero}`} onClick={entry.openCreateModal}>
+      <Hero
+        title="Слушать музыку вместе с друзьями"
+        sub="Создайте музыкальную комнату и слушайте треки вместе онлайн в синхронном режиме."
+        actions={
+          <>
+            <button className="btn" onClick={entry.openCreateModal}>
               Create Room
             </button>
-            <button className={`btn ${styles.btnHero} btn-secondary`} onClick={entry.openJoinModal}>
+            <button className="btn btn-secondary" onClick={entry.openJoinModal}>
               Join by Code
             </button>
-          </div>
-          {entry.error && <div className="error-msg" style={{ marginTop: 12 }}>{entry.error}</div>}
-        </div>
-        <div className={styles.roomsHeroStats}>
-          <div className={styles.roomsHeroStat}>
-            <span className={styles.roomsHeroStatNum}>{rooms.length}</span>
-            <span className={styles.roomsHeroStatLabel}>rooms</span>
-          </div>
-          <div className={styles.roomsHeroStat}>
-            <span className={styles.roomsHeroStatNum}>{totalListeners}</span>
-            <span className={styles.roomsHeroStatLabel}>listening</span>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+        stats={
+          <>
+            <div className={styles.heroStat}>
+              <span className={styles.heroStatNum}>{rooms.length}</span>
+              <span className={styles.heroStatLabel}>rooms</span>
+            </div>
+            <div className={styles.heroStat}>
+              <span className={styles.heroStatNum}>{totalListeners}</span>
+              <span className={styles.heroStatLabel}>listening</span>
+            </div>
+          </>
+        }
+      />
+      {entry.error && <div className="error-msg">{entry.error}</div>}
 
       {user && recentRooms.length > 0 && (
         <Shelf title="Recently Played">

@@ -56,6 +56,15 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  --sidebar-w: 0px;
+}
+
+.app-root.sb-full {
+  --sidebar-w: 240px;
+}
+
+.app-root.sb-rail {
+  --sidebar-w: 76px;
 }
 
 button {
@@ -96,26 +105,17 @@ input:focus {
 
 /* Строка контента под шапкой: сайдбар + страница. */
 .app-body {
-  --sidebar-w: 0px;
   flex: 1;
   display: flex;
   min-height: 0;
   align-items: stretch;
 }
 
-.app-body.sb-full {
-  --sidebar-w: 240px;
-}
-
-.app-body.sb-rail {
-  --sidebar-w: 76px;
-}
-
 @media (max-width: 640px) {
   /* Специфичность не ниже классовых вариантов выше, иначе 240px вычтутся и на телефоне. */
-  .app-body,
-  .app-body.sb-full,
-  .app-body.sb-rail {
+  .app-root,
+  .app-root.sb-full,
+  .app-root.sb-rail {
     --sidebar-w: 0px;
   }
 }

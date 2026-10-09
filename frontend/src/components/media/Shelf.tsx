@@ -49,7 +49,13 @@ export default function Shelf({
   return (
     <section className={styles.shelf}>
       <div className={`${styles.header}${small ? ` ${styles.headerSmall}` : ''}`}>
-        <h2 className={small ? styles.titleSmall : styles.title}>{title}</h2>
+        {linkTo ? (
+          <Link to={linkTo} className={styles.titleLink} aria-label={`${title} — ${linkLabel}`}>
+            <h2 className={small ? styles.titleSmall : styles.title}>{title}</h2>
+          </Link>
+        ) : (
+          <h2 className={small ? styles.titleSmall : styles.title}>{title}</h2>
+        )}
         <div className={styles.headerRight}>
           {count !== undefined && <span className={styles.count}>{count}</span>}
           {linkTo && (

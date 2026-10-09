@@ -1,9 +1,17 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { useKaraoke } from '../store'
+
+let mockHasToken = false
+vi.mock('../lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/api')>()
+  // Встроенный режим: BASE задан — видны гостевые ссылки на вход.
+  return { ...actual, BASE: '/api/karaoke', hasAuthToken: () => mockHasToken }
+})
 
 const META = {
   id: 't',
@@ -50,6 +58,7 @@ function mockFetch() {
 
 beforeEach(() => {
   mockFetch()
+  mockHasToken = false
   vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockImplementation(async () => undefined)
   vi.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined)
   vi.stubGlobal('requestAnimationFrame', (cb: () => void) => setTimeout(cb, 16) as unknown as number)
@@ -66,7 +75,11 @@ afterEach(() => {
 
 describe('App: каталог → песня → назад', () => {
   it('возврат показывает каталог, а не чёрный экран', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     // каталог загрузился
     const sing = await screen.findByText('Петь')
     fireEvent.click(sing)
@@ -84,7 +97,11 @@ describe('App: каталог → песня → назад', () => {
 
 describe('Catalog: шапка, табы, помощь', () => {
   it('показывает табы Все/Избранное с бейджами, таба Недавние нет', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     expect(screen.queryByRole('heading', { name: /Караоке/ })).toBeNull()
     expect(screen.getByRole('tab', { name: /Все песни/ }).textContent).toContain('1')
@@ -94,7 +111,11 @@ describe('Catalog: шапка, табы, помощь', () => {
   })
 
   it('пустое избранное зовёт ко всем песням', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     fireEvent.click(screen.getByRole('tab', { name: /Избранное/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ко всем песням' }))
@@ -104,7 +125,11 @@ describe('Catalog: шапка, табы, помощь', () => {
   })
 
   it('пустой поиск сбрасывается кнопкой', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     fireEvent.change(screen.getByLabelText('Найти песню'), { target: { value: 'zzz' } })
     fireEvent.click(await screen.findByRole('button', { name: 'Сбросить поиск' }))
@@ -115,7 +140,11 @@ describe('Catalog: шапка, табы, помощь', () => {
 
 describe('Catalog: фаза 1 — полка, сортировка, язык, вид', () => {
   it('строки нумерованы, длительность справа', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     const nums = document.querySelectorAll('.num')
     expect(nums.length).toBe(1)
@@ -124,7 +153,11 @@ describe('Catalog: фаза 1 — полка, сортировка, язык, в
   })
 
   it('полка «Недавние» остаётся при поиске — фильтруется только список', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     expect(screen.queryByRole('heading', { name: 'Недавние' })).toBeNull()
     act(() => {
@@ -138,7 +171,11 @@ describe('Catalog: фаза 1 — полка, сортировка, язык, в
   })
 
   it('клик по карточке полки открывает плеер', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     act(() => {
       useKaraoke.getState().pushRecent('t')
@@ -152,7 +189,11 @@ describe('Catalog: фаза 1 — полка, сортировка, язык, в
   })
 
   it('сортировка меняет порядок строк секции', async () => {
-    const { container } = render(<App />)
+    const { container } = render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     act(() => {
       useKaraoke.getState().setSongs([META, META_EN])
@@ -166,7 +207,11 @@ describe('Catalog: фаза 1 — полка, сортировка, язык, в
   })
 
   it('языковые чипсы фильтруют каталог и сбрасываются', async () => {
-    const { container } = render(<App />)
+    const { container } = render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     expect(screen.queryByText('EN')).toBeNull()
     act(() => {
@@ -187,7 +232,11 @@ describe('Catalog: фаза 1 — полка, сортировка, язык, в
 
 describe('Catalog: исполнители и популярность', () => {
   it('полка «Популярное» ранжирует по исполнениям', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     act(() => {
       useKaraoke.getState().setSongs([META, META_EN])
@@ -200,7 +249,11 @@ describe('Catalog: исполнители и популярность', () => {
   })
 
   it('спетая песня всплывает в «Популярном»', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     act(() => {
       useKaraoke.getState().setSongs([META, META_EN])
@@ -215,7 +268,11 @@ describe('Catalog: исполнители и популярность', () => {
   })
 
   it('полка исполнителей ведёт на экран исполнителя и назад', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     act(() => {
       useKaraoke.getState().setSongs([META_A1, META_A2, META_C1])
@@ -234,10 +291,39 @@ describe('Catalog: исполнители и популярность', () => {
   })
 
   it('секция показывает живое число песен', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
     await screen.findByText('Петь')
     expect(screen.getByRole('heading', { name: /Все песни/ }).textContent).toContain('1 песня')
     fireEvent.change(screen.getByLabelText('Найти песню'), { target: { value: 'zzz' } })
     expect(screen.getByRole('heading', { name: /Все песни/ }).textContent).toContain('0')
+  })
+
+  it('гость видит хиро с регистрацией', async () => {
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
+    await screen.findByText('Петь')
+    expect(screen.getByText('Регистрируйся и загружай своё')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Регистрация' })).toHaveAttribute('href', '/register')
+    expect(screen.queryByText('Загрузи свою песню')).toBeNull()
+  })
+
+  it('вошедший видит хиро с загрузкой', async () => {
+    mockHasToken = true
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
+    await screen.findByText('Петь')
+    expect(screen.getByText('Загрузи свою песню')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Загрузить' })).toBeInTheDocument()
+    expect(screen.queryByText('Регистрируйся и загружай своё')).toBeNull()
   })
 })

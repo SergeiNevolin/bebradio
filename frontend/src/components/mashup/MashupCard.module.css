@@ -24,7 +24,6 @@
   font-size: 13px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  min-height: 34px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

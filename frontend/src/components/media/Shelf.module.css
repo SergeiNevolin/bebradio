@@ -1,13 +1,14 @@
-/* Единая полка bebradio — язык заголовков главной (Home). */
+/* Единая полка bebradio — язык заголовков главной (Home).
+   Ритм между полками задаётся здесь (контейнерного gap на страницах нет). */
 .shelf {
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 
 .header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .title {
@@ -15,6 +16,17 @@
   font-weight: 800;
   letter-spacing: -0.5px;
   color: var(--text);
+}
+
+/* Заголовок-ссылка (полки главной): ховер подчёркивает, как «Показать все». */
+.titleLink {
+  text-decoration: none;
+  color: inherit;
+}
+
+.titleLink:hover .title,
+.titleLink:hover .titleSmall {
+  text-decoration: underline;
 }
 
 .headerRight {

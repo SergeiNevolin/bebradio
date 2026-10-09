@@ -91,7 +91,6 @@ describe('Mashups page', () => {
 
   it('renders the three browse sections', async () => {
     renderPage()
-    expect(screen.getByRole('heading', { name: 'Загружайте и слушайте мешапы' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Latest' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Top by likes' })).toBeInTheDocument()
     expect(await screen.findAllByText('Top Bootleg')).not.toHaveLength(0)
@@ -116,6 +115,23 @@ describe('Mashups page', () => {
     expect(screen.queryByRole('button', { name: 'Upload' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Liked' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'My mashups' })).not.toBeInTheDocument()
+  })
+
+  it('shows guest hero with registration CTA', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Latest' })
+    expect(screen.getByText('Регистрируйся и загружай своё')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Регистрация' })).toHaveAttribute('href', '/register')
+    expect(screen.queryByText('Загрузи свой мешап')).toBeNull()
+  })
+
+  it('shows upload hero for signed-in users', async () => {
+    mockUser = { id: 'owner1', username: 'me' }
+    renderPage()
+    await screen.findByRole('heading', { name: 'Latest' })
+    expect(screen.getByText('Загрузи свой мешап')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Upload' })).toBeInTheDocument()
+    expect(screen.queryByText('Регистрируйся и загружай своё')).toBeNull()
   })
 
   it('toggles a like optimistically and settles on the server count', async () => {

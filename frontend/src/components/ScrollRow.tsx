@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, type MutableRefObject, type ReactNode, type WheelEvent } from 'react'
+import { useRef, useState, useEffect, type MutableRefObject, type ReactNode } from 'react'
 import styles from './ScrollRow.module.css'
 
 interface ScrollRowProps {
@@ -40,19 +40,28 @@ export default function ScrollRow({ children, className = '', trackRef }: Scroll
     }
   }, [children])
 
+  // Вертикальное колесо крутит рейл, а не страницу. React вешает onWheel
+  // как passive (preventDefault там молча игнорируется), поэтому слушатель
+  // нативный с passive: false. Когда полке некуда ехать — страницу отдаём.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onWheelNative = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+      const canDown = el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+      const canUp = el.scrollLeft > 1
+      if ((e.deltaY > 0 && !canDown) || (e.deltaY < 0 && !canUp)) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY
+    }
+    el.addEventListener('wheel', onWheelNative, { passive: false })
+    return () => el.removeEventListener('wheel', onWheelNative)
+  }, [])
+
   const scroll = (dir: -1 | 1) => {
     const el = ref.current
     if (!el) return
     el.scrollBy({ left: dir * el.clientWidth * 0.7, behavior: 'smooth' })
-  }
-
-  const onWheel = (e: WheelEvent) => {
-    const el = ref.current
-    if (!el) return
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      e.preventDefault()
-      el.scrollLeft += e.deltaY
-    }
   }
 
   return (
@@ -65,7 +74,6 @@ export default function ScrollRow({ children, className = '', trackRef }: Scroll
       <div
         className={styles.scrollRowTrack}
         ref={setTrack}
-        onWheel={onWheel}
       >
         {children}
       </div>

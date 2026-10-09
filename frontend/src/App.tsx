@@ -58,7 +58,9 @@ export default function App() {
     }
   })
   const [drawer, setDrawer] = useState(false)
-  const sidebarClass = overlayNav ? '' : rail ? 'sb-rail' : 'sb-full'
+  // Ширина сайдбара для сетки (бургер-зона в шапке, брейкауты страниц).
+  // На комнатах сайдбар — шторка, но зона бургера в шапке та же.
+  const sidebarClass = rail ? 'sb-rail' : 'sb-full'
   useEffect(() => {
     setDrawer(false)
   }, [location.pathname])
@@ -82,9 +84,9 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <PlayerProvider>
-        <div className="app-root">
+        <div className={`app-root ${sidebarClass}`}>
           <Navbar onBurger={toggleSidebar} />
-          <div className={`app-body ${sidebarClass}`}>
+          <div className="app-body">
             <Sidebar
               collapsed={rail}
               overlay={overlayNav}

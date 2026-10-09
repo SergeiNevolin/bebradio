@@ -1,0 +1,81 @@
+/* Единый hero страниц: панель, заголовок, подпись, действия, статистика.
+   Ритм: снизу всегда 20px до следующего блока. */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  background: linear-gradient(135deg, rgba(var(--primary-r), var(--primary-g), var(--primary-b), 0.1), rgba(var(--primary-r), var(--primary-g), var(--primary-b), 0.03));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px 28px;
+  margin-bottom: 20px;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+
+.sub {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.stats {
+  display: flex;
+  gap: 24px;
+  flex-shrink: 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.statNum {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 640px) {
+  .hero {
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .stats {
+    gap: 16px;
+  }
+}

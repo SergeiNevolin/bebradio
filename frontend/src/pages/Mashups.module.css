@@ -38,53 +38,14 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 36px;
-  padding: 8px 40px 60px;
+  padding: 16px 40px 60px;
   width: 100%;
 }
 
 @media (max-width: 640px) {
   .page {
-    padding: 8px 14px 60px;
+    padding: 16px 14px 60px;
   }
-}
-
-/* ── Pagehead ─────────────────────────────────────────────────── */
-.pagehead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.title {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-
-.counter {
-  display: inline-block;
-  min-width: 22px;
-  padding: 0 7px;
-  height: 22px;
-  line-height: 22px;
-  border-radius: 999px;
-  background: var(--surface-hover);
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.uploadBtn {
-  margin-left: auto;
-}
-
-.sub {
-  margin: 4px 0 0;
-  font-size: 15px;
-  color: var(--text-muted);
 }
 
 /* ── Секция «Все мешапы» ──────────────────────────────────────── */

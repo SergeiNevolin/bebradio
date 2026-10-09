@@ -145,7 +145,7 @@ describe('Home', () => {
     mockHomeApis(rooms, many)
     render(<MemoryRouter><Home /></MemoryRouter>)
     const cards = await screen.findAllByTestId('karaoke-song-card')
-    expect(cards.length).toBe(8)
+    expect(cards.length).toBe(20)
     expect(screen.getByText('Song 0')).toBeInTheDocument()
     expect(screen.queryByText('Song 6')).not.toBeInTheDocument()
   })

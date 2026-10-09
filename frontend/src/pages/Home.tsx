@@ -11,10 +11,10 @@ import type { KaraokePreview } from '../lib/karaokePreview'
 import { type RoomListItem, type Track } from '../types'
 import styles from './Home.module.css'
 
-const POPULAR_ROOMS_LIMIT = 8
-const POPULAR_TRACKS_LIMIT = 5
-const KARAOKE_SHELF_LIMIT = 14
-const KARAOKE_SHELF_VISIBLE = 8
+const POPULAR_ROOMS_LIMIT = 20
+const POPULAR_TRACKS_LIMIT = 20
+const KARAOKE_SHELF_LIMIT = 28
+const KARAOKE_SHELF_VISIBLE = 20
 
 function sampleEvenly<T>(items: T[], max: number): T[] {
   if (items.length <= max) return items
@@ -95,6 +95,14 @@ export default function Home() {
     <div className={`${styles.home} ${player.current ? styles.homeWithPlayer : ''}`}>
       {entry.error && <div className="error-msg">{entry.error}</div>}
 
+      {stations.length > 0 && (
+        <Shelf title="Потоки" linkTo="/rooms">
+          {stations.map((room) => (
+            <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
+          ))}
+        </Shelf>
+      )}
+
       <Shelf
         title="Караоке"
         count={<>{karaokeSongs.length} {plural(karaokeSongs.length, 'песня', 'песни', 'песен')}</>}
@@ -136,14 +144,6 @@ export default function Home() {
           )
         })}
       </Shelf>
-
-      {stations.length > 0 && (
-        <Shelf title="Потоки" linkTo="/rooms">
-          {stations.map((room) => (
-            <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
-          ))}
-        </Shelf>
-      )}
 
       <Shelf
         title="Комнаты"

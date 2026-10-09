@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import Shelf from '../components/media/Shelf'
+import Hero from '../components/media/Hero'
 import MediaCard from '../components/media/MediaCard'
 import { TrackList, TrackRow } from '../components/media/TrackRows'
 
@@ -17,6 +18,7 @@ describe('Shelf', () => {
     expect(screen.getByRole('heading', { name: 'Мешапы' })).toBeInTheDocument()
     expect(screen.getByText('42 песни')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Показать все' })).toHaveAttribute('href', '/mashup')
+    expect(screen.getByRole('link', { name: 'Мешапы — Показать все' })).toHaveAttribute('href', '/mashup')
     expect(screen.getByText('card')).toBeInTheDocument()
   })
 
@@ -40,6 +42,28 @@ describe('Shelf', () => {
     )
     expect(screen.getByText('Пусто')).toBeInTheDocument()
     expect(screen.queryByText('card')).toBeNull()
+  })
+})
+
+describe('Hero', () => {
+  it('renders title, sub, actions and stats', () => {
+    render(
+      <Hero
+        title="Слушать вместе"
+        sub="Подзаголовок"
+        actions={<button type="button">Go</button>}
+        stats={<span>42 rooms</span>}
+      />,
+    )
+    expect(screen.getByText('Слушать вместе')).toBeInTheDocument()
+    expect(screen.getByText('Подзаголовок')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Go' })).toBeInTheDocument()
+    expect(screen.getByText('42 rooms')).toBeInTheDocument()
+  })
+
+  it('renders title only', () => {
+    render(<Hero title="Только заголовок" />)
+    expect(screen.getByText('Только заголовок')).toBeInTheDocument()
   })
 })
 
@@ -95,7 +119,8 @@ describe('MediaCard', () => {
     expect(container.querySelector('.cardSm')).toBeNull()
   })
 
-  it('disables toggle for not-ready tracks', () => {    const onToggle = vi.fn()
+  it('disables toggle for not-ready tracks', () => {
+    const onToggle = vi.fn()
     render(
       <MediaCard title="Raw" playLabel="Raw is not ready" onToggle={onToggle} disabled testId="card-3" />,
     )

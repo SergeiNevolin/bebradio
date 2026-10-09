@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { api } from '../lib/api'
@@ -6,6 +7,7 @@ import type { Track } from '../types'
 import { usePlayer } from '../context/PlayerContext'
 import MashupCard from '../components/mashup/MashupCard'
 import Shelf from '../components/media/Shelf'
+import Hero from '../components/media/Hero'
 import { TrackList, TrackRow } from '../components/media/TrackRows'
 import { HeartFillIcon, HeartIcon } from '../components/player/icons'
 import { formatTime } from '../lib/format'
@@ -386,10 +388,6 @@ export default function Mashups() {
     )
   }
 
-  const hint = recentLoading
-    ? 'Loading mashups…'
-    : 'Uploads from everyone on bebradio. Click a card to play it here.'
-
   const renderShelf = (
     title: string,
     items: Track[],
@@ -412,23 +410,32 @@ export default function Mashups() {
     <div className={styles.wrap}>
       <div className={`${styles.root} ${player.current ? styles.barClear : ''}`}>
         <div className={styles.page}>
-      <div>
-        <div className={styles.pagehead}>
-          <h1 className={styles.title}>Загружайте и слушайте мешапы</h1>
-          {!recentLoading && (
-            <span className={styles.counter}>{playerList.length}</span>
-          )}
-          {user && (
-            <button className={`btn ${styles.uploadBtn}`} onClick={() => setShowUpload(true)}>
+      {user ? (
+        <Hero
+          title="Загрузи свой мешап"
+          sub="Трек сразу попадёт в каталог — его можно ставить в очередь в комнатах."
+          actions={
+            <button className="btn" onClick={() => setShowUpload(true)}>
               Upload
             </button>
-          )}
-        </div>
-        <p className={styles.sub}>
-          Слушайте мешапы онлайн, находите новые треки и собирайте свою очередь музыки.
-          {hint && ` ${hint}`}
-        </p>
-      </div>
+          }
+        />
+      ) : (
+        <Hero
+          title="Регистрируйся и загружай своё"
+          sub="Слушать можно без входа — аккаунт нужен только для загрузки."
+          actions={
+            <>
+              <Link className="btn btn-sm" to="/register">
+                Регистрация
+              </Link>
+              <Link className="btn btn-secondary btn-sm" to="/login">
+                Войти
+              </Link>
+            </>
+          }
+        />
+      )}
 
       {renderShelf('Latest', recent, recentLoading, {
         emptyText: user ? 'No mashups yet — hit Upload.' : 'No mashups yet.',
