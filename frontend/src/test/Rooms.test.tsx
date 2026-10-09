@@ -122,6 +122,16 @@ describe('Rooms page', () => {
     expect(setRoomAccess).toHaveBeenCalledWith('BBB222', 'granted')
   })
 
+  it('shows an idle room in the main list even when there are no active rooms', async () => {
+    mockFetch(() => [rooms[1]])
+    render(<MemoryRouter><Rooms /></MemoryRouter>)
+    const list = await screen.findByTestId('rooms-list')
+    expect(list).toBeInTheDocument()
+    expect(await screen.findByText('Closed')).toBeInTheDocument()
+    expect(screen.queryByText('All rooms')).not.toBeInTheDocument()
+    expect(screen.getByText('Waiting for listeners')).toBeInTheDocument()
+  })
+
   it('shows recently played rooms for logged-in users', async () => {
     mockUser = { id: 'u1', username: 'alice' }
     mockFetch((url) => {

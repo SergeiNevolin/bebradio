@@ -28,11 +28,15 @@ async function createRoom(page: Page, roomName: string): Promise<string> {
 const roomCard = (page: Page, name: string) =>
   page.getByTestId('room-card').filter({ hasText: name })
 
-/** Cards inside the "All rooms" section (a room can also show up under Recently Played). */
+/**
+ * Cards inside the main rooms list (a room can also show up under Recently
+ * Played, so we scope to #rooms-list). Covers both the "All rooms" shelf
+ * (active rooms) and the "Waiting for listeners" shelf (empty rooms) —
+ * a freshly created room lands in the latter.
+ */
 const allRoomsCard = (page: Page, name: string) =>
   page
-    .locator('section')
-    .filter({ has: page.getByRole('heading', { name: 'All rooms' }) })
+    .getByTestId('rooms-list')
     .getByTestId('room-card')
     .filter({ hasText: name })
 

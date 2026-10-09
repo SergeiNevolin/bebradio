@@ -86,8 +86,10 @@ export default function Rooms() {
           <p className={styles.roomsEmptySub}>Create the first one!</p>
         </div>
       ) : (
-        // Одна секция «All rooms»: активные + ждущие (пустые — своей подполкой).
-        <section>
+        // Основной список комнат (исключает Recently Played): активные в
+        // «All rooms», пустые — в «Waiting for listeners». data-testid нужен
+        // e2e, чтобы находить карточку вне зависимости от подполки.
+        <div data-testid="rooms-list">
           {activeRooms.length > 0 && (
             <Shelf title="All rooms">
               {activeRooms.map((room) => (
@@ -102,7 +104,7 @@ export default function Rooms() {
               ))}
             </Shelf>
           )}
-        </section>
+        </div>
       )}
 
       {entry.entryModals}
