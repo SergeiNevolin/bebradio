@@ -5,7 +5,11 @@ import { api } from '../lib/api'
 import type { Track } from '../types'
 import { usePlayer } from '../context/PlayerContext'
 import MashupCard from '../components/mashup/MashupCard'
-import MashupSidebar from '../components/mashup/MashupSidebar'
+import Shelf from '../components/media/Shelf'
+import { TrackList, TrackRow } from '../components/media/TrackRows'
+import { HeartFillIcon, HeartIcon } from '../components/player/icons'
+import { formatTime } from '../lib/format'
+import { monoGlyph, tintForId } from '../lib/mashupArt'
 import UploadMashupModal from '../components/mashup/UploadMashupModal'
 import EditMashupModal from '../components/mashup/EditMashupModal'
 import styles from './Mashups.module.css'
@@ -47,6 +51,8 @@ export default function Mashups() {
 
   const [showUpload, setShowUpload] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [q, setQ] = useState('')
+  const [sort, setSort] = useState<'recent' | 'top' | 'title'>('recent')
 
   const [recent, setRecent] = useState<Track[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
@@ -185,6 +191,21 @@ export default function Mashups() {
     )
   }, [recent, top, liked, mine])
 
+  // Секция «Все мешапы»: поиск и сортировка режут только список ниже.
+  const allFiltered = useMemo(() => {
+    const query = q.trim().toLowerCase()
+    const rows = query
+      ? playerList.filter(
+          (m) =>
+            m.title.toLowerCase().includes(query) ||
+            (m.artist || '').toLowerCase().includes(query),
+        )
+      : [...playerList]
+    if (sort === 'top') rows.sort((a, b) => b.likes - a.likes)
+    else if (sort === 'title') rows.sort((a, b) => a.title.localeCompare(b.title, 'ru'))
+    return rows
+  }, [playerList, q, sort])
+
   useEffect(() => {
     registerTracks(playerList)
   }, [playerList, registerTracks])
@@ -295,28 +316,75 @@ export default function Mashups() {
   const renderCard = (m: Track) => {
     const view = applyLike(m)
     return (
-      <div key={m.id} className={styles.railItem}>
-        <MashupCard
-          mashup={view}
-          active={m.id === activeId}
-          isPlaying={player.isPlaying}
-          canEdit={!!user && (user.id === m.owner_id || isAdmin)}
-          onPlay={() => toggleTrack(view)}
-          onToggleLike={() => handleToggleLike(view)}
-          onEdit={() => setEditingId(m.id)}
-          onOpenProfile={setProfileUserId}
-        />
-      </div>
+      <MashupCard
+        key={m.id}
+        mashup={view}
+        active={m.id === activeId}
+        isPlaying={player.isPlaying}
+        canEdit={!!user && (user.id === m.owner_id || isAdmin)}
+        onPlay={() => toggleTrack(view)}
+        onToggleLike={() => handleToggleLike(view)}
+        onEdit={() => setEditingId(m.id)}
+        onOpenProfile={setProfileUserId}
+      />
     )
   }
 
-  const skeletonRail = (
-    <div className={styles.rail}>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className={`${styles.railItem} ${styles.skeletonCard}`} />
-      ))}
-    </div>
-  )
+  const renderRow = (m: Track, index: number) => {
+    const view = applyLike(m)
+    const active = m.id === activeId
+    const playing = active && player.isPlaying
+    const ready = m.status === 'ready'
+    return (
+      <TrackRow
+        key={m.id}
+        index={index}
+        title={view.title}
+        meta={<>{view.artist || 'Unknown artist'}</>}
+        badge={
+          view.status === 'processing' ? (
+            <span className={styles.rowBadgeWarn}>processing…</span>
+          ) : view.status === 'failed' ? (
+            <span className={styles.rowBadgeError} title={view.error || 'failed'}>
+              failed
+            </span>
+          ) : undefined
+        }
+        duration={ready ? formatTime(view.duration) : undefined}
+        artUrl={view.thumbnail || undefined}
+        tint={tintForId(view.id)}
+        glyph={monoGlyph(view.title)}
+        onPlay={() => toggleTrack(view)}
+        playLabel={playing ? `Pause ${view.title}` : `Play ${view.title}`}
+        disabled={!ready}
+        disabledLabel={`${view.title} is not ready`}
+        actions={
+          <>
+            <button
+              type="button"
+              className={`${styles.rowLike} ${view.liked ? styles.rowLikeOn : ''}`}
+              onClick={() => handleToggleLike(view)}
+              aria-pressed={!!view.liked}
+              aria-label={view.liked ? `Unlike ${view.title}` : `Like ${view.title}`}
+            >
+              {view.liked ? <HeartFillIcon size={15} /> : <HeartIcon size={15} />}
+              <span>{view.likes}</span>
+            </button>
+            {(!!user && (user.id === m.owner_id || isAdmin)) && (
+              <button
+                type="button"
+                className={styles.rowEdit}
+                onClick={() => setEditingId(m.id)}
+                aria-label={`Edit ${view.title}`}
+              >
+                Edit
+              </button>
+            )}
+          </>
+        }
+      />
+    )
+  }
 
   const hint = recentLoading
     ? 'Loading mashups…'
@@ -328,73 +396,99 @@ export default function Mashups() {
     loading: boolean,
     opts: { emptyText: string; rail?: boolean },
   ) => (
-    <section className={styles.shelf}>
-      <h2 className={styles.shelfTitle}>{title}</h2>
-      {loading ? (
-        skeletonRail
-      ) : items.length === 0 ? (
-        <p className={styles.empty}>{opts.emptyText}</p>
-      ) : (
-        <div className={styles.rail} ref={opts.rail ? topRailRef : undefined}>
-          {items.map(renderCard)}
-          {opts.rail && !topDone && <div ref={sentinelRef} className={styles.railSentinel} />}
-        </div>
-      )}
-    </section>
+    <Shelf
+      title={title}
+      loading={loading}
+      skeletonCount={6}
+      empty={items.length === 0 ? <p className={styles.empty}>{opts.emptyText}</p> : undefined}
+      trackRef={opts.rail ? topRailRef : undefined}
+      sentinel={opts.rail && !topDone ? <div ref={sentinelRef} className={styles.railSentinel} /> : undefined}
+    >
+      {items.map(renderCard)}
+    </Shelf>
   )
 
   return (
-    <div className={styles.page}>
-      <div className={styles.shell}>
-        <MashupSidebar
-          items={playerList.map(applyLike)}
-          likedItems={liked.map(applyLike)}
-          mineItems={mine.map(applyLike)}
-          signedIn={!!user}
-          activeId={activeId}
-          isPlaying={player.isPlaying}
-          loading={recentLoading}
-          onPlay={(m) => toggleTrack(m)}
-        />
+    <div className={styles.wrap}>
+      <div className={`${styles.root} ${player.current ? styles.barClear : ''}`}>
+        <div className={styles.page}>
+      <div>
+        <div className={styles.pagehead}>
+          <h1 className={styles.title}>Загружайте и слушайте мешапы</h1>
+          {!recentLoading && (
+            <span className={styles.counter}>{playerList.length}</span>
+          )}
+          {user && (
+            <button className={`btn ${styles.uploadBtn}`} onClick={() => setShowUpload(true)}>
+              Upload
+            </button>
+          )}
+        </div>
+        <p className={styles.sub}>
+          Слушайте мешапы онлайн, находите новые треки и собирайте свою очередь музыки.
+          {hint && ` ${hint}`}
+        </p>
+      </div>
 
-        <div className={styles.main}>
-          <div className={styles.mainScroll}>
-            <div className={styles.content}>
-              <div className={styles.pagehead}>
-                <h1 className={styles.title}>Загружайте и слушайте мешапы</h1>
-                {!recentLoading && (
-                  <span className={styles.counter}>{playerList.length}</span>
-                )}
-                {user && (
-                  <button className="btn" onClick={() => setShowUpload(true)}>
-                    Upload
-                  </button>
-                )}
-              </div>
-              <p className={styles.sub}>
-                Слушайте мешапы онлайн, находите новые треки и собирайте свою очередь музыки.
-                {hint && ` ${hint}`}
-              </p>
+      {renderShelf('Latest', recent, recentLoading, {
+        emptyText: user ? 'No mashups yet — hit Upload.' : 'No mashups yet.',
+      })}
+      {renderShelf('Top by likes', top, topLoading && top.length === 0, {
+        emptyText: 'No mashups yet.',
+        rail: true,
+      })}
+      {user &&
+        renderShelf('Liked', liked, likedLoading, {
+          emptyText: 'You haven\u2019t liked any mashups yet.',
+        })}
+      {user &&
+        renderShelf('My mashups', mine, mineLoading, {
+          emptyText: 'You have not uploaded any mashups yet.',
+        })}
 
-              {renderShelf('Latest', recent, recentLoading, {
-                emptyText: user ? 'No mashups yet — hit Upload.' : 'No mashups yet.',
-              })}
-              {renderShelf('Top by likes', top, topLoading && top.length === 0, {
-                emptyText: 'No mashups yet.',
-                rail: true,
-              })}
-              {user &&
-                renderShelf('Liked', liked, likedLoading, {
-                  emptyText: 'You haven\u2019t liked any mashups yet.',
-                })}
-              {user &&
-                renderShelf('My mashups', mine, mineLoading, {
-                  emptyText: 'You have not uploaded any mashups yet.',
-                })}
-            </div>
+      <section>
+        <div className={styles.allHead}>
+          <h2 className={styles.allTitle}>
+            Все мешапы
+            <span className={styles.allCount}>
+              · {allFiltered.length}
+            </span>
+          </h2>
+          <div className={styles.allTools}>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Найти мешап…"
+              aria-label="Найти мешап"
+              className={styles.allSearch}
+            />
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as typeof sort)}
+              aria-label="Сортировка"
+              className={styles.allSort}
+            >
+              <option value="recent">Сначала новые</option>
+              <option value="top">По лайкам</option>
+              <option value="title">A–Я</option>
+            </select>
           </div>
         </div>
-      </div>
+        {allFiltered.length === 0 ? (
+          <div className={styles.allEmpty}>
+            <p className={styles.empty}>Ничего не найдено</p>
+            {q && (
+              <button onClick={() => setQ('')} className="btn btn-secondary btn-sm">
+                Сбросить поиск
+              </button>
+            )}
+          </div>
+        ) : (
+          <TrackList>
+            {allFiltered.map((m, i) => renderRow(m, i + 1))}
+          </TrackList>
+        )}
+      </section>
 
       {showUpload && (
         <UploadMashupModal
@@ -416,6 +510,8 @@ export default function Mashups() {
         />
       )}
 
+        </div>
+      </div>
     </div>
   )
 }

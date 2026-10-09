@@ -198,6 +198,7 @@ export default function Player() {
   const openSong = useKaraoke((s) => s.openSong)
   const back = useKaraoke((s) => s.back)
   const pushRecent = useKaraoke((s) => s.pushRecent)
+  const setSoundActive = useKaraoke((s) => s.setSoundActive)
 
   const [phase, setPhase] = useState<Phase>('ready')
   const [count, setCount] = useState(3)
@@ -259,6 +260,8 @@ export default function Player() {
   useEffect(() => stopMic, [stopMic])
   // размонтирование посреди отсчёта — таймер снять
   useEffect(() => () => window.clearInterval(countTimer.current), [])
+  // ушли со страницы во время пения — вернуть общий плеер
+  useEffect(() => () => setSoundActive(false), [setSoundActive])
   useEffect(() => {
     const a = audioRef.current
     if (a) a.volume = volume
@@ -435,6 +438,7 @@ export default function Player() {
       if (!audioRef.current || !song) return
       if (phaseRef.current !== 'ready') return // двойной клик по «Петь» — второй игнор
       pushRecent(song.id)
+      setSoundActive(true)
       setMicError(null)
       setScore(null)
       setScored(false)
@@ -484,12 +488,13 @@ export default function Player() {
             })
             .catch(() => {
               setPhase('ready')
+              setSoundActive(false)
               setMicError('Браузер заблокировал автоплей — нажмите «Петь» ещё раз')
             })
         } else setCount(n)
       }, 750)
     },
-    [setupMic, song, startLoop, pushRecent],
+    [setupMic, song, startLoop, pushRecent, setSoundActive],
   )
 
   const togglePlay = useCallback(() => {
@@ -563,6 +568,7 @@ export default function Player() {
   const restart = useCallback(() => {
     const a = audioRef.current
     if (!a) return
+    setSoundActive(true)
     framesRef.current = []
     dotsRef.current = []
     smoothRef.current = []
@@ -588,19 +594,21 @@ export default function Player() {
     }).catch(() => {
       setPhase('paused')
     })
-  }, [startLoop])
+  }, [startLoop, setSoundActive])
 
   const backToCatalog = useCallback(() => {
     window.clearInterval(countTimer.current)
     audioRef.current?.pause()
     origRef.current?.pause()
     stopMic()
+    setSoundActive(false)
     back()
-  }, [back, stopMic])
+  }, [back, stopMic, setSoundActive])
 
   const onEnded = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
     setPhase('finished')
+    setSoundActive(false)
     stopMic()
     origRef.current?.pause()
     if (song && framesRef.current.length > 10) {
@@ -621,7 +629,7 @@ export default function Player() {
         setScored(true)
       }
     }
-  }, [stopMic, song])
+  }, [stopMic, song, setSoundActive])
 
   const seek = useCallback((v: number) => {
     const a = audioRef.current

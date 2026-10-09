@@ -12,11 +12,30 @@ function readJSON(key: string, fallback: string[]): string[] {
     return fallback
   }
 }
+function readPlays(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(PLAYS_KEY)
+    const v = raw ? (JSON.parse(raw) as unknown) : {}
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const out: Record<string, number> = {}
+      for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
+        if (typeof n === 'number' && Number.isFinite(n) && n > 0) out[k] = Math.floor(n)
+      }
+      return out
+    }
+  } catch {
+    /* ignore */
+  }
+  return {}
+}
 
 const FAV_KEY = 'karaoke:favorites'
-const RECENT_KEY = 'karaoke:recent'
-const MAX_RECENT = 20
 
+const RECENT_KEY = 'karaoke:recent'
+
+const PLAYS_KEY = 'karaoke:plays'
+
+const MAX_RECENT = 20
 function persist(favorites: string[], recent: string[]) {
   try {
     localStorage.setItem(FAV_KEY, JSON.stringify(favorites))
@@ -33,12 +52,17 @@ interface KaraokeState {
   loadingSong: boolean
   favorites: string[]
   recent: string[]
+  /** Сколько раз пели каждую песню — основа подборки «Популярное». */
+  plays: Record<string, number>
   setSongs: (s: SongMeta[]) => void
   openSong: (s: SongData) => void
   back: () => void
   setLoadingSong: (v: boolean) => void
   toggleFavorite: (id: string) => void
   pushRecent: (id: string) => void
+  /** Идёт ли сейчас пение в караоке — общий плеер при этом прячется и молчит. */
+  soundActive: boolean
+  setSoundActive: (v: boolean) => void
 }
 
 export const useKaraoke = create<KaraokeState>((set, get) => ({
@@ -48,8 +72,22 @@ export const useKaraoke = create<KaraokeState>((set, get) => ({
   loadingSong: false,
   favorites: readJSON(FAV_KEY, []),
   recent: readJSON(RECENT_KEY, []),
+  plays: readPlays(),
+  soundActive: false,
   setSongs: (songs) => set({ songs }),
-  openSong: (song) => set({ song, screen: 'player' }),
+  openSong: (song) => {
+    if (song.id) {
+      const plays = { ...get().plays, [song.id]: (get().plays[song.id] ?? 0) + 1 }
+      try {
+        localStorage.setItem(PLAYS_KEY, JSON.stringify(plays))
+      } catch {
+        /* приватный режим — просто не запоминаем */
+      }
+      set({ song, screen: 'player', plays })
+    } else {
+      set({ song, screen: 'player' })
+    }
+  },
   back: () => set({ screen: 'catalog', song: null }),
   setLoadingSong: (v) => set({ loadingSong: v }),
   toggleFavorite: (id) => {
@@ -63,4 +101,5 @@ export const useKaraoke = create<KaraokeState>((set, get) => ({
     persist(get().favorites, recent)
     set({ recent })
   },
+  setSoundActive: (v) => set({ soundActive: v }),
 }))

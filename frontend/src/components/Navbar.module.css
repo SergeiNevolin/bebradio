@@ -17,7 +17,7 @@
 .navbarLeft {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   justify-self: start;
 }
 
@@ -30,27 +30,22 @@
   margin: -8px -12px;
 }
 
-.navbarLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 600;
+.navbarBurger {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  /* Почти у самого края, как гамбургер YouTube (шапка имеет поля 40px). */
+  margin-left: -28px;
+  border-radius: 50%;
+  background: none;
   color: var(--text-muted);
-  text-decoration: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: color 0.15s, background 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
-.navbarLink:hover {
+.navbarBurger:hover {
+  background: var(--surface-hover);
   color: var(--text);
-  background: var(--surface);
-}
-
-.navbarLinkActive {
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 .navbarRight {
@@ -213,8 +208,8 @@
     align-items: center;
   }
 
-  /* Section links move to the bottom tab bar on phones. */
-  .navbarLeft .navbarLink {
+  /* Сайдбара нет на телефонах — бургер тоже прячем. */
+  .navbarBurger {
     display: none;
   }
 

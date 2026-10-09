@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { useRoomEntry } from '../hooks/useRoomEntry'
 import RoomCard from '../components/RoomCard'
-import ScrollRow from '../components/ScrollRow'
+import Shelf from '../components/media/Shelf'
 import { type RoomListItem } from '../types'
 import styles from './Rooms.module.css'
 
@@ -71,53 +71,39 @@ export default function Rooms() {
       </div>
 
       {user && recentRooms.length > 0 && (
-        <section className={styles.roomsSection}>
-          <div className={styles.roomsSectionHeader}>
-            <h2 className={styles.roomsSectionTitle}>Recently Played</h2>
-          </div>
-          <ScrollRow>
-            {recentRooms.map((room) => (
-              <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
-            ))}
-          </ScrollRow>
-        </section>
+        <Shelf title="Recently Played">
+          {recentRooms.map((room) => (
+            <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
+          ))}
+        </Shelf>
       )}
 
-      <section className={styles.roomsSection}>
-        <div className={styles.roomsSectionHeader}>
-          <h2 className={styles.roomsSectionTitle}>All rooms</h2>
+      {roomsLoading ? (
+        <div className={styles.roomsLoading}>Loading...</div>
+      ) : activeRooms.length === 0 && idleRooms.length === 0 ? (
+        <div className={styles.roomsEmpty}>
+          <p>No rooms yet</p>
+          <p className={styles.roomsEmptySub}>Create the first one!</p>
         </div>
-        {roomsLoading ? (
-          <div className={styles.roomsLoading}>Loading...</div>
-        ) : activeRooms.length === 0 && idleRooms.length === 0 ? (
-          <div className={styles.roomsEmpty}>
-            <p>No rooms yet</p>
-            <p className={styles.roomsEmptySub}>Create the first one!</p>
-          </div>
-        ) : (
-          <>
-            {activeRooms.length > 0 && (
-              <ScrollRow>
-                {activeRooms.map((room) => (
-                  <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
-                ))}
-              </ScrollRow>
-            )}
-            {idleRooms.length > 0 && (
-              <>
-                <div className={styles.roomsSectionHeader} style={{ marginTop: 24 }}>
-                  <h2 className={styles.roomsSectionTitle} style={{ fontSize: 14, color: 'var(--text-muted)' }}>Waiting for listeners</h2>
-                </div>
-                <ScrollRow>
-                  {idleRooms.map((room) => (
-                    <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
-                  ))}
-                </ScrollRow>
-              </>
-            )}
-          </>
-        )}
-      </section>
+      ) : (
+        // Одна секция «All rooms»: активные + ждущие (пустые — своей подполкой).
+        <section>
+          {activeRooms.length > 0 && (
+            <Shelf title="All rooms">
+              {activeRooms.map((room) => (
+                <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
+              ))}
+            </Shelf>
+          )}
+          {idleRooms.length > 0 && (
+            <Shelf title="Waiting for listeners" small>
+              {idleRooms.map((room) => (
+                <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
+              ))}
+            </Shelf>
+          )}
+        </section>
+      )}
 
       {entry.entryModals}
     </div>

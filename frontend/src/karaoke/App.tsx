@@ -1,10 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { MicVocal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Catalog from './components/Catalog'
 import Player from './components/Player'
 import { AuthRequiredError } from './lib/api'
-import { loadManifest, plural } from './lib/songs'
+import { loadManifest } from './lib/songs'
 import { useKaraoke } from './store'
 
 const LOAD_FAILED = 'Не удалось загрузить каталог — проверьте сеть или запустите бэкенд'
@@ -23,20 +22,8 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col bg-bg">
-      <header className="mx-auto flex w-full max-w-3xl items-center gap-2.5 px-5 py-4">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary">
-          <MicVocal className="h-4.5 w-4.5 text-white" />
-        </div>
-        <h1 className="text-[17px] font-semibold tracking-tight text-text">Караоке</h1>
-        {songs.length > 0 && (
-          <span className="ml-auto rounded-full bg-surface-hover px-3 py-1 text-xs text-muted">
-            {songs.length} {plural(songs.length, 'песня', 'песни', 'песен')}
-          </span>
-        )}
-      </header>
-
       {loadError && songs.length === 0 && (
-        <p className="mx-auto w-full max-w-3xl px-5 pb-2 text-[13px] text-danger">{loadError}</p>
+        <p className="w-full px-10 pb-2 text-[13px] text-danger max-sm:px-3.5">{loadError}</p>
       )}
 
       <main className="min-h-0 flex-1">

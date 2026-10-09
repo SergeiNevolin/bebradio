@@ -1,9 +1,10 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import Home from '../pages/Home'
 import { GlobalPlayerBar, GlobalPlayerOverlays } from '../components/player/GlobalPlayerUI'
 import { PlayerProvider } from '../context/PlayerContext'
+import { useKaraoke } from '../karaoke/store'
 
 function LocationProbe() {
   const location = useLocation()
@@ -72,6 +73,7 @@ describe('Home', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHomeApis()
+    useKaraoke.getState().setSoundActive(false)
   })
 
   it('shelves autodj rooms as popular stations with a badge', async () => {
@@ -210,7 +212,7 @@ describe('Home', () => {
     expect(screen.getByRole('complementary', { name: 'Now playing' })).toBeInTheDocument()
   })
 
-  it('hides the player and queue inside karaoke', async () => {
+  it('keeps the player on the karaoke page and hides only while a karaoke song sings', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <PlayerProvider>
@@ -239,8 +241,14 @@ describe('Home', () => {
 
     fireEvent.click(screen.getByRole('link', { name: 'go karaoke' }))
     expect(await screen.findByText('karaoke page')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Expand player' })).toBeInTheDocument()
+
+    act(() => useKaraoke.getState().setSoundActive(true))
     expect(screen.queryByRole('button', { name: 'Expand player' })).not.toBeInTheDocument()
     expect(screen.queryByRole('complementary', { name: 'Now playing' })).not.toBeInTheDocument()
+
+    act(() => useKaraoke.getState().setSoundActive(false))
+    expect(screen.getByRole('button', { name: 'Expand player' })).toBeInTheDocument()
   })
 
   it('hides the player and queue inside rooms', async () => {

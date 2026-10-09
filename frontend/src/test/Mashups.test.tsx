@@ -105,7 +105,7 @@ describe('Mashups page', () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Liked' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'My mashups' })).toBeInTheDocument()
-    // Titles now show in both the centre shelves and the left library rail.
+    // Titles show in the shelves (single-column page, no library rail).
     expect((await screen.findAllByText('Liked Bootleg')).length).toBeGreaterThan(0)
     expect((await screen.findAllByText('My Only Mix')).length).toBeGreaterThan(0)
   })
@@ -121,7 +121,7 @@ describe('Mashups page', () => {
   it('toggles a like optimistically and settles on the server count', async () => {
     mockUser = { id: 'someone', username: 'me' }
     renderPage()
-    const top = (await screen.findByRole('heading', { name: 'Top by likes' })).parentElement as HTMLElement
+    const top = (await screen.findByRole('heading', { name: 'Top by likes' })).closest('section') as HTMLElement
     const likeBtn = within(top).getByRole('button', { name: 'Like Top Bootleg' })
 
     fireEvent.click(likeBtn)
@@ -134,10 +134,35 @@ describe('Mashups page', () => {
 
   it('asks anonymous visitors to sign in before liking', async () => {
     renderPage()
-    const top = (await screen.findByRole('heading', { name: 'Top by likes' })).parentElement as HTMLElement
+    const top = (await screen.findByRole('heading', { name: 'Top by likes' })).closest('section') as HTMLElement
     fireEvent.click(within(top).getByRole('button', { name: 'Like Top Bootleg' }))
     expect(showToast).toHaveBeenCalledWith('Sign in to like mashups', 'error')
     expect(likeTrack).not.toHaveBeenCalled()
+  })
+
+  it('filters the All section by search without touching shelves', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Latest' })
+    const section = screen.getByRole('heading', { name: /Все мешапы/ }).closest('section') as HTMLElement
+    const rows = () => within(section).getAllByRole('button', { name: /^(Play|Pause) / })
+    expect(rows()).toHaveLength(3)
+    fireEvent.change(screen.getByLabelText('Найти мешап'), { target: { value: 'top' } })
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]).toHaveAttribute('aria-label', 'Play Top Bootleg')
+    // полки на месте, счётчик секции живой
+    expect(screen.getByRole('heading', { name: 'Latest' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Все мешапы/ }).textContent).toContain('1')
+  })
+
+  it('sorts the All section by likes', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Latest' })
+    const section = screen.getByRole('heading', { name: /Все мешапы/ }).closest('section') as HTMLElement
+    const first = () =>
+      within(section).getAllByRole('button', { name: /^(Play|Pause) / })[0].getAttribute('aria-label')
+    expect(first()).toBe('Play Alpha Bootleg')
+    fireEvent.change(screen.getByLabelText('Сортировка'), { target: { value: 'top' } })
+    expect(first()).toBe('Play Top Bootleg')
   })
 
   it('shows the reworked player transport once a track is playing', async () => {

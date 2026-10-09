@@ -1,0 +1,125 @@
+import { NavLink } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import styles from './Sidebar.module.css'
+
+function HomeIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 3l9 8h-3v9h-5v-6h-2v6H6v-9H3l9-8z" />
+    </svg>
+  )
+}
+
+function RoomsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3.24 6.15C2.51 6.43 2 7.17 2 8v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-.83-.51-1.57-1.24-1.85L12 1 3.24 6.15ZM4 8l8-4.5L20 8v11c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1V8Zm7 4c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3Zm0 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Z" />
+    </svg>
+  )
+}
+
+function MashupIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+    </svg>
+  )
+}
+
+function KaraokeIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
+    </svg>
+  )
+}
+
+function ProfileIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 8a3 3 0 100-6 3 3 0 000 6zm0 1c-3.3 0-6 1.8-6 4v1h12v-1c0-2.2-2.7-4-6-4z" />
+    </svg>
+  )
+}
+
+function SettingsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 4.754a3.246 3.246 0 100 6.492 3.246 3.246 0 000-6.492zM5.754 8a2.246 2.246 0 114.492 0 2.246 2.246 0 01-4.492 0z" />
+      <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 01-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 01-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 01.52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 011.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 011.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 01.52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 01-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 01-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 002.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 001.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 00-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 00-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 00-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 001.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 003.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 002.692-1.115l.094-.319z" />
+    </svg>
+  )
+}
+
+const SECTIONS = [
+  { to: '/', label: 'Главная', icon: <HomeIcon />, end: true },
+  { to: '/rooms', label: 'Комнаты', icon: <RoomsIcon />, end: false },
+  { to: '/mashup', label: 'Мэшапы', icon: <MashupIcon />, end: false },
+  { to: '/karaoke', label: 'Караоке', icon: <KaraokeIcon />, end: false },
+]
+
+interface SidebarProps {
+  /** Мини-rail 72px вместо полной ширины. */
+  collapsed: boolean
+  /** Режим поверх контента (комнаты, караоке): скрыт, открывается шторкой. */
+  overlay: boolean
+  open: boolean
+  onClose: () => void
+  onNavigate: () => void
+}
+
+/**
+ * Левый сайдбар разделов в духе YouTube: группы ссылок, сворачивание
+ * в icon-rail, на иммерсивных страницах — шторка поверх контента.
+ * На телефонах скрыт (там нижний таббар).
+ */
+export default function Sidebar({ collapsed, overlay, open, onClose, onNavigate }: SidebarProps) {
+  const { user } = useAuth()
+
+  if (overlay && !open) return null
+
+  const cls = `${styles.sidebar}${collapsed && !overlay ? ` ${styles.rail}` : ''}${overlay ? ` ${styles.drawer}` : ''}`
+
+  const link = (to: string, label: string, icon: React.ReactNode, end: boolean, key: string) => (
+    <NavLink
+      key={key}
+      to={to}
+      end={end}
+      onClick={onNavigate}
+      className={({ isActive }) => `${styles.item}${isActive ? ` ${styles.itemActive}` : ''}`}
+    >
+      <span className={styles.itemIcon} aria-hidden="true">
+        {icon}
+      </span>
+      <span className={styles.itemLabel}>{label}</span>
+    </NavLink>
+  )
+
+  return (
+    <>
+      {overlay && <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />}
+      <nav className={cls} aria-label="Разделы">
+        {overlay && (
+          <div className={styles.drawerHead}>
+            <button type="button" className={styles.drawerClose} onClick={onClose} aria-label="Закрыть меню">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <span className={styles.drawerBrand}>bebradio</span>
+          </div>
+        )}
+        <div className={styles.group}>
+          {SECTIONS.map((s) => link(s.to, s.label, s.icon, s.end, s.to))}
+        </div>
+        {user && (
+          <div className={styles.group}>
+            <div className={styles.groupLabel}>Вы</div>
+            {link(`/user/${user.id}`, 'Профиль', <ProfileIcon />, false, 'profile')}
+            {link('/settings', 'Настройки', <SettingsIcon />, false, 'settings')}
+          </div>
+        )}
+      </nav>
+    </>
+  )
+}

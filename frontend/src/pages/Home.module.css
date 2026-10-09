@@ -7,151 +7,12 @@
   width: 100%;
 }
 
-/* ── Секции ─────────────────────────────────────── */
-.section {
-  margin-bottom: 4px;
-}
-
-.sectionHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.sectionTitle {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: var(--text);
-}
-
-.sectionHeaderRight {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.sectionCount {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.sectionLink {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-decoration: none;
-  white-space: nowrap;
-  transition: color 0.15s;
-}
-
-.sectionLink:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
-/* ── Полка карточек (караоке + мешапы) ─────────── */
-.shelfCard {
-  flex: 0 0 176px;
-  scroll-snap-align: start;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  text-decoration: none;
-  min-width: 0;
-  transition: background 0.2s;
-}
-
-.shelfCard:hover {
-  background: var(--surface);
-}
-
-.shelfCover {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 1;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.shelfImg {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.shelfGlyph {
-  font-size: 52px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.9);
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
-}
-
-.shelfPlay {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: #fff;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.15s, transform 0.15s;
-}
-
-.shelfCard:hover .shelfPlay {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.shelfCardActive {
-  outline: 1px solid var(--primary);
-  outline-offset: -1px;
-}
-
-.shelfCardActive .shelfPlay {
-  opacity: 1;
-  transform: translateY(0);
-}
-
 /* Место под глобальную нижнюю плашку плеера */
 .homeWithPlayer {
   padding-bottom: 180px;
 }
 
-.shelfTitle {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.shelfMeta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
+/* Раскладка второй строки карточки мэшапа: исполнитель слева, лайки справа. */
 .shelfMetaSpread {
   justify-content: space-between;
 }
@@ -175,25 +36,6 @@
 }
 
 /* ── Loading / empty ────────────────────────────── */
-.shelfSkeleton {
-  display: flex;
-  gap: 16px;
-  overflow: hidden;
-}
-
-.shelfSkeletonCard {
-  flex: 0 0 176px;
-  height: 244px;
-  border-radius: 8px;
-  background: linear-gradient(100deg, var(--surface) 40%, var(--surface-hover) 50%, var(--surface) 60%);
-  background-size: 200% 100%;
-  animation: shimmer 1.2s infinite;
-}
-
-@keyframes shimmer {
-  to { background-position: -200% 0; }
-}
-
 .homeEmpty {
   text-align: center;
   padding: 40px 20px;
@@ -210,10 +52,4 @@
 .homeEmptySub {
   font-size: 13px;
   opacity: 0.7;
-}
-
-@media (max-width: 768px) {
-  .sectionTitle {
-    font-size: 20px;
-  }
 }

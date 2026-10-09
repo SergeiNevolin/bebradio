@@ -1,0 +1,150 @@
+/* Единая карточка трека — словарь полок главной. */
+.card {
+  flex: 0 0 176px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  min-width: 0;
+  text-align: left;
+  font-family: inherit;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.2s;
+}
+
+.cardClickable {
+  cursor: pointer;
+}
+
+/* Компакт для плотных полок (караоке): уже и ниже. */
+.cardSm {
+  flex-basis: 144px;
+}
+
+.cardSm .glyph {
+  font-size: 40px;
+}
+
+.card:hover {
+  background: var(--surface);
+}
+
+.cardOn {
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+}
+
+.cover,
+.coverBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 6px;
+  overflow: hidden;
+  padding: 0;
+  background: var(--surface-hover);
+  cursor: inherit;
+  font: inherit;
+  color: inherit;
+}
+
+.coverBtn:disabled {
+  cursor: default;
+}
+
+/* Круглый вариант — аватары исполнителей. */
+.coverRound {
+  border-radius: 50%;
+}
+
+.img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.glyph {
+  font-size: 52px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+
+/* Play / pause, правый нижний угол — показывается на hover или у активной. */
+.fab {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.15s, transform 0.15s;
+  pointer-events: none;
+}
+
+.card:hover .fab,
+.cardOn .fab {
+  opacity: 1;
+  transform: none;
+}
+
+/* Эквалайзер поверх обложки играющей карточки. */
+.eq {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.eq i {
+  width: 3px;
+  border-radius: 1px;
+  background: #fff;
+  animation: media-eq 900ms ease-in-out infinite;
+}
+
+.eq i:nth-child(1) { height: 9px; animation-delay: 0ms; }
+.eq i:nth-child(2) { height: 18px; animation-delay: 150ms; }
+.eq i:nth-child(3) { height: 12px; animation-delay: 300ms; }
+
+@keyframes media-eq {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

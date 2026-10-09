@@ -1,0 +1,168 @@
+/* Левый сайдбар разделов: обычное состояние 240px, rail 72px,
+   на иммерсивных страницах — шторка поверх контента. */
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 67px;
+  height: calc(100vh - 67px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.group:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.groupLabel {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.item:hover {
+  background: var(--surface-hover);
+}
+
+.itemActive {
+  background: var(--surface-hover);
+  font-weight: 700;
+}
+
+.itemIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.itemActive .itemIcon {
+  color: var(--text);
+}
+
+.itemLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Мини-rail ──────────────────────────────────────────────── */
+.rail {
+  width: 76px;
+  padding: 4px;
+  align-items: center;
+}
+
+.rail .group {
+  align-items: center;
+  width: 100%;
+}
+
+.rail .item {
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 0 10px;
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.rail .groupLabel {
+  display: none;
+}
+
+/* ── Шторка поверх контента ─────────────────────────────────── */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 190;
+}
+
+.drawer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 200;
+  height: auto;
+  border-right: none;
+  border-radius: 0;
+  box-shadow: 16px 0 48px rgba(0, 0, 0, 0.35);
+  animation: drawer-in 0.18s ease;
+}
+
+@keyframes drawer-in {
+  from { transform: translateX(-24px); opacity: 0.5; }
+  to { transform: none; opacity: 1; }
+}
+
+.drawerHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 12px;
+}
+
+.drawerClose {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.drawerClose:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.drawerBrand {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+@media (max-width: 640px) {
+  .sidebar,
+  .backdrop {
+    display: none;
+  }
+}

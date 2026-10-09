@@ -1,0 +1,184 @@
+/* Единая панель вертикального списка треков. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Строка: словарь очереди/сайдбара. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  transition: background 0.15s;
+  animation: row-in 0.32s both;
+}
+
+.row:hover {
+  background: var(--surface-hover);
+}
+
+/* Порядковый номер слева — приглушённый, как в плейлистах. */
+.num {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    animation: none;
+  }
+}
+
+.art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 6px;
+  overflow: hidden;
+  padding: 0;
+  background-color: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.art:disabled {
+  cursor: default;
+}
+
+.art:disabled .artHover {
+  display: none;
+}
+
+.rowDisabled .body {
+  cursor: default;
+}
+
+.img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.glyph {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.glyph svg {
+  width: 20px;
+  height: 20px;
+}
+
+.artHover {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.row:hover .artHover {
+  opacity: 1;
+}
+
+.artPlay {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.artPlay svg {
+  margin-left: 2px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  animation: row-spin 0.8s linear infinite;
+}
+
+@keyframes row-spin {
+  to { transform: rotate(360deg); }
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.metaText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.error {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* Длительность справа — приглушённая, как в плейлистах. */
+.dur {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

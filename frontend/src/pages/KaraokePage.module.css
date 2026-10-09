@@ -2,13 +2,27 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
+  /* Во всю ширину от края сайдбара до края вьюпорта:
+     .app даёт боковые поля 40px (14 на мобильных) — вычитаем левое. */
+  width: calc(100vw - var(--sidebar-w, 0px));
+  max-width: calc(100vw - var(--sidebar-w, 0px));
+  margin-left: -40px;
   background: var(--color-bg, var(--bg));
   overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    margin-left: -14px;
+  }
 }
 
 .root {
   position: absolute;
   inset: 0;
+}
+
+/* полоса общего плеера (80px) видна на странице — не прячем за ней контент */
+.barClear {
+  inset: 0 0 88px 0;
 }

@@ -13,12 +13,15 @@ vi.mock('../context/AuthContext', () => ({
 vi.mock('../components/ThemeToggle', () => ({ default: () => <span data-testid="theme" /> }))
 vi.mock('../components/AccentPicker', () => ({ default: () => <span data-testid="accent" /> }))
 
-function renderNavbar() {
-  return render(
-    <MemoryRouter>
-      <Navbar />
-    </MemoryRouter>
-  )
+function renderNavbar(onBurger = vi.fn()) {
+  return {
+    onBurger,
+    ...render(
+      <MemoryRouter>
+        <Navbar onBurger={onBurger} />
+      </MemoryRouter>
+    ),
+  }
 }
 
 describe('Navbar', () => {
@@ -32,11 +35,10 @@ describe('Navbar', () => {
     expect(screen.getByText('bebradio')).toHaveAttribute('href', '/')
   })
 
-  it('links to Rooms, Mashups and Karaoke pages', () => {
-    renderNavbar()
-    expect(screen.getByText('Комнаты')).toHaveAttribute('href', '/rooms')
-    expect(screen.getByText('Мэшапы')).toHaveAttribute('href', '/mashup')
-    expect(screen.getByText('Караоке')).toHaveAttribute('href', '/karaoke')
+  it('calls onBurger from the menu button', () => {
+    const { onBurger } = renderNavbar()
+    fireEvent.click(screen.getByRole('button', { name: 'Меню разделов' }))
+    expect(onBurger).toHaveBeenCalledTimes(1)
   })
 
   it('shows Sign In and Register when logged out', () => {

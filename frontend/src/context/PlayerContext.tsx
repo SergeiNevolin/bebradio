@@ -14,6 +14,7 @@ import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import { api } from '../lib/api'
 import type { KaraokePreview } from '../lib/karaokePreview'
+import { useKaraoke } from '../karaoke/store'
 import type { Track } from '../types'
 
 interface PlayerContextValue {
@@ -99,21 +100,29 @@ export function usePlayer(): PlayerContextValue {
 }
 
 /**
- * Маршруты со своим звуком, где общий плеер прячется: комнаты (эфир)
- * и караоке (своё приложение в iframe).
+ * Маршруты со своим звуком, где общий плеер прячется всегда: комнаты (эфир).
+ * Караоке нативно внутри SPA — там плеер прячется только на время пения
+ * конкретной песни (см. playerBlocked / karaoke store soundActive).
  */
-export function isPlayerHiddenPath(pathname: string): boolean {
-  return (
-    pathname.startsWith('/room/') ||
-    pathname === '/karaoke' ||
-    pathname.startsWith('/karaoke/')
-  )
+export function isOnKaraoke(pathname: string): boolean {
+  return pathname === '/karaoke' || pathname.startsWith('/karaoke/')
 }
 
-function defaultBlockedMessage(pathname: string): string {
+export function isPlayerHiddenPath(pathname: string): boolean {
   return pathname.startsWith('/room/')
-    ? 'В комнате играет эфир — мешапы слушайте вне комнат'
-    : 'В караоке свой звук — мешапы слушайте вне караоке'
+}
+
+function isPlayerBlocked(pathname: string, karaokeActive: boolean): boolean {
+  return isPlayerHiddenPath(pathname) || (karaokeActive && isOnKaraoke(pathname))
+}
+
+function defaultBlockedMessage(pathname: string, karaokeActive: boolean): string {
+  if (pathname.startsWith('/room/')) {
+    return 'В комнате играет эфир — мешапы слушайте вне комнат'
+  }
+  return karaokeActive
+    ? 'Сейчас поёт караоке — мешапы послушайте после песни'
+    : 'Мешапы можно слушать вне комнат'
 }
 
 /**
@@ -126,6 +135,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const { showToast } = useToast()
   const location = useLocation()
+  const karaokeActive = useKaraoke((s) => s.soundActive)
   const [queueOpen, setQueueOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
@@ -170,9 +180,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const playTrack = useCallback(
     (track: Track, opts?: { blockedMessage?: string }) => {
-      if (isPlayerHiddenPath(location.pathname)) {
+      if (isPlayerBlocked(location.pathname, karaokeActive)) {
         showToast(
-          opts?.blockedMessage ?? defaultBlockedMessage(location.pathname),
+          opts?.blockedMessage ?? defaultBlockedMessage(location.pathname, karaokeActive),
           'error',
         )
         return
@@ -184,7 +194,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setList((prev) => (prev.some((x) => x.id === track.id) ? prev : [...prev, track]))
       }
     },
-    [location.pathname, setList, showToast],
+    [location.pathname, karaokeActive, setList, showToast],
   )
 
   // Once the pending track lands in the list, hand it to the player.
@@ -201,12 +211,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [player.list, listLength])
 
   const guardedToggle = useCallback(() => {
-    if (!player.isPlaying && player.current && isPlayerHiddenPath(location.pathname)) {
-      showToast(defaultBlockedMessage(location.pathname), 'error')
+    if (!player.isPlaying && player.current && isPlayerBlocked(location.pathname, karaokeActive)) {
+      showToast(defaultBlockedMessage(location.pathname, karaokeActive), 'error')
       return
     }
     player.toggle()
-  }, [player, location.pathname, showToast])
+  }, [player, location.pathname, karaokeActive, showToast])
 
   const toggleTrack = useCallback(
     (track: Track, opts?: { blockedMessage?: string }) => {

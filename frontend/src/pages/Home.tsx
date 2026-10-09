@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useRoomEntry } from '../hooks/useRoomEntry'
 import { usePlayer } from '../context/PlayerContext'
 import RoomCard from '../components/RoomCard'
-import ScrollRow from '../components/ScrollRow'
-import { HeartFillIcon, PauseIcon, PlayIcon } from '../components/player/icons'
+import Shelf from '../components/media/Shelf'
+import MediaCard from '../components/media/MediaCard'
+import { HeartFillIcon } from '../components/player/icons'
 import { tintForId, monoGlyph } from '../lib/mashupArt'
 import type { KaraokePreview } from '../lib/karaokePreview'
 import { type RoomListItem, type Track } from '../types'
@@ -95,159 +95,124 @@ export default function Home() {
     <div className={`${styles.home} ${player.current ? styles.homeWithPlayer : ''}`}>
       {entry.error && <div className="error-msg">{entry.error}</div>}
 
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Караоке</h2>
-          <div className={styles.sectionHeaderRight}>
-            <span className={styles.sectionCount}>
-              {karaokeSongs.length}{' '}
-              {plural(karaokeSongs.length, 'песня', 'песни', 'песен')}
-            </span>
-            <Link className={styles.sectionLink} to="/karaoke">Показать все</Link>
-          </div>
-        </div>
-        {shelfSongs.length === 0 ? (
-          <div className={styles.homeEmpty}>
-            <p>Песен пока нет</p>
-            <p className={styles.homeEmptySub}>Загрузите первую!</p>
-          </div>
-        ) : (
-          <ScrollRow>
-            {shelfSongs.slice(0, KARAOKE_SHELF_VISIBLE).map((song) => {
-              const open = previewSong?.id === song.id
-              return (
-                <button
-                  key={song.id}
-                  type="button"
-                  onClick={() => {
-                    setQueueOpen(false)
-                    setPreviewSong(open ? null : song)
-                  }}
-                  className={`${styles.shelfCard} ${open ? styles.shelfCardActive : ''}`}
-                  data-testid="karaoke-song-card"
-                  aria-pressed={open}
-                  aria-label={`Превью: ${song.title}`}
-                  title="Открыть превью и кнопку «Спеть»"
-                >
-                  <span className={styles.shelfCover} style={{ background: tintForId(song.id) }}>
-                    <span className={styles.shelfGlyph} aria-hidden="true">{monoGlyph(song.title)}</span>
-                    <span className={styles.shelfPlay} aria-hidden="true">
-                      <PlayIcon size={16} />
-                    </span>
-                  </span>
-                  <span className={styles.shelfTitle}>{song.title}</span>
-                  <span className={styles.shelfMeta}>
-                    {song.language && <span>{song.language.toUpperCase()}</span>}
-                    {formatDuration(song.duration) && <span>{formatDuration(song.duration)}</span>}
-                  </span>
-                </button>
-              )
-            })}
-          </ScrollRow>
-        )}
-      </section>
+      <Shelf
+        title="Караоке"
+        count={<>{karaokeSongs.length} {plural(karaokeSongs.length, 'песня', 'песни', 'песен')}</>}
+        linkTo="/karaoke"
+        empty={
+          shelfSongs.length === 0 ? (
+            <div className={styles.homeEmpty}>
+              <p>Песен пока нет</p>
+              <p className={styles.homeEmptySub}>Загрузите первую!</p>
+            </div>
+          ) : undefined
+        }
+      >
+        {shelfSongs.slice(0, KARAOKE_SHELF_VISIBLE).map((song) => {
+          const open = previewSong?.id === song.id
+          return (
+            <MediaCard
+              asButton
+              key={song.id}
+              title={song.title}
+              meta={
+                <>
+                  {song.language && <span>{song.language.toUpperCase()}</span>}{' '}
+                  {formatDuration(song.duration) && <span>{formatDuration(song.duration)}</span>}
+                </>
+              }
+              tint={tintForId(song.id)}
+              glyph={monoGlyph(song.title)}
+              active={open}
+              playing={false}
+              playLabel={`Превью: ${song.title}`}
+              pressed={open}
+              onToggle={() => {
+                setQueueOpen(false)
+                setPreviewSong(open ? null : song)
+              }}
+              testId="karaoke-song-card"
+            />
+          )
+        })}
+      </Shelf>
 
       {stations.length > 0 && (
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>Потоки</h2>
-            <Link className={styles.sectionLink} to="/rooms">Показать все</Link>
-          </div>
-          <ScrollRow>
-            {stations.map((room) => (
-              <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
-            ))}
-          </ScrollRow>
-        </section>
+        <Shelf title="Потоки" linkTo="/rooms">
+          {stations.map((room) => (
+            <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
+          ))}
+        </Shelf>
       )}
 
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Комнаты</h2>
-          <Link className={styles.sectionLink} to="/rooms">Показать все</Link>
-        </div>
-        {roomsLoading ? (
-          <div className={styles.shelfSkeleton} aria-label="Загрузка комнат">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={styles.shelfSkeletonCard} />
-            ))}
-          </div>
-        ) : liveRooms.length === 0 ? (
-          <div className={styles.homeEmpty}>
-            <p>Тихо — эфиров нет</p>
-            <p className={styles.homeEmptySub}>Создайте комнату!</p>
-            <button className="btn" style={{ marginTop: 12 }} onClick={entry.openCreateModal}>
-              Создать комнату
-            </button>
-          </div>
-        ) : (
-          <ScrollRow>
-            {liveRooms.map((room) => (
-              <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
-            ))}
-          </ScrollRow>
-        )}
-      </section>
+      <Shelf
+        title="Комнаты"
+        linkTo="/rooms"
+        loading={roomsLoading}
+        skeletonCount={4}
+        empty={
+          liveRooms.length === 0 ? (
+            <div className={styles.homeEmpty}>
+              <p>Тихо — эфиров нет</p>
+              <p className={styles.homeEmptySub}>Создайте комнату!</p>
+              <button className="btn" style={{ marginTop: 12 }} onClick={entry.openCreateModal}>
+                Создать комнату
+              </button>
+            </div>
+          ) : undefined
+        }
+      >
+        {liveRooms.map((room) => (
+          <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
+        ))}
+      </Shelf>
 
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Мешапы</h2>
-          <Link className={styles.sectionLink} to="/mashup">Показать все</Link>
-        </div>
-        {tracksLoading ? (
-          <div className={styles.shelfSkeleton} aria-label="Загрузка мэшапов">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className={styles.shelfSkeletonCard} />
-            ))}
-          </div>
-        ) : topTracks.length === 0 ? (
-          <div className={styles.homeEmpty}>
-            <p>Мэшапов пока нет</p>
-            <p className={styles.homeEmptySub}>Загрузите первый!</p>
-          </div>
-        ) : (
-          <ScrollRow>
-            {topTracks.map((track) => {
-              const view = applyLike(track)
-              const active = view.id === player.current?.id
-              const playing = active && player.isPlaying
-              return (
-                <button
-                  key={track.id}
-                  className={`${styles.shelfCard} ${active ? styles.shelfCardActive : ''}`}
-                  onClick={() => toggleTrack(view)}
-                  data-testid="top-track-card"
-                  data-track-id={track.id}
-                  aria-pressed={active}
-                  aria-label={playing ? `Pause ${view.title}` : `Play ${view.title}`}
-                >
-                  <span
-                    className={styles.shelfCover}
-                    style={view.thumbnail ? undefined : { background: tintForId(view.id) }}
-                  >
-                    {view.thumbnail ? (
-                      <img className={styles.shelfImg} src={view.thumbnail} alt="" />
-                    ) : (
-                      <span className={styles.shelfGlyph} aria-hidden="true">{monoGlyph(view.title)}</span>
-                    )}
-                    <span className={styles.shelfPlay} aria-hidden="true">
-                      {playing ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
-                    </span>
+      <Shelf
+        title="Мешапы"
+        linkTo="/mashup"
+        loading={tracksLoading}
+        skeletonCount={5}
+        empty={
+          topTracks.length === 0 ? (
+            <div className={styles.homeEmpty}>
+              <p>Мэшапов пока нет</p>
+              <p className={styles.homeEmptySub}>Загрузите первый!</p>
+            </div>
+          ) : undefined
+        }
+      >
+        {topTracks.map((track) => {
+          const view = applyLike(track)
+          const active = view.id === player.current?.id
+          const playing = active && player.isPlaying
+          return (
+            <MediaCard
+              asButton
+              key={track.id}
+              title={view.title}
+              meta={
+                <span className={styles.shelfMetaSpread}>
+                  <span className={styles.shelfArtist}>{view.artist || 'Unknown artist'}</span>
+                  <span className={styles.shelfLikes}>
+                    <HeartFillIcon size={11} />
+                    {view.likes}
                   </span>
-                  <span className={styles.shelfTitle}>{view.title}</span>
-                  <span className={`${styles.shelfMeta} ${styles.shelfMetaSpread}`}>
-                    <span className={styles.shelfArtist}>{view.artist || 'Unknown artist'}</span>
-                    <span className={styles.shelfLikes}>
-                      <HeartFillIcon size={11} />
-                      {view.likes}
-                    </span>
-                  </span>
-                </button>
-              )
-            })}
-          </ScrollRow>
-        )}
-      </section>
+                </span>
+              }
+              coverUrl={view.thumbnail || undefined}
+              tint={tintForId(view.id)}
+              glyph={monoGlyph(view.title)}
+              active={active}
+              playing={playing}
+              playLabel={playing ? `Pause ${view.title}` : `Play ${view.title}`}
+              pressed={active}
+              onToggle={() => toggleTrack(view)}
+              testId="top-track-card"
+              dataTrackId={track.id}
+            />
+          )
+        })}
+      </Shelf>
 
       {entry.entryModals}
     </div>

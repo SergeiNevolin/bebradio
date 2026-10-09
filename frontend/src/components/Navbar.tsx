@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import SearchBar from './SearchBar'
 import styles from './Navbar.module.css'
 
-export default function Navbar() {
+export default function Navbar({ onBurger }: { onBurger: () => void }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -35,34 +34,12 @@ export default function Navbar() {
     <nav className={styles.navbar}>
       <div className={styles.navbarInner}>
         <div className={styles.navbarLeft}>
+          <button type="button" className={styles.navbarBurger} onClick={onBurger} aria-label="Меню разделов">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+          </button>
           <Link to="/" className={styles.navbarBrand}>bebradio</Link>
-          <Link
-            to="/rooms"
-            className={`${styles.navbarLink} ${location.pathname === '/rooms' || location.pathname.startsWith('/room/') ? styles.navbarLinkActive : ''}`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M3.24 6.15C2.51 6.43 2 7.17 2 8v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-.83-.51-1.57-1.24-1.85L12 1 3.24 6.15ZM4 8l8-4.5L20 8v11c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1V8Zm7 4c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3Zm0 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Z" />
-            </svg>
-            Комнаты
-          </Link>
-          <Link
-            to="/mashup"
-            className={`${styles.navbarLink} ${location.pathname === '/mashup' ? styles.navbarLinkActive : ''}`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
-            </svg>
-            Мэшапы
-          </Link>
-          <Link
-            to="/karaoke"
-            className={`${styles.navbarLink} ${location.pathname === '/karaoke' ? styles.navbarLinkActive : ''}`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
-            </svg>
-            Караоке
-          </Link>
         </div>
         <div className={styles.navbarSearchWrap}>
           <SearchBar />

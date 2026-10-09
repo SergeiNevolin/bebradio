@@ -1,5 +1,5 @@
 .card {
-  flex: 0 0 180px;
+  flex: 0 0 144px;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
@@ -138,10 +138,4 @@
 
 .code {
   display: none;
-}
-
-@media (max-width: 640px) {
-  .card {
-    flex-basis: 150px;
-  }
 }

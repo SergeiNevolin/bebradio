@@ -1,15 +1,24 @@
-import { useRef, useState, useEffect, type ReactNode, type WheelEvent } from 'react'
+import { useRef, useState, useEffect, type MutableRefObject, type ReactNode, type WheelEvent } from 'react'
 import styles from './ScrollRow.module.css'
 
 interface ScrollRowProps {
   children: ReactNode
   className?: string
+  /** Ref на скролл-бокс рейла (корень для IntersectionObserver снаружи). */
+  trackRef?: MutableRefObject<HTMLDivElement | null> | ((el: HTMLDivElement | null) => void)
 }
 
-export default function ScrollRow({ children, className = '' }: ScrollRowProps) {
-  const ref = useRef<HTMLDivElement>(null)
+export default function ScrollRow({ children, className = '', trackRef }: ScrollRowProps) {
+  const ref = useRef<HTMLDivElement | null>(null)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
+
+  const setTrack = (el: HTMLDivElement | null) => {
+    ref.current = el
+    if (!trackRef) return
+    if (typeof trackRef === 'function') trackRef(el)
+    else trackRef.current = el
+  }
 
   const update = () => {
     const el = ref.current
@@ -55,7 +64,7 @@ export default function ScrollRow({ children, className = '' }: ScrollRowProps) 
       )}
       <div
         className={styles.scrollRowTrack}
-        ref={ref}
+        ref={setTrack}
         onWheel={onWheel}
       >
         {children}

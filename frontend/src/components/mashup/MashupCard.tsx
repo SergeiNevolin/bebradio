@@ -1,7 +1,8 @@
 import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
-import { HeartFillIcon, HeartIcon, PauseIcon, PlayIcon } from '../player/icons'
+import { HeartFillIcon, HeartIcon } from '../player/icons'
+import MediaCard from '../media/MediaCard'
 import styles from './MashupCard.module.css'
 
 interface MashupCardProps {
@@ -30,54 +31,10 @@ export default function MashupCard({
   const playing = active && isPlaying
 
   return (
-    <div
-      className={`${styles.card} ${active ? styles.cardActive : ''} ${ready ? styles.cardReady : ''}`}
-      onClick={ready ? onPlay : undefined}
-    >
-      <button
-        type="button"
-        className={styles.art}
-        style={mashup.thumbnail ? undefined : { background: tintForId(mashup.id) }}
-        onClick={(e) => {
-          e.stopPropagation()
-          onPlay()
-        }}
-        disabled={!ready}
-        aria-label={
-          !ready
-            ? `${mashup.title} is not ready`
-            : playing
-              ? `Pause ${mashup.title}`
-              : `Play ${mashup.title}`
-        }
-      >
-        {mashup.thumbnail ? (
-          <img className={styles.cover} src={mashup.thumbnail} alt="" />
-        ) : (
-          <span className={styles.glyph} aria-hidden="true">{monoGlyph(mashup.title)}</span>
-        )}
-
-        {playing && (
-          <span className={styles.eq} aria-hidden="true">
-            <i /><i /><i />
-          </span>
-        )}
-
-        {ready && (
-          <span className={styles.fab} aria-hidden="true">{playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}</span>
-        )}
-      </button>
-
-      <div className={styles.body}>
-        <div className={styles.title} title={mashup.title}>{mashup.title}</div>
-        <div
-          className={styles.meta}
-          title={
-            mashup.owner_name
-              ? `${mashup.artist || 'Unknown artist'} · by ${mashup.owner_name}`
-              : mashup.artist || 'Unknown artist'
-          }
-        >
+    <MediaCard
+      title={mashup.title}
+      meta={
+        <>
           {mashup.artist || 'Unknown artist'}
           {mashup.owner_name && mashup.owner_id && onOpenProfile ? (
             <>
@@ -96,7 +53,29 @@ export default function MashupCard({
           ) : mashup.owner_name ? (
             ` · by ${mashup.owner_name}`
           ) : null}
-        </div>
+        </>
+      }
+      metaTitle={
+        mashup.owner_name
+          ? `${mashup.artist || 'Unknown artist'} · by ${mashup.owner_name}`
+          : mashup.artist || 'Unknown artist'
+      }
+      coverUrl={mashup.thumbnail || undefined}
+      tint={tintForId(mashup.id)}
+      glyph={monoGlyph(mashup.title)}
+      active={active}
+      playing={playing}
+      showEq
+      playLabel={
+        !ready
+          ? `${mashup.title} is not ready`
+          : playing
+            ? `Pause ${mashup.title}`
+            : `Play ${mashup.title}`
+      }
+      onToggle={onPlay}
+      disabled={!ready}
+      foot={
         <div className={styles.foot}>
           <button
             type="button"
@@ -139,8 +118,7 @@ export default function MashupCard({
             </button>
           )}
         </div>
-      </div>
-    </div>
+      }
+    />
   )
 }
-

@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { usePlayer, isPlayerHiddenPath } from '../../context/PlayerContext'
+import { usePlayer, isPlayerHiddenPath, isOnKaraoke } from '../../context/PlayerContext'
+import { useKaraoke } from '../../karaoke/store'
 import MashupPlayer from '../mashup/MashupPlayer'
 import NowPlayingPanel from '../mashup/NowPlayingPanel'
 import NowPlayingModal from '../mashup/NowPlayingModal'
@@ -8,14 +10,26 @@ import ProfileModal from '../ProfileModal'
 
 /**
  * Bottom player bar. Mounted once in App so it (and its <audio>) survives
- * navigation — playback continues on every page.
+ * navigation — playback continues on every page, karaoke included. It hides
+ * (still keeping <audio> mounted) only in rooms, or while a karaoke song is
+ * actually singing.
  */
 export function GlobalPlayerBar() {
   const { player, toggleLike, openExpanded, queueOpen, setQueueOpen } = usePlayer()
   const location = useLocation()
-  if (isPlayerHiddenPath(location.pathname)) {
-    // В комнате свой эфир и своя плашка: UI плеера прячем, но <audio>
-    // держим смонтированным, чтобы не рвать состояние хука.
+  const karaokeActive = useKaraoke((s) => s.soundActive)
+
+  // Как только караоке начинает петь — общий плеер сразу замолкает.
+  const wasKaraokeActiveRef = useRef(karaokeActive)
+  useEffect(() => {
+    if (karaokeActive && !wasKaraokeActiveRef.current) player.pause()
+    wasKaraokeActiveRef.current = karaokeActive
+  }, [karaokeActive, player.pause])
+
+  const singingKaraoke = isOnKaraoke(location.pathname) && karaokeActive
+  if (isPlayerHiddenPath(location.pathname) || singingKaraoke) {
+    // В комнате свой эфир и своя плашка; в караоке поёт минус. UI плеера
+    // прячем, но <audio> держим смонтированным, чтобы не рвать состояние.
     return <audio ref={player.audioRef} preload="auto" />
   }
   // У превью караоке нет библиотечного трека — лайкать нечего.
@@ -59,7 +73,9 @@ export function GlobalPlayerOverlays() {
     player.index >= 0 ? player.list.slice(player.index + 1, player.index + 4) : []
 
   const location = useLocation()
-  const playerHidden = isPlayerHiddenPath(location.pathname)
+  const karaokeActive = useKaraoke((s) => s.soundActive)
+  const playerHidden =
+    isPlayerHiddenPath(location.pathname) || (isOnKaraoke(location.pathname) && karaokeActive)
 
   const handleToggleLike =
     player.current?.source === 'karaoke'

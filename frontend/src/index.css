@@ -85,12 +85,39 @@ input:focus {
 
 .app {
   flex: 1;
+  min-width: 0;
   margin: 0 auto;
   padding: 0 40px;
   display: flex;
   flex-direction: column;
   min-height: 0;
   width: 100%;
+}
+
+/* Строка контента под шапкой: сайдбар + страница. */
+.app-body {
+  --sidebar-w: 0px;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.app-body.sb-full {
+  --sidebar-w: 240px;
+}
+
+.app-body.sb-rail {
+  --sidebar-w: 76px;
+}
+
+@media (max-width: 640px) {
+  /* Специфичность не ниже классовых вариантов выше, иначе 240px вычтутся и на телефоне. */
+  .app-body,
+  .app-body.sb-full,
+  .app-body.sb-rail {
+    --sidebar-w: 0px;
+  }
 }
 
 .btn {

@@ -1,4 +1,4 @@
-import { CheckCircle2, CloudUpload, FileMusic, FileVideo, Link2, Loader2, X, XCircle } from 'lucide-react'
+import { CheckCircle2, CloudUpload, FileMusic, FileVideo, Link2, Loader2, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchGeniusLines, getJob, uploadSong, type JobStatus } from '../lib/api'
 
@@ -179,18 +179,13 @@ export default function Upload({ onClose, onDone }: Props) {
   const isVideo = file && (file.type.startsWith('video') || /\.(mp4|mov|mkv|webm)$/i.test(file.name))
 
   return (
-    <div className="fixed inset-0 z-30 grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl border border-border bg-surface p-6">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary">
-            <CloudUpload className="h-4.5 w-4.5 text-white" />
-          </div>
-          <div className="flex-1 text-[16px] font-semibold text-text">Новая песня</div>
-          <button onClick={onClose} aria-label="Закрыть"
-            className="grid h-9 w-9 place-items-center rounded-full bg-surface-hover text-text transition hover:bg-border">
-            <X className="h-4 w-4" />
-          </button>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Новая песня</h3>
+          <button className="btn-close" onClick={onClose} aria-label="Закрыть">×</button>
         </div>
+        <div className="modal-body">
 
         {phase === 'pick' && (
           <>
@@ -254,7 +249,7 @@ export default function Upload({ onClose, onDone }: Props) {
 
             {error && <p className="mt-3 text-[13px] text-danger">{error}</p>}
             <button onClick={() => void start()} disabled={!file}
-              className="mt-4 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-white transition hover:bg-primary-hover disabled:opacity-40">
+              className="btn mt-4 w-full disabled:opacity-40">
               Сделать караоке
             </button>
             <p className="mt-2.5 text-center text-xs leading-relaxed text-muted/70">
@@ -289,7 +284,7 @@ export default function Upload({ onClose, onDone }: Props) {
             <div className="mt-3 font-medium text-text">Готово — можно петь!</div>
             <div className="mt-1 max-w-full truncate text-sm text-muted">{job?.title}</div>
             <button onClick={() => onDone(job?.songId ?? null)}
-              className="mt-4 w-full rounded-2xl bg-primary py-3 text-[15px] font-semibold text-white transition hover:bg-primary-hover">
+              className="btn mt-4 w-full">
               Открыть песню
             </button>
           </div>
@@ -308,7 +303,7 @@ export default function Upload({ onClose, onDone }: Props) {
                   setError(null)
                 }
               }}
-              className="mt-4 w-full rounded-2xl bg-primary py-3 text-[15px] font-semibold text-white transition hover:bg-primary-hover">
+              className="btn mt-4 w-full">
               Повторить загрузку
             </button>
             <button
@@ -316,11 +311,12 @@ export default function Upload({ onClose, onDone }: Props) {
                 setPhase('pick')
                 setError(null)
               }}
-              className="mt-2 w-full rounded-2xl bg-surface-hover py-3 text-[15px] font-medium text-text transition hover:bg-border">
+className="btn btn-secondary mt-2 w-full">
               Выбрать другой файл
             </button>
           </div>
         )}
+        </div>
       </div>
     </div>
   )
