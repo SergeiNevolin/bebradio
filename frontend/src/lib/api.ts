@@ -56,6 +56,8 @@ export function refreshAuth(): Promise<string | null> {
   if (refreshForbidden) return Promise.resolve(null)
   if (!refreshPromise) {
     refreshPromise = (async () => {
+      // snapshot for the quiet-restore case (no token in localStorage yet)
+      const tokenAtStart = localStorage.getItem('token')
       try {
         const res = await fetch('/api/auth/refresh', {
           method: 'POST',
@@ -64,6 +66,11 @@ export function refreshAuth(): Promise<string | null> {
         if (!res.ok) return null
         const data = (await res.json()) as { token?: string }
         if (!data.token) return null
+        // while the restore was in flight the user may have logged in or
+        // registered — never overwrite that fresh session with the old token
+        if (tokenAtStart === null && localStorage.getItem('token') !== null) {
+          return null
+        }
         authToken = data.token
         localStorage.setItem('token', data.token)
         tokenRefreshedHandler?.(data.token)

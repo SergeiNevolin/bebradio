@@ -130,6 +130,9 @@ test.describe('Password-protected Room', () => {
 
     const code = page.url().split('/room/')[1]
 
+    // fetchRoom on the room page may still be in flight: its late response
+    // re-writes room_access_* into localStorage and defeats the clear() below.
+    await page.waitForLoadState('networkidle')
     await page.evaluate(() => localStorage.clear())
     await page.goto('/register')
     await page.getByPlaceholder('Email').fill(email2)
@@ -169,6 +172,9 @@ test.describe('Password-protected Room', () => {
     await expect(page).toHaveURL(/\/room\//)
     const code = page.url().split('/room/')[1]
 
+    // Same race as above: wait for the room fetch to settle before wiping
+    // localStorage, otherwise its late response restores room_access_*.
+    await page.waitForLoadState('networkidle')
     await page.evaluate(() => localStorage.clear())
     await page.goto('/register')
     await page.getByPlaceholder('Email').fill(email2)

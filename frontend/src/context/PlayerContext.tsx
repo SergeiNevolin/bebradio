@@ -139,9 +139,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (tracks: Track[]) => {
       if (tracks.length === 0) return
       setList((prev) => {
+        const incoming = new Map(tracks.map((t) => [t.id, t]))
+        // A processing upload keeps its id while polling swaps in the ready
+        // url: refresh those media fields in place, or the entry stays silent.
+        let changed = false
+        const merged = prev.map((t) => {
+          const fresh = incoming.get(t.id)
+          if (!fresh) return t
+          if (fresh.url === t.url && fresh.status === t.status && fresh.error === t.error) return t
+          changed = true
+          return { ...t, url: fresh.url, status: fresh.status, error: fresh.error }
+        })
         const seen = new Set(prev.map((t) => t.id))
-        const fresh = tracks.filter((t) => !seen.has(t.id))
-        return fresh.length > 0 ? [...prev, ...fresh] : prev
+        const added = tracks.filter((t) => !seen.has(t.id))
+        if (!changed && added.length === 0) return prev
+        return [...merged, ...added]
       })
     },
     [setList],

@@ -79,36 +79,36 @@ test.describe('Mashup upload', () => {
   })
 })
 
-// test.describe('Mashup playback', () => {
-//   test('plays an uploaded mashup end to end', async ({ page }) => {
-//     const title = `E2E Play ${uniqueId()}`
-//     await register(page, 'mashplay')
-//     await uploadTone(page, title)
-//     await waitUntilPlayable(page, title)
+test.describe('Mashup playback', () => {
+  test('plays an uploaded mashup end to end', async ({ page }) => {
+    const title = `E2E Play ${uniqueId()}`
+    await register(page, 'mashplay')
+    await uploadTone(page, title)
+    await waitUntilPlayable(page, title)
 
-//     await page
-//       .getByRole('button', { name: `Play ${title}`, exact: true })
-//       .first()
-//       .click()
+    await page
+      .getByRole('button', { name: `Play ${title}`, exact: true })
+      .first()
+      .click()
 
-//     const audio = page.locator('audio').first()
-//     await expect(audio).toHaveAttribute('src', /\/api\/tracks\/.+\/audio/, {
-//       timeout: 15000,
-//     })
+    const audio = page.locator('audio').first()
+    await expect(audio).toHaveAttribute('src', /\/api\/tracks\/.+\/audio/, {
+      timeout: 15000,
+    })
 
-//     // Trusted click counts as a user gesture, so play() is allowed.
-//     await expect(async () => {
-//       const state = await audio.evaluate((el: HTMLAudioElement) => ({
-//         paused: el.paused,
-//         readyState: el.readyState,
-//       }))
-//       expect(state.paused).toBe(false)
-//       expect(state.readyState).toBeGreaterThanOrEqual(2)
-//     }).toPass({ timeout: 30000 })
+    // Trusted click counts as a user gesture, so play() is allowed.
+    await expect(async () => {
+      const state = await audio.evaluate((el: HTMLAudioElement) => ({
+        paused: el.paused,
+        readyState: el.readyState,
+      }))
+      expect(state.paused).toBe(false)
+      expect(state.readyState).toBeGreaterThanOrEqual(2)
+    }).toPass({ timeout: 30000 })
 
-//     const time1 = await audio.evaluate((el: HTMLAudioElement) => el.currentTime)
-//     await page.waitForTimeout(1500)
-//     const time2 = await audio.evaluate((el: HTMLAudioElement) => el.currentTime)
-//     expect(time2).toBeGreaterThan(time1)
-//   })
-// })
+    const time1 = await audio.evaluate((el: HTMLAudioElement) => el.currentTime)
+    await page.waitForTimeout(1500)
+    const time2 = await audio.evaluate((el: HTMLAudioElement) => el.currentTime)
+    expect(time2).toBeGreaterThan(time1)
+  })
+})
