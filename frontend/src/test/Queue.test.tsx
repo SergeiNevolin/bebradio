@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import Queue from '../components/Queue'
+import Queue from '../components/room/Queue'
 import type { Track } from '../types'
 
 const base = {

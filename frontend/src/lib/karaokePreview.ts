@@ -15,7 +15,11 @@ export interface KaraokePreview {
 /** Превью — оригинал с вокалом, иначе минус; пути резолвятся через прокси /api/karaoke/. */
 export function karaokePreviewUrl(song: KaraokePreview): string {
   const rel = song.original || song.audio || `songs/${song.id}/minus.mp3`
-  return `/api/karaoke/${rel}`
+  if (/^(https?:)?\/\//.test(rel) || rel.startsWith('data:') || rel.startsWith('blob:')) return rel
+  // Уже абсолютный путь встроенного режима (манифест с префиксом) — как есть.
+  if (rel.startsWith('/api/karaoke/')) return rel
+  const clean = rel.replace(/^\/+/, '')
+  return `/api/karaoke/${clean}`
 }
 
 /** Превью как элемент общей очереди: играет в глобальном плеере. */

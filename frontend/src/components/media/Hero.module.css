@@ -44,6 +44,19 @@
   flex-shrink: 0;
 }
 
+.art {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.art img {
+  display: block;
+  width: 132px;
+  height: 132px;
+  object-fit: cover;
+  border-radius: 16px;
+}
+
 .stat {
   display: flex;
   flex-direction: column;
@@ -78,5 +91,11 @@
 
   .stats {
     gap: 16px;
+  }
+
+  .art img {
+    width: 96px;
+    height: 96px;
+    border-radius: 12px;
   }
 }

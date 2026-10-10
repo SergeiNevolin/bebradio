@@ -2,13 +2,14 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
-import { PlayerProvider } from './context/PlayerContext'
+import { PlayerProvider, isOnKaraoke } from './context/PlayerContext'
+import { useKaraoke } from './karaoke/store'
 import { applyAccent, getStoredAccent } from './lib/theme'
 import Navbar from './components/Navbar'
 import Sidebar from './components/Sidebar'
 import MobileTabBar from './components/MobileTabBar'
 import ProtectedRoute from './components/ProtectedRoute'
-import { GlobalPlayerBar, GlobalPlayerOverlays } from './components/player/GlobalPlayerUI'
+import { GlobalPlayerBar, GlobalPlayerOverlays, PanelDock } from './components/player/GlobalPlayerUI'
 
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
@@ -46,10 +47,14 @@ export default function App() {
   }, [])
 
   const location = useLocation()
-  // Комнаты — иммерсивные со своим эфиром: сайдбар там — шторка поверх
-  // контента. Караоке живёт в общей строке, его 100vw-брейкаут учитывает
-  // ширину сайдбара через --sidebar-w (см. KaraokePage.module.css).
-  const overlayNav = location.pathname.startsWith('/room/')
+  // Комнаты — иммерсивные со своим эфиром; караоке — на время пения:
+  // сайдбар там — шторка поверх контента. Караоке живёт в общей строке,
+  // его 100vw-брейкаут учитывает ширину сайдбара через --sidebar-w
+  // (см. KaraokePage.module.css).
+  const karaokeActive = useKaraoke((s) => s.soundActive)
+  const overlayNav =
+    location.pathname.startsWith('/room/') ||
+    (isOnKaraoke(location.pathname) && karaokeActive)
   const [rail, setRail] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_RAIL_KEY) === '1'
@@ -114,6 +119,7 @@ export default function App() {
         </div>
         <GlobalPlayerBar />
         <GlobalPlayerOverlays />
+        <PanelDock />
         <MobileTabBar />
         </PlayerProvider>
       </ToastProvider>

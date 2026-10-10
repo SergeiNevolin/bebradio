@@ -2,11 +2,30 @@ import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { usePlayer, isPlayerHiddenPath, isOnKaraoke } from '../../context/PlayerContext'
 import { useKaraoke } from '../../karaoke/store'
-import MashupPlayer from '../mashup/MashupPlayer'
-import NowPlayingPanel from '../mashup/NowPlayingPanel'
-import NowPlayingModal from '../mashup/NowPlayingModal'
-import KaraokePreviewPanel from '../mashup/KaraokePreviewPanel'
+import MashupPlayer from './MashupPlayer'
+import NowPlayingPanel from './NowPlayingPanel'
+import NowPlayingModal from './NowPlayingModal'
+import KaraokePreviewPanel from './KaraokePreviewPanel'
 import ProfileModal from '../ProfileModal'
+
+/**
+ * Стыковка правой панели: пока видна очередь или превью, страница ужимается
+ * на ширину панели (класс + --panel-w на .app-root), и панель встаёт рядом
+ * с контентом, а не поверх него. На мобильных и там, где панель скрыта
+ * (комнаты, пение), класс снимается.
+ */
+export function PanelDock() {
+  const { previewSong, queueOpen } = usePlayer()
+  const location = useLocation()
+  const karaokeActive = useKaraoke((s) => s.soundActive)
+  const hidden =
+    isPlayerHiddenPath(location.pathname) || (isOnKaraoke(location.pathname) && karaokeActive)
+  const docked = (previewSong != null || queueOpen) && !hidden
+  useEffect(() => {
+    document.querySelector('.app-root')?.classList.toggle('with-panel', docked)
+  }, [docked])
+  return null
+}
 
 /**
  * Bottom player bar. Mounted once in App so it (and its <audio>) survives
@@ -67,10 +86,30 @@ export function GlobalPlayerOverlays() {
     profileUserId,
     setProfileUserId,
     previewSong,
+    setPreviewSong,
   } = usePlayer()
 
   const queue =
     player.index >= 0 ? player.list.slice(player.index + 1, player.index + 4) : []
+
+  // Протухшее превью: как только ПОСЛЕ его открытия заиграл обычный трек
+  // (не превью) — закрываем, чтобы панель не показывала прошлое. Уже игравший
+  // до открытия трек, пауза и само превью её не трогают.
+  const baselineRef = useRef<string | null | undefined>(undefined)
+  useEffect(() => {
+    if (!previewSong) {
+      baselineRef.current = undefined
+      return
+    }
+    const id = player.current?.id ?? null
+    if (baselineRef.current === undefined) {
+      baselineRef.current = id
+      return
+    }
+    if (id && id !== baselineRef.current && player.current?.source !== 'karaoke') {
+      setPreviewSong(null)
+    }
+  })
 
   const location = useLocation()
   const karaokeActive = useKaraoke((s) => s.soundActive)

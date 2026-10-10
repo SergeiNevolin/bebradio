@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { createRef } from 'react'
-import NowPlayingModal from '../components/mashup/NowPlayingModal'
+import NowPlayingModal from '../components/player/NowPlayingModal'
 import type { MashupPlayer as MashupPlayerState } from '../hooks/useMashupPlayer'
 import type { Track } from '../types'
 

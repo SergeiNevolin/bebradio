@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
-import TrackArt from '../components/TrackArt'
+import TrackArt from '../components/media/TrackArt'
 
 describe('TrackArt', () => {
   it('renders an img when a thumbnail exists', () => {

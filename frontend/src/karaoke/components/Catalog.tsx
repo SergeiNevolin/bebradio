@@ -12,7 +12,9 @@ import { loadSong } from '../lib/songs'
 import { formatTime } from '../lib/songs'
 import { hasLocalLyrics, loadManifest, plural } from '../lib/songs'
 import { useKaraoke } from '../store'
+import { usePlayer } from '../../context/PlayerContext'
 import type { SongMeta } from '../lib/types'
+import type { KaraokePreview } from '../../lib/karaokePreview'
 import Upload from './Upload'
 
 type Tab = 'all' | 'fav'
@@ -23,6 +25,8 @@ function hueOf(s: string): number {
   return h
 }
 
+const HERO_CAT = <img src="/karaoke-cat.gif" alt="Поющий кот" />;
+
 function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number; activeArtist?: string }) {
   const openSong = useKaraoke((s) => s.openSong)
   const setLoadingSong = useKaraoke((s) => s.setLoadingSong)
@@ -30,6 +34,7 @@ function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number
   const favorites = useKaraoke((s) => s.favorites)
   const toggleFavorite = useKaraoke((s) => s.toggleFavorite)
   const pushRecent = useKaraoke((s) => s.pushRecent)
+  const { setPreviewSong, previewSong } = usePlayer()
   const [busy, setBusy] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const hue = hueOf(song.id)
@@ -40,11 +45,27 @@ function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number
     ? parsed.artists.filter((a) => a.toLowerCase() !== activeArtist.toLowerCase())
     : parsed.artists
 
+  // Превью как на главной: клик по треку открывает панель, петь — только «Петь».
+  const preview = () => {
+    if (previewSong?.id === song.id) setPreviewSong(null)
+    else {
+      setPreviewSong({
+        id: song.id,
+        title: parsed.title,
+        language: song.language,
+        duration: song.duration,
+        audio: song.audio,
+        original: song.original ?? null,
+      })
+    }
+  }
+
   const sing = async () => {
     if (busy || loadingSong) return
     setBusy(true)
     setLoadingSong(true)
     setLoadError(null)
+    setPreviewSong(null)
     try {
       const data = await loadSong(song)
       pushRecent(song.id)
@@ -82,8 +103,8 @@ function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number
       tint={`linear-gradient(135deg, hsl(${hue} 45% 32%), hsl(${(hue + 40) % 360} 50% 20%))`}
       glyph={<Disc3 className="h-5 w-5 text-white/70" />}
       busy={busy}
-      onPlay={sing}
-      playLabel={`Петь: ${parsed.title}`}
+      onPlay={preview}
+      playLabel={`Превью: ${parsed.title}`}
       actions={
         <>
           <button onClick={() => toggleFavorite(song.id)} title={fav ? 'Убрать из избранного' : 'В избранное'}
@@ -123,7 +144,6 @@ export default function Catalog() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [apiUp, setApiUp] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
-  const loadingSong = useKaraoke((s) => s.loadingSong)
   const setLoadingSong = useKaraoke((s) => s.setLoadingSong)
 
   // загрузка — только для вошедших: бэкенд жив + токен (или standalone без входа)
@@ -200,20 +220,24 @@ export default function Catalog() {
     }
   }
 
-  const playSong = async (song: SongMeta) => {
-    if (loadingSong) return
-    setLoadingSong(true)
-    setRefreshError(null)
-    try {
-      const data = await loadSong(song)
-      pushRecent(song.id)
-      openSong(data)
-    } catch (e) {
-      console.error(e)
-      setRefreshError('Не открылась — проверьте файлы песни')
-    } finally {
-      setLoadingSong(false)
+  const { setPreviewSong: setPreview, previewSong: currentPreview } = usePlayer()
+
+  // Превью как на главной: клик по карточке открывает панель, петь — только «Петь».
+  const togglePreview = (s: SongMeta) => {
+    if (currentPreview?.id === s.id) {
+      setPreview(null)
+      return
     }
+    const parsed = parseSong(s.title)
+    const preview: KaraokePreview = {
+      id: s.id,
+      title: parsed.title,
+      language: s.language,
+      duration: s.duration,
+      audio: s.audio,
+      original: s.original ?? null,
+    }
+    setPreview(preview)
   }
 
   const artists = useMemo(() => groupArtists(songs), [songs])
@@ -237,13 +261,13 @@ export default function Catalog() {
   // Полки всегда на месте; поиск, табы и фильтры режут только список ниже.
 
   return (
-    <div className="w-full px-10 pb-16 max-sm:px-3.5">
-      <div className="mt-4">
-        {hasAuthToken() ? (
-          <Hero
-            title="Загрузи свою песню"
-            sub="Загрузи песню, отредактируй текст и пой."
-            actions={
+    <div className="w-full px-10 pb-16 pt-4 max-sm:px-3.5">
+      {hasAuthToken() ? (
+        <Hero
+          title="Загрузи свою песню"
+          sub="Загрузи песню, отредактируй текст и пой."
+          art={HERO_CAT}
+          actions={
               canUpload ? (
                 <button onClick={() => setUploadOpen(true)} title="Загрузить свою песню (аудио или клип)"
                   className="btn shrink-0 gap-1.5">
@@ -257,6 +281,7 @@ export default function Catalog() {
           <Hero
             title="Регистрируйся и загружай своё"
             sub="Петь можно без входа, а загрузка песен — для своих."
+            art={HERO_CAT}
             actions={
               BASE ? (
                 <>
@@ -271,10 +296,9 @@ export default function Catalog() {
             }
           />
         )}
-      </div>
 
       {artistEntry ? (
-        <div className="mt-4">
+        <div className="pt-4">
           <button
             onClick={() => setArtist(null)}
             className="flex items-center gap-1.5 rounded-full bg-surface-hover px-3.5 py-2 text-[13px] font-medium text-muted transition hover:text-text"
@@ -320,8 +344,8 @@ export default function Catalog() {
                       }
                       tint={tintForId(s.id)}
                       glyph={monoGlyph(parsed.title)}
-                      playLabel={`Петь: ${parsed.title}`}
-                      onToggle={() => void playSong(s)}
+                      playLabel={`Превью: ${parsed.title}`}
+                      onToggle={() => togglePreview(s)}
                     />
                   )
                 })}
@@ -343,8 +367,8 @@ export default function Catalog() {
                       }
                       tint={tintForId(s.id)}
                       glyph={monoGlyph(parsed.title)}
-                      playLabel={`Петь: ${parsed.title}`}
-                      onToggle={() => void playSong(s)}
+                      playLabel={`Превью: ${parsed.title}`}
+                      onToggle={() => togglePreview(s)}
                     />
                   )
                 })}

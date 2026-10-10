@@ -7,13 +7,15 @@ interface HeroProps {
   actions?: ReactNode
   /** Правая колонка статистики (hero комнат). */
   stats?: ReactNode
+  /** Правая картинка (кот в караоке). */
+  art?: ReactNode
 }
 
 /**
  * Единый hero страниц: панель с заголовком, подписью, действиями
  * и опциональной статистикой. Одинаковые отступы везде: снизу 20px.
  */
-export default function Hero({ title, sub, actions, stats }: HeroProps) {
+export default function Hero({ title, sub, actions, stats, art }: HeroProps) {
   return (
     <div className={styles.hero}>
       <div className={styles.main}>
@@ -22,6 +24,7 @@ export default function Hero({ title, sub, actions, stats }: HeroProps) {
         {actions && <div className={styles.actions}>{actions}</div>}
       </div>
       {stats && <div className={styles.stats}>{stats}</div>}
+      {art && <div className={styles.art}>{art}</div>}
     </div>
   )
 }

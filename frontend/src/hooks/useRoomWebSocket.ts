@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
 import { api } from '../lib/api'
 import { getRoomAccess, setRoomAccess, clearRoomAccess } from '../lib/roomAccess'
-import type { ChatMessage } from '../components/Chat'
-import type { FloatingReaction } from '../components/Reactions'
+import type { ChatMessage } from '../components/room/Chat'
+import type { FloatingReaction } from '../components/room/Reactions'
 import type { RoomState } from '../types'
 
 interface User {

@@ -65,6 +65,12 @@ describe('Hero', () => {
     render(<Hero title="Только заголовок" />)
     expect(screen.getByText('Только заголовок')).toBeInTheDocument()
   })
+
+  it('renders art slot', () => {
+    const { container } = render(<Hero title="T" art={<img src="/karaoke-cat.gif" alt="Поющий кот" />} />)
+    expect(screen.getByAltText('Поющий кот')).toBeInTheDocument()
+    expect(container.querySelector('img[src="/karaoke-cat.gif"]')).not.toBeNull()
+  })
 })
 
 describe('MediaCard', () => {

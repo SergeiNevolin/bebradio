@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import Home from '../pages/Home'
@@ -74,6 +74,9 @@ describe('Home', () => {
     vi.clearAllMocks()
     mockHomeApis()
     useKaraoke.getState().setSoundActive(false)
+    // Снапшот плеера переживает размонтирование (persist при unmount) —
+    // иначе трек прошлого теста ресторится в следующий.
+    localStorage.removeItem('mashup-player')
   })
 
   it('shelves autodj rooms as popular stations with a badge', async () => {
@@ -183,6 +186,19 @@ describe('Home', () => {
     fireEvent.click(screen.getByRole('button', { name: /Спеть/ }))
     expect(mockNavigate).toHaveBeenCalledWith('/karaoke')
     expect(screen.queryByTestId('karaoke-preview-panel')).not.toBeInTheDocument()
+  })
+
+  it('closes karaoke preview when a mashup starts playing', async () => {
+    render(<HomeWithPlayer />)
+    const kcards = await screen.findAllByTestId('karaoke-song-card')
+    fireEvent.click(kcards[0])
+    await screen.findByTestId('karaoke-preview-panel')
+    const tcards = await screen.findAllByTestId('top-track-card')
+    fireEvent.click(tcards[0])
+    await waitFor(() => {
+      expect(screen.queryByTestId('karaoke-preview-panel')).toBeNull()
+    })
+    expect(await screen.findByRole('button', { name: 'Expand player' })).toBeInTheDocument()
   })
 
   it('plays a mashup inline and shows the bottom player', async () => {

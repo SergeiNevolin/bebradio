@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react'
-import { useToast } from '../context/ToastContext'
-import { api } from '../lib/api'
-import { formatTime as formatDuration } from '../lib/format'
-import TrackArt from './TrackArt'
-import type { Track } from '../types'
+import { useToast } from '../../context/ToastContext'
+import { api } from '../../lib/api'
+import { formatTime as formatDuration } from '../../lib/format'
+import TrackArt from '../media/TrackArt'
+import type { Track } from '../../types'
 import styles from './AddTrack.module.css'
 
 interface YoutubeHit {

@@ -3,7 +3,7 @@ import type { Track } from '../../types'
 import type { MashupPlayer } from '../../hooks/useMashupPlayer'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
-import SeekBar from '../player/SeekBar'
+import SeekBar from './SeekBar'
 import {
   ChevronDownIcon,
   HeartFillIcon,
@@ -15,7 +15,7 @@ import {
   RepeatIcon,
   RepeatOneIcon,
   ShuffleIcon,
-} from '../player/icons'
+} from './icons'
 import styles from './NowPlayingModal.module.css'
 
 interface NowPlayingModalProps {

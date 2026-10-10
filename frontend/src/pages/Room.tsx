@@ -6,11 +6,11 @@ import { api } from '../lib/api'
 import { setRoomAccess, clearRoomAccess } from '../lib/roomAccess'
 import { useRoomWebSocket } from '../hooks/useRoomWebSocket'
 import { useToast } from '../context/ToastContext'
-import Player from '../components/Player'
-import Queue from '../components/Queue'
-import AddTrack from '../components/AddTrack'
-import Chat from '../components/Chat'
-import { ReactionBar, ReactionsOverlay } from '../components/Reactions'
+import RoomPlayer from '../components/player/RoomPlayer'
+import Queue from '../components/room/Queue'
+import AddTrack from '../components/room/AddTrack'
+import Chat from '../components/room/Chat'
+import { ReactionBar, ReactionsOverlay } from '../components/room/Reactions'
 import ProfileModal from '../components/ProfileModal'
 import RoomHeader from '../components/room/RoomHeader'
 import RoomPasswordGate from '../components/room/RoomPasswordGate'
@@ -216,7 +216,7 @@ export default function Room() {
         <div className={styles.roomMain}>
           <div className={styles.playerWrap}>
             <ReactionsOverlay items={reactions} />
-            <Player
+            <RoomPlayer
               track={room?.current_track ?? null}
               nextTrack={room?.queue?.[(room?.current_index ?? 0) + 1] ?? null}
               isPlaying={room?.is_playing ?? false}

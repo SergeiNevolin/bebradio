@@ -1,8 +1,12 @@
-import { useNavigate } from 'react-router-dom'
-import { usePlayer } from '../../context/PlayerContext'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { usePlayer, isOnKaraoke } from '../../context/PlayerContext'
+import { useToast } from '../../context/ToastContext'
+import { useKaraoke } from '../../karaoke/store'
+import { loadSong } from '../../karaoke/lib/songs'
 import { karaokePreviewTrack } from '../../lib/karaokePreview'
 import { tintForId } from '../../lib/mashupArt'
-import { MicIcon, PauseIcon, PlayIcon } from '../player/icons'
+import { MicIcon, PauseIcon, PlayIcon } from './icons'
+import SidePanel from './SidePanel'
 import styles from './KaraokePreviewPanel.module.css'
 
 const BLOCKED_MESSAGE = 'В комнате играет эфир — послушать можно вне комнат'
@@ -21,6 +25,8 @@ function formatDuration(sec?: number | null): string {
 export default function KaraokePreviewPanel() {
   const { previewSong, setPreviewSong, player, toggleTrack } = usePlayer()
   const navigate = useNavigate()
+  const location = useLocation()
+  const { showToast } = useToast()
 
   if (!previewSong) return null
 
@@ -32,31 +38,42 @@ export default function KaraokePreviewPanel() {
     toggleTrack(track, { blockedMessage: BLOCKED_MESSAGE })
   }
 
-  const handleSing = () => {
+  const handleSing = async () => {
+    const songId = previewSong.id
     player.pause()
     setPreviewSong(null)
-    navigate('/karaoke')
+    if (!isOnKaraoke(location.pathname)) {
+      navigate('/karaoke')
+      return
+    }
+    // Уже на странице караоке — открываем песню сразу, без навигации.
+    const st = useKaraoke.getState()
+    if (st.loadingSong) return
+    const meta = st.songs.find((s) => s.id === songId)
+    if (!meta) return
+    st.setLoadingSong(true)
+    try {
+      const data = await loadSong(meta)
+      const cur = useKaraoke.getState()
+      cur.pushRecent(meta.id)
+      cur.openSong(data)
+    } catch (e) {
+      console.error(e)
+      showToast('Не открылась — проверьте файлы песни', 'error')
+    } finally {
+      useKaraoke.getState().setLoadingSong(false)
+    }
   }
 
   return (
-    <aside
-      className={`${styles.panel} ${player.current ? styles.withPlayer : ''}`}
-      aria-label="Превью караоке"
-      data-testid="karaoke-preview-panel"
+    <SidePanel
+      label="Превью караоке"
+      testId="karaoke-preview-panel"
+      withPlayer={player.current != null}
+      onClose={() => setPreviewSong(null)}
+      closeLabel="Закрыть превью"
     >
-      <div className={styles.head}>
-        <button
-          type="button"
-          className={styles.closeBtn}
-          onClick={() => setPreviewSong(null)}
-          aria-label="Закрыть превью"
-        >
-          ×
-        </button>
-      </div>
-
-      <div className={styles.scroll}>
-        <div className={styles.bodyPad}>
+      <div className={styles.bodyPad}>
           <div className={styles.bigArt} style={{ background: tintForId(previewSong.id) }}>
             <MicIcon size={56} />
           </div>
@@ -83,7 +100,6 @@ export default function KaraokePreviewPanel() {
             </button>
           </div>
         </div>
-      </div>
-    </aside>
+      </SidePanel>
   )
 }

@@ -11,7 +11,6 @@ vi.mock('../context/AuthContext', () => ({
 }))
 
 vi.mock('../components/ThemeToggle', () => ({ default: () => <span data-testid="theme" /> }))
-vi.mock('../components/AccentPicker', () => ({ default: () => <span data-testid="accent" /> }))
 
 function renderNavbar(onBurger = vi.fn()) {
   return {

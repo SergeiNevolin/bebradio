@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import { ReactionBar, ReactionsOverlay, REACTIONS, type FloatingReaction } from '../components/Reactions'
+import { ReactionBar, ReactionsOverlay, REACTIONS, type FloatingReaction } from '../components/room/Reactions'
 
 describe('ReactionBar', () => {
   it('renders a button for every reaction', () => {

@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { monoGlyph, tintForId } from '../lib/mashupArt'
+import { monoGlyph, tintForId } from '../../lib/mashupArt'
 import styles from './TrackArt.module.css'
 
 interface TrackArtProps {

@@ -4,11 +4,16 @@
   min-height: 0;
   /* Во всю ширину от края сайдбара до края вьюпорта:
      .app даёт боковые поля 40px (14 на мобильных) — вычитаем левое. */
-  width: calc(100vw - var(--sidebar-w, 0px));
-  max-width: calc(100vw - var(--sidebar-w, 0px));
+  width: calc(100vw - var(--sidebar-w, 0px) - var(--panel-w, 0px));
+  max-width: calc(100vw - var(--sidebar-w, 0px) - var(--panel-w, 0px));
   margin-left: -40px;
   background: var(--color-bg, var(--bg));
   overflow: hidden;
+}
+
+/* Пока поётся — сайдбар спрятан (шторка), полоса тянется на весь вьюпорт. */
+.wrapFull {
+  --sidebar-w: 0px;
 }
 
 @media (max-width: 640px) {

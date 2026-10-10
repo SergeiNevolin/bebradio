@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import Chat from '../components/Chat'
+import Chat from '../components/room/Chat'
 
 const messages = [
   { id: '1', user_id: 'u1', username: 'Alice', text: 'Hello!', created_at: 1 },

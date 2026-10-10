@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import AddTrack from '../components/AddTrack'
+import AddTrack from '../components/room/AddTrack'
 import { ToastProvider } from '../context/ToastContext'
 
 function renderWithToast(ui: React.ReactElement) {

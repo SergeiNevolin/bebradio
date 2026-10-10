@@ -22,7 +22,7 @@ export default function KaraokePage() {
   const reservePlayer = !!player.current && !karaokeActive
 
   return (
-    <div className={styles.wrap}>
+    <div className={`${styles.wrap} ${karaokeActive ? styles.wrapFull : ''}`}>
       <div className={`karaoke-root ${styles.root} ${reservePlayer ? styles.barClear : ''}`}>
         <ErrorBoundary>
           <KaraokeApp />

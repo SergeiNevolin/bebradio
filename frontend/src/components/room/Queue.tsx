@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
-import type { Track } from '../types'
-import TrackArt from './TrackArt'
+import type { Track } from '../../types'
+import TrackArt from '../media/TrackArt'
 import styles from './Queue.module.css'
 
 interface QueueProps {

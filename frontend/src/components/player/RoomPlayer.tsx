@@ -1,17 +1,17 @@
 import { memo, useCallback, useEffect } from 'react'
-import type { Track } from '../types'
-import TrackArt from './TrackArt'
-import SeekBar from './player/SeekBar'
-import VolumeControl from './player/VolumeControl'
-import { useGaplessPlayer } from '../hooks/useGaplessPlayer'
-import { useVolume } from '../hooks/useVolume'
-import { PlayIcon, SkipIcon, ThumbDownIcon, ThumbUpIcon } from './player/icons'
-import styles from './Player.module.css'
+import type { Track } from '../../types'
+import TrackArt from '../media/TrackArt'
+import SeekBar from './SeekBar'
+import VolumeControl from './VolumeControl'
+import { useGaplessPlayer } from '../../hooks/useGaplessPlayer'
+import { useVolume } from '../../hooks/useVolume'
+import { PlayIcon, SkipIcon, ThumbDownIcon, ThumbUpIcon } from './icons'
+import styles from './RoomPlayer.module.css'
 
 /** Seconds of overlap between tracks. 0 would disable crossfading. */
 const CROSSFADE_SECONDS = 3
 
-interface PlayerProps {
+interface RoomPlayerProps {
   track: Track | null
   nextTrack?: Track | null
   isPlaying: boolean
@@ -28,7 +28,7 @@ interface PlayerProps {
   canVote?: boolean
 }
 
-function Player({
+function RoomPlayer({
   track,
   nextTrack,
   isPlaying,
@@ -42,7 +42,7 @@ function Player({
   skipVoters,
   currentUserId,
   canVote = true,
-}: PlayerProps) {
+}: RoomPlayerProps) {
   const onEnded = useCallback(() => onPlayback('next'), [onPlayback])
   const onSync = useCallback(
     (p: number) => onPlayback('sync', { position: p }),
@@ -191,4 +191,4 @@ function Player({
   )
 }
 
-export default memo(Player)
+export default memo(RoomPlayer)

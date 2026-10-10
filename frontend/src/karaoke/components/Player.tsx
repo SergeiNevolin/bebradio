@@ -681,7 +681,7 @@ export default function Player() {
   const curLine = visible[0] ?? null
 
   return (
-    <div className="mx-auto flex h-[calc(100%-64px)] w-full max-w-7xl flex-col px-5">
+    <div className="flex h-[calc(100%-64px)] w-full flex-col px-5">
       <audio ref={audioRef} src={song.audio}
         preload="auto" onEnded={onEnded}
         onLoadedMetadata={(e) => onBackingLoaded(e.currentTarget)} />

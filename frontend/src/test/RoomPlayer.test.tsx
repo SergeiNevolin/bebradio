@@ -1,6 +1,6 @@
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import Player from '../components/Player'
+import RoomPlayer from '../components/player/RoomPlayer'
 import type { Track } from '../types'
 
 const mockTrack: Track = {
@@ -31,21 +31,21 @@ const defaultPlayerProps = {
   currentUserId: 'user1',
 }
 
-describe('Player', () => {
+describe('RoomPlayer', () => {
   it('shows empty message when no track', () => {
-    render(<Player track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.getByText('Add a track to start listening together')).toBeInTheDocument()
   })
 
   it('renders track info', () => {
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.getByText('Test Song')).toBeInTheDocument()
     expect(screen.getByText('Test Artist')).toBeInTheDocument()
     expect(screen.getByText('Added by Alice')).toBeInTheDocument()
   })
 
   it('renders thumbnail img with correct src', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     const img = container.querySelector('.playerThumb') as HTMLImageElement
     expect(img).toBeInTheDocument()
     expect(img.src).toBe('https://example.com/thumb.jpg')
@@ -53,49 +53,49 @@ describe('Player', () => {
 
   it('renders placeholder art and Unknown artist when missing', () => {
     const bare: Track = { ...mockTrack, thumbnail: '', artist: '' }
-    const { container } = render(<Player track={bare} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    const { container } = render(<RoomPlayer track={bare} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(container.querySelector('img.playerThumb')).not.toBeInTheDocument()
     expect(screen.getByText('T')).toBeInTheDocument()
     expect(screen.getByText('Unknown artist')).toBeInTheDocument()
   })
 
   it('has audio element', () => {
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(document.querySelector('audio')).toBeInTheDocument()
   })
 
   it('renders the seek bar', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.getByRole('meter', { name: 'Playback position' })).toBeInTheDocument()
     expect(container.querySelector('.seekFill')).toBeInTheDocument()
   })
 
   it('renders volume control', () => {
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.getByTitle('Mute')).toBeInTheDocument()
     expect(document.querySelector('.volumeSlider')).toBeInTheDocument()
   })
 
   it('does not render prev/next buttons', () => {
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.queryByTitle('Previous')).not.toBeInTheDocument()
     expect(screen.queryByTitle('Next')).not.toBeInTheDocument()
   })
 
   it('does not render controls when no track', () => {
-    render(<Player track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.queryByTitle('Mute')).not.toBeInTheDocument()
   })
 
   it('renders vote buttons when track is present', () => {
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.getByRole('button', { name: 'Like this track' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Dislike this track' })).toBeInTheDocument()
     expect(screen.getByText(/Skip/)).toBeInTheDocument()
   })
 
   it('does not render vote buttons when no track', () => {
-    render(<Player track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.queryByRole('button', { name: 'Like this track' })).not.toBeInTheDocument()
   })
 })
@@ -103,59 +103,59 @@ describe('Player', () => {
 describe('Player vote buttons', () => {
   it('sends vote=1 when clicking like with no user vote', () => {
     const onVote = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onVote={onVote} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onVote={onVote} />)
     fireEvent.click(screen.getByRole('button', { name: 'Like this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 1)
   })
 
   it('sends vote=0 when clicking like if already liked (userVote=1)', () => {
     const onVote = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} onVote={onVote} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} onVote={onVote} />)
     fireEvent.click(screen.getByRole('button', { name: 'Like this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 0)
   })
 
   it('sends vote=-1 when clicking dislike with no user vote', () => {
     const onVote = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onVote={onVote} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onVote={onVote} />)
     fireEvent.click(screen.getByRole('button', { name: 'Dislike this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', -1)
   })
 
   it('sends vote=0 when clicking dislike if already disliked (userVote=-1)', () => {
     const onVote = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} onVote={onVote} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} onVote={onVote} />)
     fireEvent.click(screen.getByRole('button', { name: 'Dislike this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 0)
   })
 
   it('sends vote=1 when switching from dislike to like', () => {
     const onVote = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} onVote={onVote} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} onVote={onVote} />)
     fireEvent.click(screen.getByRole('button', { name: 'Like this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 1)
   })
 
   it('sends vote=-1 when switching from like to dislike', () => {
     const onVote = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} onVote={onVote} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} onVote={onVote} />)
     fireEvent.click(screen.getByRole('button', { name: 'Dislike this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', -1)
   })
 
   it('highlights like button when userVote=1', () => {
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={1} />)
     expect(screen.getByRole('button', { name: 'Like this track' })).toHaveClass('vote-btn-active')
   })
 
   it('highlights dislike button when userVote=-1', () => {
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} userVote={-1} />)
     expect(screen.getByRole('button', { name: 'Dislike this track' })).toHaveClass('vote-btn-active-down')
   })
 
   it('sends vote even when others already voted', () => {
     const onVote = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={5} dislikes={3} userVote={0} onVote={onVote} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={5} dislikes={3} userVote={0} onVote={onVote} />)
     fireEvent.click(screen.getByRole('button', { name: 'Like this track' }))
     expect(onVote).toHaveBeenCalledWith('abc123', 1)
   })
@@ -163,33 +163,33 @@ describe('Player vote buttons', () => {
 
 describe('Player vote scale', () => {
   it('renders vote scale bar', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(container.querySelector('.vote-scale')).toBeInTheDocument()
     expect(container.querySelector('.vote-bar')).toBeInTheDocument()
   })
 
   it('shows empty bar when no votes', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(container.querySelector('.vote-bar-like')).not.toBeInTheDocument()
     expect(container.querySelector('.vote-bar-dislike')).not.toBeInTheDocument()
   })
 
   it('shows full green bar when all likes', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={10} dislikes={0} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={10} dislikes={0} />)
     const like = container.querySelector('.vote-bar-like') as HTMLElement
     expect(like.style.width).toBe('100%')
     expect(container.querySelector('.vote-bar-dislike')).not.toBeInTheDocument()
   })
 
   it('shows full red bar when all dislikes', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={0} dislikes={10} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={0} dislikes={10} />)
     const dislike = container.querySelector('.vote-bar-dislike') as HTMLElement
     expect(dislike.style.width).toBe('100%')
     expect(container.querySelector('.vote-bar-like')).not.toBeInTheDocument()
   })
 
   it('shows 75% green and 25% red with 3 likes 1 dislike', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={3} dislikes={1} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={3} dislikes={1} />)
     const like = container.querySelector('.vote-bar-like') as HTMLElement
     const dislike = container.querySelector('.vote-bar-dislike') as HTMLElement
     expect(like.style.width).toBe('75%')
@@ -197,7 +197,7 @@ describe('Player vote scale', () => {
   })
 
   it('shows 25% green and 75% red with 1 like 3 dislikes', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={1} dislikes={3} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={1} dislikes={3} />)
     const like = container.querySelector('.vote-bar-like') as HTMLElement
     const dislike = container.querySelector('.vote-bar-dislike') as HTMLElement
     expect(like.style.width).toBe('25%')
@@ -205,7 +205,7 @@ describe('Player vote scale', () => {
   })
 
   it('shows 50/50 with equal votes', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={5} dislikes={5} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={5} dislikes={5} />)
     const like = container.querySelector('.vote-bar-like') as HTMLElement
     const dislike = container.querySelector('.vote-bar-dislike') as HTMLElement
     expect(like.style.width).toBe('50%')
@@ -213,7 +213,7 @@ describe('Player vote scale', () => {
   })
 
   it('scale sits between the like and dislike buttons', () => {
-    const { container } = render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    const { container } = render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     const buttons = container.querySelector('.vote-buttons')
     const children = Array.from(buttons!.children)
     const likeBtn = screen.getByRole('button', { name: 'Like this track' })
@@ -225,20 +225,20 @@ describe('Player vote scale', () => {
 
   it('resets to empty when track changes and new track has no votes', () => {
     const { container, rerender } = render(
-      <Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={5} dislikes={3} />
+      <RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={5} dislikes={3} />
     )
     expect(container.querySelector('.vote-bar-like')).toBeInTheDocument()
 
     const newTrack: Track = { ...mockTrack, id: 'new1', title: 'New Song' }
     rerender(
-      <Player track={newTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={0} dislikes={0} />
+      <RoomPlayer track={newTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} likes={0} dislikes={0} />
     )
     expect(container.querySelector('.vote-bar-like')).not.toBeInTheDocument()
     expect(container.querySelector('.vote-bar-dislike')).not.toBeInTheDocument()
   })
 
   it('does not show the tap-to-play prompt when autoplay is allowed', () => {
-    render(<Player track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
     expect(screen.queryByRole('button', { name: /enable sound/i })).not.toBeInTheDocument()
   })
 
@@ -246,7 +246,7 @@ describe('Player vote scale', () => {
     const play = HTMLMediaElement.prototype.play as ReturnType<typeof vi.fn>
     play.mockRejectedValueOnce(new Error('NotAllowedError'))
 
-    render(<Player track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />)
 
     const btn = await screen.findByRole('button', { name: /enable sound/i })
     fireEvent.click(btn)
@@ -259,14 +259,14 @@ describe('Player vote scale', () => {
   it('tears down audio when the queue empties (last track skipped)', () => {
     const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause')
     const { container, rerender } = render(
-      <Player track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+      <RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
     )
     const audio = container.querySelector('audio') as HTMLAudioElement
     expect(audio.getAttribute('src')).toBe(mockTrack.url)
 
     pauseSpy.mockClear()
     rerender(
-      <Player track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+      <RoomPlayer track={null} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
     )
 
     expect(pauseSpy).toHaveBeenCalled()
@@ -277,7 +277,7 @@ describe('Player vote scale', () => {
     const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause')
     const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load')
     const { container, unmount } = render(
-      <Player track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+      <RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
     )
     const audio = container.querySelector('audio') as HTMLAudioElement
     expect(audio.getAttribute('src')).toBe(mockTrack.url)
@@ -323,7 +323,7 @@ describe('Player sync', () => {
 
   it('sends periodic sync when playing', () => {
     const onPlayback = vi.fn()
-    render(<Player track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
 
     act(() => {
       vi.advanceTimersByTime(5000)
@@ -334,7 +334,7 @@ describe('Player sync', () => {
 
   it('does not send sync when paused', () => {
     const onPlayback = vi.fn()
-    render(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
 
     act(() => {
       vi.advanceTimersByTime(5000)
@@ -345,7 +345,7 @@ describe('Player sync', () => {
 
   it('sends sync every 5 seconds', () => {
     const onPlayback = vi.fn()
-    render(<Player track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
+    render(<RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
 
     act(() => {
       vi.advanceTimersByTime(15000)
@@ -357,7 +357,7 @@ describe('Player sync', () => {
   it('stops sync when paused', () => {
     const onPlayback = vi.fn()
     const { rerender } = render(
-      <Player track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />
+      <RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />
     )
 
     act(() => {
@@ -367,7 +367,7 @@ describe('Player sync', () => {
     const countAfterPlay = countSyncCalls(onPlayback)
     expect(countAfterPlay).toBeGreaterThanOrEqual(1)
 
-    rerender(<Player track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
+    rerender(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
 
     act(() => {
       vi.advanceTimersByTime(10000)
@@ -381,7 +381,7 @@ describe('Player seeking', () => {
   it('renders a Skip chip in the control row that votes to skip', () => {
     const onSkipVote = vi.fn()
     render(
-      <Player track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onSkipVote={onSkipVote} skipVoters={['x']} />
+      <RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={vi.fn()} {...defaultPlayerProps} onSkipVote={onSkipVote} skipVoters={['x']} />
     )
     const skip = screen.getByRole('button', { name: /skip \(1\)/i })
     expect(skip).toHaveClass('playerChip')
@@ -411,14 +411,14 @@ const nextTrack: Track = {
 describe('Player gapless playback', () => {
   it('renders two audio decks', () => {
     const { container } = render(
-      <Player track={mockTrack} isPlaying position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+      <RoomPlayer track={mockTrack} isPlaying position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
     )
     expect(container.querySelectorAll('audio')).toHaveLength(2)
   })
 
   it('prefetches the next track into the idle deck', () => {
     const { container } = render(
-      <Player
+      <RoomPlayer
         track={mockTrack}
         nextTrack={nextTrack}
         isPlaying
@@ -434,7 +434,7 @@ describe('Player gapless playback', () => {
 
   it('leaves the idle deck empty when there is no next track', () => {
     const { container } = render(
-      <Player track={mockTrack} isPlaying position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
+      <RoomPlayer track={mockTrack} isPlaying position={0} onPlayback={vi.fn()} {...defaultPlayerProps} />
     )
     expect(container.querySelectorAll('audio')[1].getAttribute('src')).toBeNull()
   })
@@ -444,7 +444,7 @@ describe('Player gapless playback', () => {
     try {
       const onPlayback = vi.fn()
       const { container } = render(
-        <Player
+        <RoomPlayer
           track={mockTrack}
           nextTrack={nextTrack}
           isPlaying
@@ -475,7 +475,7 @@ describe('Player gapless playback', () => {
     try {
       const onPlayback = vi.fn()
       const { container } = render(
-        <Player
+        <RoomPlayer
           track={mockTrack}
           nextTrack={nextTrack}
           isPlaying

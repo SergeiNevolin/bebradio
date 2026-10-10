@@ -73,6 +73,11 @@ body {
   --sidebar-w: 76px;
 }
 
+/* Открыта правая панель (очередь/превью): страница ужимается на её ширину. */
+.app-root.with-panel {
+  --panel-w: 360px;
+}
+
 button {
   cursor: pointer;
   border: none;
@@ -104,6 +109,7 @@ input:focus {
   min-height: 0;
   margin: 0 auto;
   padding: 0 40px;
+  padding-right: calc(40px + var(--panel-w, 0px));
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -120,11 +126,14 @@ input:focus {
 }
 
 @media (max-width: 640px) {
-  /* Специфичность не ниже классовых вариантов выше, иначе 240px вычтутся и на телефоне. */
+  /* Специфичность не ниже классовых вариантов выше, иначе 240px вычтутся и на телефоне.
+     Панель на мобильных — оверлей на всю ширину, страницу не ужимаем. */
   .app-root,
   .app-root.sb-full,
-  .app-root.sb-rail {
+  .app-root.sb-rail,
+  .app-root.with-panel {
     --sidebar-w: 0px;
+    --panel-w: 0px;
   }
 }
 

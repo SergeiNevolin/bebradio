@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import styles from './Chat.module.css'
 import Avatar from './Avatar'
-import { useUserAvatars } from '../hooks/useUserAvatars'
+import { useUserAvatars } from '../../hooks/useUserAvatars'
 
 export interface ChatMessage {
   id: string

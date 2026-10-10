@@ -1,5 +1,5 @@
-import SeekBar from '../player/SeekBar'
-import VolumeControl from '../player/VolumeControl'
+import SeekBar from './SeekBar'
+import VolumeControl from './VolumeControl'
 import {
   ChevronUpIcon,
   HeartFillIcon,
@@ -12,7 +12,7 @@ import {
   RepeatIcon,
   RepeatOneIcon,
   ShuffleIcon,
-} from '../player/icons'
+} from './icons'
 import type { Track } from '../../types'
 import type { MashupPlayer as MashupPlayerState } from '../../hooks/useMashupPlayer'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'

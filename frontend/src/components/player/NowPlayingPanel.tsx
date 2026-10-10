@@ -1,7 +1,8 @@
 import type { Track } from '../../types'
 import { formatTime } from '../../lib/format'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
-import { HeartFillIcon, HeartIcon } from '../player/icons'
+import { HeartFillIcon, HeartIcon } from './icons'
+import SidePanel from './SidePanel'
 import styles from './NowPlayingPanel.module.css'
 
 interface NowPlayingPanelProps {
@@ -38,25 +39,13 @@ export default function NowPlayingPanel({
   playerVisible = false,
 }: NowPlayingPanelProps) {
   return (
-    <aside
-      className={`${styles.panel} ${playerVisible ? styles.withPlayer : ''}`}
-      aria-label="Now playing"
+    <SidePanel
+      label="Now playing"
+      withPlayer={playerVisible}
+      onClose={onClose}
+      closeLabel="Close now playing"
     >
-      {onClose && (
-        <div className={styles.head}>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            onClick={onClose}
-            aria-label="Close now playing"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      <div className={styles.scroll}>
-        {loading && (
+      {loading && (
           <div className={styles.bodyPad}>
             <div className={`${styles.skel} ${styles.skelArt}`} />
             <div className={`${styles.skel} ${styles.skelLine}`} style={{ width: '70%', marginTop: 14 }} />
@@ -132,8 +121,7 @@ export default function NowPlayingPanel({
             )}
           </div>
         )}
-      </div>
-    </aside>
+    </SidePanel>
   )
 }
 

@@ -1,4 +1,4 @@
-/* Панель превью караоке: та же full-height рейка справа, что и очередь. */
+/* Единая правая панель (очередь, превью): full-height рейка справа. */
 .panel {
   position: fixed;
   top: 0;
@@ -13,9 +13,10 @@
   border: none;
   border-left: 1px solid var(--border);
   overflow: hidden;
-  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.25);
 }
 
+/* Bare toolbar: no title, just the close action. Top padding clears the
+   navbar the panel slides under. */
 .head {
   flex-shrink: 0;
   display: flex;
@@ -46,56 +47,31 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
-.bodyPad {
-  padding: 4px 16px 20px;
+.scroll::-webkit-scrollbar {
+  width: 10px;
 }
 
-.bigArt {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+.scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.bigTitle {
-  margin-top: 14px;
-  font-size: 18px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+  border: 2px solid var(--surface);
 }
 
-.bigMeta {
-  font-size: 14px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
-.hint {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.actions .btn {
-  width: 100%;
-  gap: 8px;
+/* Десктоп: резерв под 80px плашку плеера. */
+.withPlayer .scroll {
+  padding-bottom: 100px;
 }
 
 @media (max-width: 640px) {
@@ -105,6 +81,7 @@
     border-left: none;
   }
 
+  /* Мобильный навбар ниже — шапке хватает меньшего отступа. */
   .head {
     padding: 62px 12px 4px;
   }
@@ -115,16 +92,13 @@
     font-size: 26px;
   }
 
-  .bodyPad {
+  /* Контент не должен уходить под табы. */
+  .scroll {
     padding-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
-  .withPlayer .bodyPad {
+  /* …а при видимой плашке плеера — ещё и под неё. */
+  .withPlayer .scroll {
     padding-bottom: calc(216px + env(safe-area-inset-bottom) + env(safe-area-inset-bottom));
   }
-}
-
-/* Десктоп: резерв под 80px плашку плеера. */
-.withPlayer .bodyPad {
-  padding-bottom: 100px;
 }

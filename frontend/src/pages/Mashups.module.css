@@ -7,8 +7,8 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  width: calc(100vw - var(--sidebar-w, 0px));
-  max-width: calc(100vw - var(--sidebar-w, 0px));
+  width: calc(100vw - var(--sidebar-w, 0px) - var(--panel-w, 0px));
+  max-width: calc(100vw - var(--sidebar-w, 0px) - var(--panel-w, 0px));
   margin-left: -40px;
   background: var(--bg);
   overflow: hidden;

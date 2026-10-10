@@ -40,4 +40,12 @@ describe('KaraokePage', () => {
     act(() => useKaraoke.getState().setSoundActive(true))
     expect(root()).not.toContain('barClear')
   })
+
+  it('тянет полосу на весь вьюпорт пока поётся (сайдбар спрятан)', () => {
+    const { container } = render(<KaraokePage />)
+    const wrap = () => container.firstElementChild?.className ?? ''
+    expect(wrap()).not.toContain('wrapFull')
+    act(() => useKaraoke.getState().setSoundActive(true))
+    expect(wrap()).toContain('wrapFull')
+  })
 })
