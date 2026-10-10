@@ -38,6 +38,11 @@ export interface SongMeta {
   language?: string
   lines: number
   duration: number
+  /** автор из метаданных (редактор); пусто — разбираем из названия */
+  artist?: string | null
+  /** владелец-загрузчик; пусто — легаси без автора */
+  owner_id?: string | null
+  owner_name?: string | null
 }
 
 export interface SongData extends SongMeta {

@@ -10,6 +10,9 @@ export interface KaraokePreview {
   audio?: string | null
   /** Оригинал с вокалом для превью; может отсутствовать. */
   original?: string | null
+  /** Владелец-загрузчик; пусто — легаси без автора. */
+  owner_id?: string | null
+  owner_name?: string | null
 }
 
 /** Превью — оригинал с вокалом, иначе минус; пути резолвятся через прокси /api/karaoke/. */

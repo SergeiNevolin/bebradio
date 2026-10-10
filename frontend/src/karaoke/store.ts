@@ -45,6 +45,14 @@ function persist(favorites: string[], recent: string[]) {
   }
 }
 
+function persistPlays(plays: Record<string, number>) {
+  try {
+    localStorage.setItem(PLAYS_KEY, JSON.stringify(plays))
+  } catch {
+    /* приватный режим — просто не запоминаем */
+  }
+}
+
 interface KaraokeState {
   screen: Screen
   songs: SongMeta[]
@@ -60,9 +68,20 @@ interface KaraokeState {
   setLoadingSong: (v: boolean) => void
   toggleFavorite: (id: string) => void
   pushRecent: (id: string) => void
+  /** Удалить песню из всего локального состояния (каталог, избранное, недавние, счётчики). */
+  removeSong: (id: string) => void
+  /** Обновить название/автора песни в каталоге и в открытой песне. */
+  updateSongMeta: (id: string, title: string, artist: string | null) => void
   /** Идёт ли сейчас пение в караоке — общий плеер при этом прячется и молчит. */
   soundActive: boolean
   setSoundActive: (v: boolean) => void
+  /** Просьба открыть редактор для песни (кнопка из превью). */
+  editRequest: string | null
+  requestEdit: (id: string) => void
+  consumeEditRequest: () => void
+  /** Редактор текста открыт поверх плеера. */
+  editorOpen: boolean
+  setEditorOpen: (v: boolean) => void
 }
 
 export const useKaraoke = create<KaraokeState>((set, get) => ({
@@ -74,15 +93,13 @@ export const useKaraoke = create<KaraokeState>((set, get) => ({
   recent: readJSON(RECENT_KEY, []),
   plays: readPlays(),
   soundActive: false,
+  editRequest: null,
+  editorOpen: false,
   setSongs: (songs) => set({ songs }),
   openSong: (song) => {
     if (song.id) {
       const plays = { ...get().plays, [song.id]: (get().plays[song.id] ?? 0) + 1 }
-      try {
-        localStorage.setItem(PLAYS_KEY, JSON.stringify(plays))
-      } catch {
-        /* приватный режим — просто не запоминаем */
-      }
+      persistPlays(plays)
       set({ song, screen: 'player', plays })
     } else {
       set({ song, screen: 'player' })
@@ -101,5 +118,21 @@ export const useKaraoke = create<KaraokeState>((set, get) => ({
     persist(get().favorites, recent)
     set({ recent })
   },
+  removeSong: (id) => {
+    const favorites = get().favorites.filter((f) => f !== id)
+    const recent = get().recent.filter((r) => r !== id)
+    persist(favorites, recent)
+    const { [id]: _drop, ...plays } = get().plays
+    persistPlays(plays)
+    set({ songs: get().songs.filter((s) => s.id !== id), favorites, recent, plays })
+  },
+  updateSongMeta: (id, title, artist) => {
+    const songs = get().songs.map((s) => (s.id === id ? { ...s, title, artist } : s))
+    const cur = get().song
+    set({ songs, song: cur && cur.id === id ? { ...cur, title, artist } : cur })
+  },
   setSoundActive: (v) => set({ soundActive: v }),
+  requestEdit: (id) => set({ editRequest: id }),
+  consumeEditRequest: () => set({ editRequest: null }),
+  setEditorOpen: (v) => set({ editorOpen: v }),
 }))

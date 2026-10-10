@@ -49,6 +49,15 @@ const props = () => ({ song, onClose: vi.fn(), onSave: vi.fn(), onReset: vi.fn()
 beforeEach(() => {
   vi.clearAllMocks()
   cleanup()
+  vi.stubGlobal(
+    'fetch',
+    (async (url: string) => {
+      // Мета пишется отдельным контрактом — сервер отвечает ок,
+      // остальное недоступно (текст падает в localStorage, как раньше).
+      if (String(url).includes('/meta')) return { ok: true, json: async () => ({}) }
+      throw new TypeError('offline')
+    }) as unknown as typeof fetch,
+  )
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     setTransform: vi.fn(), scale: vi.fn(), clearRect: vi.fn(), fillRect: vi.fn(), fillText: vi.fn(),
     beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(),
@@ -123,8 +132,7 @@ describe('Editor skips', () => {
     expect(screen.queryByLabelText(/Удалить пропуск/)).toBe(null)
   })
 
-  it('удаление и сохранение в localStorage', async () => {
-    const withSkip = { ...songSkips, skips: [{ s: 1, e: 2 }] }
+  it('удаление и сохранение в localStorage', async () => {    const withSkip = { ...songSkips, skips: [{ s: 1, e: 2 }] }
     const p = { ...props(), song: withSkip }
     render(<Editor key={4} {...p} />)
     const del = screen.getByLabelText('Удалить пропуск 0:01.000–0:02.000')
@@ -136,5 +144,21 @@ describe('Editor skips', () => {
       expect(JSON.parse(localStorage.getItem('karaoke:skips:ts')!)).toEqual({ skips: [] })
     })
     expect(p.onSave).toHaveBeenCalled()
+  })
+
+  it('мета не правится в редакторе: onSave только тайминг', async () => {
+    const p = props()
+    render(<Editor key={6} {...p} />)
+    // Полей названия/автора в редакторе тайминга больше нет.
+    expect(screen.queryByLabelText('Название песни')).toBeNull()
+    expect(screen.queryByLabelText('Автор песни')).toBeNull()
+    fireEvent.click(screen.getByText(/^Сохранить/))
+    await waitFor(() => {
+      expect(p.onSave).toHaveBeenCalledTimes(1)
+    })
+    expect(p.onSave.mock.calls[0]).toHaveLength(2)
+    expect(p.onSave.mock.calls[0][0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ text: 'раз два' })]),
+    )
   })
 })

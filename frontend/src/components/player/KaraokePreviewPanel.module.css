@@ -31,6 +31,12 @@
   text-overflow: ellipsis;
 }
 
+.uploader {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .hint {
   margin-top: 8px;
   font-size: 13px;

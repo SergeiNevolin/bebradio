@@ -24,6 +24,12 @@ function splitArtists(raw: string): string[] {
     .filter(validName)
 }
 
+/** Исполнители песни: поле artist из метаданных, иначе разбор названия. */
+export function songArtists(song: Pick<SongMeta, 'title'> & { artist?: string | null }): string[] {
+  if (song.artist && song.artist.trim()) return splitArtists(song.artist)
+  return parseSong(song.title).artists
+}
+
 /**
  * Разбирает «ИСПОЛНИТЕЛЬ - НАЗВАНИЕ» с файловым мусором:
  * ANNA_ASTI_-_Carica_(Pesni.CC), CUEA_-_YA_TEBYA_MOGNU_81980502,
@@ -52,7 +58,7 @@ export interface ArtistEntry {
 export function groupArtists(songs: SongMeta[]): ArtistEntry[] {
   const map = new Map<string, ArtistEntry>()
   for (const song of songs) {
-    for (const artist of parseSong(song.title).artists) {
+    for (const artist of songArtists(song)) {
       const key = artist.toLowerCase()
       const entry = map.get(key)
       if (entry) entry.songs.push(song)

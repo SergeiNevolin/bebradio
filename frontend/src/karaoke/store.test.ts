@@ -71,4 +71,44 @@ describe('useKaraoke', () => {
     expect(m.useKaraoke.getState().favorites).toEqual([])
     expect(m.useKaraoke.getState().recent).toEqual([])
   })
+
+  it('removeSong чистит каталог, избранное, недавние и счётчики', () => {
+    const s = useKaraoke.getState()
+    s.setSongs([{ id: 'a', title: 'a', audio: 'x', lines: 1, duration: 10 }])
+    s.toggleFavorite('a')
+    s.pushRecent('a')
+    s.openSong(song('a'))
+    s.removeSong('a')
+    const st = useKaraoke.getState()
+    expect(st.songs).toEqual([])
+    expect(st.favorites).toEqual([])
+    expect(st.recent).toEqual([])
+    expect(st.plays['a']).toBeUndefined()
+  })
+
+  it('updateSongMeta правит каталог и открытую песню', () => {
+    const s = useKaraoke.getState()
+    s.setSongs([
+      { id: 'a', title: 'a', audio: 'x', lines: 1, duration: 10 },
+      { id: 'b', title: 'b', audio: 'x', lines: 1, duration: 10 },
+    ])
+    s.openSong(song('a'))
+    s.updateSongMeta('a', 'Новое', 'Автор')
+    const st = useKaraoke.getState()
+    expect(st.songs.find((x) => x.id === 'a')).toMatchObject({ title: 'Новое', artist: 'Автор' })
+    expect(st.songs.find((x) => x.id === 'b')).toMatchObject({ title: 'b' })
+    expect(st.song).toMatchObject({ title: 'Новое', artist: 'Автор' })
+  })
+
+  it('editRequest/editorOpen: заявка и флаг редактора', () => {
+    const s = useKaraoke.getState()
+    expect(s.editRequest).toBeNull()
+    expect(s.editorOpen).toBe(false)
+    s.requestEdit('a')
+    expect(useKaraoke.getState().editRequest).toBe('a')
+    s.consumeEditRequest()
+    expect(useKaraoke.getState().editRequest).toBeNull()
+    s.setEditorOpen(true)
+    expect(useKaraoke.getState().editorOpen).toBe(true)
+  })
 })

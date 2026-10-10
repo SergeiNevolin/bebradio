@@ -154,13 +154,14 @@ export async function apiAvailable(): Promise<boolean> {
 export async function uploadSong(
   file: File,
   opts: UploadOptions,
-  extra?: { lyricsText?: string; lyricsUrl?: string },
+  extra?: { lyricsText?: string; lyricsUrl?: string; ownerName?: string },
 ): Promise<string> {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('lang', opts.lang)
   if (extra?.lyricsText?.trim()) fd.append('lyrics_text', extra.lyricsText.trim())
   if (extra?.lyricsUrl?.trim()) fd.append('lyrics_url', extra.lyricsUrl.trim())
+  if (extra?.ownerName?.trim()) fd.append('owner_name', extra.ownerName.trim())
   // большой файл по медленному каналу — щедрый таймаут, но не вечность
   const r = await apiFetch('/api/upload', { method: 'POST', body: fd }, 10 * 60_000)
   if (!r.ok) throw new Error(await errorBody(r))
@@ -185,4 +186,11 @@ export async function fetchGeniusLines(url: string): Promise<string[]> {
   const data = (await r.json()) as { lines?: string[]; error?: string }
   if (data.error) throw new Error(data.error)
   return data.lines ?? []
+}
+
+/** удалить песню целиком (только владелец; 404 — нет песни) */
+export async function deleteSong(id: string): Promise<void> {
+  const r = await apiFetch(`/api/songs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (r.status === 401) throw new AuthRequiredError(AUTH_REQUIRED)
+  if (!r.ok) throw new Error(await errorBody(r))
 }

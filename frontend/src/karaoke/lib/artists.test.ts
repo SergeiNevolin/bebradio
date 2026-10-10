@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { groupArtists, parseSong, rankSongs, totalPlays } from './artists'
+import { groupArtists, parseSong, rankSongs, songArtists, totalPlays } from './artists'
 import type { SongMeta } from './types'
 
 function meta(over: Partial<SongMeta> & { id: string; title: string }): SongMeta {
@@ -28,8 +28,7 @@ describe('parseSong', () => {
   }
 })
 
-describe('groupArtists', () => {
-  it('группирует и сортирует по числу песен, коллаборации — в каждого', () => {
+describe('groupArtists', () => {  it('группирует и сортирует по числу песен, коллаборации — в каждого', () => {
     const songs = [
       meta({ id: 'a1', title: 'ANNA ASTI - Uno' }),
       meta({ id: 'a2', title: 'ANNA ASTI - Dos' }),
@@ -57,5 +56,13 @@ describe('rankSongs', () => {
 
   it('totalPlays суммирует', () => {
     expect(totalPlays(songs, { a: 2, c: 1 })).toBe(3)
+  })
+})
+
+describe('songArtists', () => {
+  it('поле artist из метаданных важнее парсинга', () => {
+    expect(songArtists({ title: 'ANNA ASTI - Uno', artist: 'Aria & Bono' })).toEqual(['Aria', 'Bono'])
+    expect(songArtists({ title: 'ANNA ASTI - Uno', artist: '' })).toEqual(['ANNA ASTI'])
+    expect(songArtists({ title: 'audio' })).toEqual([])
   })
 })

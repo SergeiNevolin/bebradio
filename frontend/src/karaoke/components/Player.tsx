@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, Loader2, Pause, Pencil, Play, RotateCcw, Volume2, Mic, MicOff } from 'lucide-react'
+import { ArrowLeft, Loader2, Pause, Play, RotateCcw, Volume2, Mic, MicOff } from 'lucide-react'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { formatTime, loadSong, clearLocalLyrics, clearLocalSkips, inSkip, wantOriginal } from '../lib/songs'
 import { ballProgress, ballXY, karaokeFrame, lineTextSize } from '../lib/karaoke'
@@ -27,11 +27,10 @@ interface TopBarProps {
   micLive: boolean
   level: number
   onBack: () => void
-  onEdit: () => void
 }
 
 /** шапка плеера: статична между тиками звука */
-const TopBar = memo(function TopBar({ title, timeSec, duration, withMic, micLive, level, onBack, onEdit }: TopBarProps) {
+const TopBar = memo(function TopBar({ title, timeSec, duration, withMic, micLive, level, onBack }: TopBarProps) {
   return (
     <div className="flex items-center gap-2.5 py-3">
       <button onClick={onBack} title="Вернуться в каталог" aria-label="Вернуться в каталог"
@@ -51,12 +50,6 @@ const TopBar = memo(function TopBar({ title, timeSec, duration, withMic, micLive
           <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${Math.round(level * 100)}%` }} />
         </div>
       </div>
-      <button onClick={onEdit} title="Исправить текст и тайминги песни (минус встанет на паузу)"
-        aria-label="Исправить текст и тайминги песни"
-        className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-surface-hover px-3.5 text-[13px] font-medium text-text transition hover:bg-border hover:text-text">
-        <Pencil className="h-4 w-4" />
-        <span className="hidden sm:inline">Текст</span>
-      </button>
     </div>
   )
 })
@@ -220,7 +213,8 @@ export default function Player() {
   const [deviceId, setDeviceId] = useState<string>('')
   const [score, setScore] = useState<ScoreResult | null>(null)
   const [scored, setScored] = useState(false)
-  const [editorOpen, setEditorOpen] = useState(false)
+  const editorOpen = useKaraoke((s) => s.editorOpen)
+  const setEditorOpen = useKaraoke((s) => s.setEditorOpen)
   // счётчик сбросов: заставляет открытый редактор перечитать song.segments
   const [editorReset, setEditorReset] = useState(0)
   // позиция пальца на ползунке во время драга — чтобы не дёргался за звуком
@@ -526,15 +520,6 @@ export default function Player() {
     }
   }, [phase, startLoop])
 
-  /** открыть редактор: звук на паузу/сброс, иначе два звука разъедутся */
-  const openEditor = useCallback(() => {
-    window.clearInterval(countTimer.current)
-    if (phase === 'playing') togglePlay()
-    else if (phase === 'countdown') setPhase('ready')
-    origRef.current?.pause()
-    setEditorOpen(true)
-  }, [phase, togglePlay])
-
   /** переключить минус/плюс: сами дорожки не трогаем, тик-эффект переключит звук */
   const switchBacking = useCallback((b: 'minus' | 'full') => {
     if (b === backing) return
@@ -699,7 +684,6 @@ export default function Player() {
         micLive={withMic && (phase === 'playing' || phase === 'paused')}
         level={level}
         onBack={backToCatalog}
-        onEdit={openEditor}
       />
 
       {/* текст как в настоящем караоке: текущая строка крупно + 2 следующие */}

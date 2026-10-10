@@ -904,6 +904,7 @@ export default function Editor({ song, onClose, onSave, onReset, onSeek, resetSi
       return
     }
     const snapSkips = [...skips]
+    // Только текст+тайминг. Название/автор правятся в «Настройках караоке», а не здесь.
     void saveSongLyrics(song.id, song.language, segs, snapSkips)
       .then((where) => {
         onSave(segs, snapSkips)

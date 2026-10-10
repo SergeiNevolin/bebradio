@@ -5,6 +5,8 @@ import { fetchGeniusLines, getJob, uploadSong, type JobStatus } from '../lib/api
 interface Props {
   onClose: () => void
   onDone: (songId: string | null) => void
+  /** Имя загрузчика для отображения (display-only; права — по sub из JWT). */
+  ownerName?: string
 }
 
 type Phase = 'pick' | 'working' | 'done' | 'error'
@@ -25,7 +27,7 @@ const POLL_MS = 1200
 const POLL_RETRIES = 5
 const RESUME_KEY = 'karaoke:uploadJob'
 
-export default function Upload({ onClose, onDone }: Props) {
+export default function Upload({ onClose, onDone, ownerName }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [drag, setDrag] = useState(false)
   const [lang, setLang] = useState('ru')
@@ -142,7 +144,7 @@ export default function Upload({ onClose, onDone }: Props) {
     setError(null)
     setErrorKind('upload')
     try {
-      const jobId = await uploadSong(file, { lang }, { lyricsText, lyricsUrl })
+      const jobId = await uploadSong(file, { lang }, { lyricsText, lyricsUrl, ownerName })
       try {
         sessionStorage.setItem(RESUME_KEY, jobId)
       } catch {

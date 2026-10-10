@@ -6,13 +6,14 @@ import Shelf from '../../components/media/Shelf'
 import Hero from '../../components/media/Hero'
 import MediaCard from '../../components/media/MediaCard'
 import { monoGlyph, tintForId } from '../../lib/mashupArt'
-import { groupArtists, parseSong, rankSongs, totalPlays } from '../lib/artists'
+import { groupArtists, parseSong, rankSongs, songArtists, totalPlays } from '../lib/artists'
 import { apiAvailable, hasAuthToken, BASE } from '../lib/api'
 import { loadSong } from '../lib/songs'
 import { formatTime } from '../lib/songs'
 import { hasLocalLyrics, loadManifest, plural } from '../lib/songs'
 import { useKaraoke } from '../store'
 import { usePlayer } from '../../context/PlayerContext'
+import { useAuth } from '../../context/AuthContext'
 import type { SongMeta } from '../lib/types'
 import type { KaraokePreview } from '../../lib/karaokePreview'
 import Upload from './Upload'
@@ -41,9 +42,10 @@ function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number
   const fav = favorites.includes(song.id)
   const edited = hasLocalLyrics(song.id)
   const parsed = parseSong(song.title)
+  const artists = songArtists(song)
   const others = activeArtist
-    ? parsed.artists.filter((a) => a.toLowerCase() !== activeArtist.toLowerCase())
-    : parsed.artists
+    ? artists.filter((a) => a.toLowerCase() !== activeArtist.toLowerCase())
+    : artists
 
   // Превью как на главной: клик по треку открывает панель, петь — только «Петь».
   const preview = () => {
@@ -56,6 +58,8 @@ function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number
         duration: song.duration,
         audio: song.audio,
         original: song.original ?? null,
+        owner_id: song.owner_id ?? null,
+        owner_name: song.owner_name ?? null,
       })
     }
   }
@@ -145,6 +149,7 @@ export default function Catalog() {
   const [apiUp, setApiUp] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const setLoadingSong = useKaraoke((s) => s.setLoadingSong)
+  const editRequest = useKaraoke((s) => s.editRequest)
 
   // загрузка — только для вошедших: бэкенд жив + токен (или standalone без входа)
   const canUpload = apiUp && hasAuthToken()
@@ -152,6 +157,42 @@ export default function Catalog() {
   useEffect(() => {
     apiAvailable().then(setApiUp).catch(() => setApiUp(false))
   }, [])
+
+  // Заявка «Редактировать караоке» из превью: грузим песню, открываем плеер и редактор тайминга.
+  useEffect(() => {
+    if (!editRequest) return
+    if (songs.length === 0) return
+    const id = editRequest
+    const meta = songs.find((s) => s.id === id)
+    if (!meta) {
+      useKaraoke.getState().consumeEditRequest()
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const st = useKaraoke.getState()
+      st.setLoadingSong(true)
+      setRefreshError(null)
+      try {
+        const data = await loadSong(meta)
+        if (cancelled) return
+        const cur = useKaraoke.getState()
+        cur.pushRecent(meta.id)
+        cur.openSong(data)
+        cur.setEditorOpen(true)
+      } catch (e) {
+        console.error(e)
+        if (!cancelled) setRefreshError('Не открылась — проверьте файлы песни')
+      } finally {
+        const cur = useKaraoke.getState()
+        cur.consumeEditRequest()
+        if (!cancelled) cur.setLoadingSong(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [editRequest, songs])
 
   // Недавние в порядке проигрывания (сначала — последняя спетая).
   const recentOrdered = useMemo(() => {
@@ -221,6 +262,7 @@ export default function Catalog() {
   }
 
   const { setPreviewSong: setPreview, previewSong: currentPreview } = usePlayer()
+  const { user } = useAuth()
 
   // Превью как на главной: клик по карточке открывает панель, петь — только «Петь».
   const togglePreview = (s: SongMeta) => {
@@ -236,6 +278,8 @@ export default function Catalog() {
       duration: s.duration,
       audio: s.audio,
       original: s.original ?? null,
+      owner_id: s.owner_id ?? null,
+      owner_name: s.owner_name ?? null,
     }
     setPreview(preview)
   }
@@ -512,7 +556,7 @@ export default function Catalog() {
         </>
       )}
       {uploadOpen && (
-        <Upload onClose={() => setUploadOpen(false)} onDone={(id) => void refreshAndOpen(id)} />
+        <Upload onClose={() => setUploadOpen(false)} onDone={(id) => void refreshAndOpen(id)} ownerName={user?.username} />
       )}
     </div>
   )

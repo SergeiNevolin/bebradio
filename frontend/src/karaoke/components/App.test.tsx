@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
@@ -227,6 +227,25 @@ describe('Catalog: фаза 1 — полка, сортировка, язык, в
     expect(panel).toHaveTextContent('Тестовая песня')
   })
 
+  it('превью из каталога показывает овнера песни', async () => {
+    vi.stubGlobal(
+      'fetch',
+      (async (url: string) => {
+        const u = String(url)
+        const json = (data: unknown) => ({ ok: true, json: async () => data })
+        if (u.includes('/api/songs')) {
+          return json({ songs: [{ ...META, owner_id: 'u1', owner_name: 'Биба' }] })
+        }
+        throw new TypeError('offline')
+      }) as unknown as typeof fetch,
+    )
+    renderCatalog('/karaoke')
+    await screen.findByText('Петь')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Превью: Тестовая песня' })[0])
+    const panel = await screen.findByTestId('karaoke-preview-panel')
+    expect(panel).toHaveTextContent('Загрузил Биба')
+  })
+
   it('Спеть из панели на странице караоке открывает плеер сразу', async () => {
     renderCatalog('/karaoke')
     await screen.findByText('Петь')
@@ -360,6 +379,22 @@ describe('Catalog: исполнители и популярность', () => {
     expect(screen.getByRole('heading', { name: /Все песни/ }).textContent).toContain('1 песня')
     fireEvent.change(screen.getByLabelText('Найти песню'), { target: { value: 'zzz' } })
     expect(screen.getByRole('heading', { name: /Все песни/ }).textContent).toContain('0')
+  })
+
+  it('заявка из превью открывает песню и редактор', async () => {
+    renderCatalog('/karaoke')
+    await screen.findByText('Петь')
+    act(() => {
+      useKaraoke.getState().requestEdit('t')
+    })
+    await waitFor(() => {
+      expect(useKaraoke.getState().screen).toBe('player')
+      expect(useKaraoke.getState().editorOpen).toBe(true)
+    })
+    expect(useKaraoke.getState().editRequest).toBeNull()
+    await waitFor(() => {
+      expect(screen.getByText('Редактор тайминга')).toBeInTheDocument()
+    })
   })
 
   it('гость видит хиро с регистрацией', async () => {
