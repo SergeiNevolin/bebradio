@@ -49,7 +49,8 @@
   align-self: center;
 }
 
-.art img {
+.art img,
+.art video {
   display: block;
   width: 132px;
   height: 132px;
@@ -93,7 +94,8 @@
     gap: 16px;
   }
 
-  .art img {
+  .art img,
+  .art video {
     width: 96px;
     height: 96px;
     border-radius: 12px;

@@ -184,9 +184,9 @@ export const api = {
   },
 
   // ── Rooms ───────────────────────────────────────────────────────────
-  // GET /api/rooms → []map  (raw array, not { rooms: [] })
-  getRooms: () =>
-    request<Array<{ id: string; name: string; user_count: number; track_count: number; is_playing: boolean; has_password: boolean; auto_radio: boolean; is_stream: boolean }>>('/api/rooms'),
+  // GET /api/rooms → []map  (raw array, not { rooms: [] }); чанки ?limit=&offset=
+  getRooms: (limit = 50, offset = 0) =>
+    request<Array<{ id: string; name: string; user_count: number; track_count: number; is_playing: boolean; has_password: boolean; auto_radio: boolean; is_stream: boolean }>>(`/api/rooms?limit=${limit}&offset=${offset}`),
 
   // GET /api/rooms/recent → []map
   getRecentRooms: () =>

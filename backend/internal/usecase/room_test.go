@@ -398,7 +398,7 @@ func TestListPublicRooms(t *testing.T) {
 
 	uc.CreateRoom(ctx, "Public Room", "owner1", "", false)
 
-	rooms, err := uc.ListPublicRooms(ctx)
+	rooms, err := uc.ListPublicRooms(ctx, 50, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -423,7 +423,7 @@ func TestListPublicRoomsExposesAutoRadio(t *testing.T) {
 	roomRepo.Save(rm)
 	uc.CreateRoom(ctx, "Plain", "owner1", "", false)
 
-	rooms, err := uc.ListPublicRooms(ctx)
+	rooms, err := uc.ListPublicRooms(ctx, 50, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -458,9 +458,75 @@ func TestListPublicRoomsExcludesPrivate(t *testing.T) {
 	rm.IsPrivate = true
 	roomRepo.Save(rm)
 
-	rooms, _ := uc.ListPublicRooms(ctx)
+	rooms, _ := uc.ListPublicRooms(ctx, 50, 0)
 	if len(rooms) != 0 {
 		t.Errorf("expected 0 public rooms, got %d", len(rooms))
+	}
+}
+
+func TestListPublicRoomsLimitOffsetAndCounts(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
+	roomRepo := repository.NewMockRoomRepo()
+	userRepo := repository.NewMockUserRepo()
+	mediaClient := repository.NewMockMediaClient()
+	auth := repository.NewMockAuthBridge()
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
+
+	busy, _, _ := uc.CreateRoom(ctx, "Busy", "owner1", "", false)
+	quiet, _, _ := uc.CreateRoom(ctx, "Quiet", "owner1", "", false)
+	_, _, _ = uc.CreateRoom(ctx, "Locked", "owner1", "secret", false)
+
+	// Онлайн/очередь/игра одним пайплайном, а не поштучно.
+	rdb.HSet(ctx, redisc.RoomKey(busy.ID, "presence"), "c1", "{}", "c2", "{}")
+	rdb.RPush(ctx, redisc.RoomKey(busy.ID, "queue"), "{}", "{}")
+	rdb.HSet(ctx, redisc.RoomKey(busy.ID, "state"), "is_playing", "1")
+	rdb.HSet(ctx, redisc.RoomKey(quiet.ID, "presence"), "c1", "{}")
+
+	rooms, err := uc.ListPublicRooms(ctx, 2, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rooms) != 2 {
+		t.Fatalf("expected 2 rooms on first chunk, got %d", len(rooms))
+	}
+	// Сортировка по онлайну: Busy (2) первая.
+	if rooms[0]["name"] != "Busy" {
+		t.Errorf("expected Busy first, got %v", rooms[0]["name"])
+	}
+	if rooms[0]["user_count"] != 2 {
+		t.Errorf("expected user_count=2, got %v", rooms[0]["user_count"])
+	}
+	if rooms[0]["track_count"] != 2 {
+		t.Errorf("expected track_count=2, got %v", rooms[0]["track_count"])
+	}
+	if rooms[0]["is_playing"] != true {
+		t.Errorf("expected is_playing=true, got %v", rooms[0]["is_playing"])
+	}
+
+	// Второй чанк.
+	tail, err := uc.ListPublicRooms(ctx, 10, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tail) != 1 {
+		t.Fatalf("expected 1 room on second chunk, got %d", len(tail))
+	}
+
+	// has_password — из SQL/мока, без отдельного FindByID.
+	all, _ := uc.ListPublicRooms(ctx, 10, 0)
+	byName := map[string]map[string]any{}
+	for _, r := range all {
+		name, _ := r["name"].(string)
+		byName[name] = r
+	}
+	if byName["Locked"]["has_password"] != true {
+		t.Errorf("expected has_password=true for Locked, got %v", byName["Locked"]["has_password"])
+	}
+	if byName["Busy"]["has_password"] != false {
+		t.Errorf("expected has_password=false for Busy, got %v", byName["Busy"]["has_password"])
 	}
 }
 

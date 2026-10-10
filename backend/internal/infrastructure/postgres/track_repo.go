@@ -145,9 +145,9 @@ func (r *TrackRepo) List(query, sort string, limit, offset int, viewerID string)
 	return collectTracks(rows)
 }
 
-func (r *TrackRepo) ListByOwner(ownerID string) ([]*entity.Track, error) {
+func (r *TrackRepo) ListByOwner(ownerID string, limit, offset int) ([]*entity.Track, error) {
 	rows, err := r.pool.Query(context.Background(),
-		trackDetailSelect+` WHERE `+libraryFilter+` AND t.owner_id = $1 ORDER BY t.added_at DESC`, ownerID)
+		trackDetailSelect+` WHERE `+libraryFilter+` AND t.owner_id = $1 ORDER BY t.added_at DESC LIMIT $2 OFFSET $3`, ownerID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

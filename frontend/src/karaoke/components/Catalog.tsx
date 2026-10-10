@@ -26,7 +26,9 @@ function hueOf(s: string): number {
   return h
 }
 
-const HERO_CAT = <img src="/karaoke-cat.gif" alt="Поющий кот" />;
+const HERO_CAT = (
+  <video src="/karaoke-cat.mp4" width={498} height={498} autoPlay muted loop playsInline preload="metadata" aria-label="Поющий кот" />
+);
 
 function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number; activeArtist?: string }) {
   const openSong = useKaraoke((s) => s.openSong)
@@ -244,7 +246,7 @@ export default function Catalog() {
     }
     setLoadingSong(true)
     try {
-      const all = await loadManifest()
+      const all = await loadManifest(500)
       setSongs(all)
       const meta = all.find((s) => s.id === songId)
       if (!meta) {

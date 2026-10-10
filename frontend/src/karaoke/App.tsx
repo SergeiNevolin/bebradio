@@ -15,7 +15,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadManifest()
+    loadManifest(500)
       .then(setSongs)
       .catch((e: unknown) => setLoadError(e instanceof AuthRequiredError ? e.message : LOAD_FAILED))
   }, [setSongs])

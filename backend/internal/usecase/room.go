@@ -91,32 +91,50 @@ func (uc *RoomUsecase) CreateRoom(ctx context.Context, name, ownerID, password s
 	return rm, access, nil
 }
 
-func (uc *RoomUsecase) ListPublicRooms(ctx context.Context) ([]map[string]any, error) {
+func (uc *RoomUsecase) ListPublicRooms(ctx context.Context, limit, offset int) ([]map[string]any, error) {
 	dbRooms, err := uc.roomRepo.ListPublic()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, r := range dbRooms {
+	// Один пайплайн на все комнаты вместо 4*N последовательных RTT:
+	// HLen presence, LLen очереди (не вся очередь!) и HGet флага игры.
+	type roomCmds struct {
+		presence *redis.IntCmd
+		qlen     *redis.IntCmd
+		playing  *redis.StringCmd
+	}
+	pipe := uc.rdb.Pipeline()
+	cmds := make([]roomCmds, len(dbRooms))
+	for i, r := range dbRooms {
 		roomID, _ := r["id"].(string)
-		// Load presence count from Redis.
-		count, _ := redisc.GetPresenceCount(ctx, uc.rdb, roomID)
-		r["user_count"] = int(count)
-
-		// Load queue length from Redis.
-		tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
-		r["track_count"] = len(tracks)
-
-		// Load playback state from Redis.
-		ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
-		if ps != nil {
-			r["is_playing"] = ps.IsPlaying
+		cmds[i] = roomCmds{
+			presence: pipe.HLen(ctx, redisc.RoomKey(roomID, "presence")),
+			qlen:     pipe.LLen(ctx, redisc.RoomKey(roomID, "queue")),
+			playing:  pipe.HGet(ctx, redisc.RoomKey(roomID, "state"), "is_playing"),
 		}
+	}
+	// Ошибки отдельных команд разбираем ниже с дефолтами; падение всего
+	// Redis даёт нули, а не 500 — как раньше при поштучных вызовах.
+	_, _ = pipe.Exec(ctx)
 
-		rm, err := uc.roomRepo.FindByID(roomID)
-		if err == nil {
-			r["has_password"] = rm.PasswordHash != nil
+	for i, r := range dbRooms {
+		if n, err := cmds[i].presence.Result(); err == nil {
+			r["user_count"] = int(n)
+		} else {
+			r["user_count"] = 0
 		}
+		if n, err := cmds[i].qlen.Result(); err == nil {
+			r["track_count"] = int(n)
+		} else {
+			r["track_count"] = 0
+		}
+		if v, err := cmds[i].playing.Result(); err == nil {
+			r["is_playing"] = v == "1"
+		} else {
+			r["is_playing"] = false
+		}
+		// has_password уже пришёл из SQL — отдельный FindByID больше не нужен.
 	}
 
 	sort.Slice(dbRooms, func(i, j int) bool {
@@ -124,6 +142,18 @@ func (uc *RoomUsecase) ListPublicRooms(ctx context.Context) ([]map[string]any, e
 		b, _ := dbRooms[j]["user_count"].(int)
 		return a > b
 	})
+
+	// Чанки: режем уже отсортированный по онлайну список.
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(dbRooms) {
+		return []map[string]any{}, nil
+	}
+	dbRooms = dbRooms[offset:]
+	if limit >= 0 && len(dbRooms) > limit {
+		dbRooms = dbRooms[:limit]
+	}
 
 	return dbRooms, nil
 }

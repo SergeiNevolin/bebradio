@@ -66,7 +66,7 @@ export default function Home() {
 
   useEffect(() => {
     let alive = true
-    fetch('/api/karaoke/api/songs')
+    fetch('/api/karaoke/api/songs?limit=28')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (alive && Array.isArray(data?.songs)) setKaraokeSongs(data.songs)
@@ -181,7 +181,7 @@ export default function Home() {
           ) : undefined
         }
       >
-        {topTracks.map((track) => {
+        {topTracks.map((track, i) => {
           const view = applyLike(track)
           const active = view.id === player.current?.id
           const playing = active && player.isPlaying
@@ -189,6 +189,7 @@ export default function Home() {
             <MediaCard
               asButton
               key={track.id}
+              eager={i < 4}
               title={view.title}
               meta={
                 <span className={styles.shelfMetaSpread}>

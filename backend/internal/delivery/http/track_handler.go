@@ -117,7 +117,15 @@ func (s *Server) handleMyTracks(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, 401, "Not authenticated")
 		return
 	}
-	items, err := s.tracks.ListMine(userID)
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 100)
+	offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	items, err := s.tracks.ListMine(userID, limit, offset)
 	if err != nil {
 		s.log.Error("list my tracks failed", "error", err, "user_id", userID)
 		s.writeError(w, 500, "Failed to list tracks")

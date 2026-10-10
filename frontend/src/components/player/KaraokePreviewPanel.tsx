@@ -4,8 +4,7 @@ import { usePlayer, isOnKaraoke } from '../../context/PlayerContext'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useKaraoke } from '../../karaoke/store'
-import { loadSong, saveSongMeta } from '../../karaoke/lib/songs'
-import { deleteSong } from '../../karaoke/lib/api'
+import { deleteSong, saveSongMeta } from '../../karaoke/lib/api'
 import { karaokePreviewTrack } from '../../lib/karaokePreview'
 import { tintForId } from '../../lib/mashupArt'
 import EditKaraokeModal from '../karaoke/EditKaraokeModal'
@@ -94,6 +93,8 @@ export default function KaraokePreviewPanel() {
     if (!meta) return
     st.setLoadingSong(true)
     try {
+      // Тяжёлый код пения (pitchy/fft) — отдельным чанком, только по клику «Спеть».
+      const { loadSong } = await import('../../karaoke/lib/songs')
       const data = await loadSong(meta)
       const cur = useKaraoke.getState()
       cur.pushRecent(meta.id)

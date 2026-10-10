@@ -33,6 +33,25 @@ function NotFound() {
   )
 }
 
+/** Скелетон ленивой страницы: держит layout без прыжков, пока едет чанк. */
+function PageSkeleton() {
+  return (
+    <div className="w-full animate-pulse px-10 pb-16 pt-4 max-sm:px-3.5" aria-hidden="true">
+      <div className="mb-6 h-8 w-56 rounded-xl bg-surface-hover" />
+      <div className="mb-3 h-4 w-full max-w-xl rounded-lg bg-surface-hover" />
+      <div className="mb-8 h-4 w-2/3 max-w-lg rounded-lg bg-surface-hover" />
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(144px, 1fr))' }}>
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i}>
+            <div className="mb-2 aspect-square w-full rounded-xl bg-surface-hover" />
+            <div className="h-3.5 w-3/4 rounded bg-surface-hover" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const SIDEBAR_RAIL_KEY = 'sidebar-rail'
 
 export default function App() {
@@ -100,7 +119,7 @@ export default function App() {
               onNavigate={() => setDrawer(false)}
             />
             <div className="app">
-            <Suspense fallback={<div className="loading">Loading...</div>}>
+            <Suspense fallback={<PageSkeleton />}>
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />

@@ -76,7 +76,7 @@ export default function ProfileCard({ userId, onNavigate }: ProfileCardProps) {
     <div className={styles.profileCard}>
       <div className={styles.profileAvatar}>
         {profile.avatar_url ? (
-          <img src={profile.avatar_url} alt={profile.username} />
+          <img src={profile.avatar_url} alt={profile.username} loading="lazy" decoding="async" width={96} height={96} />
         ) : (
           <div className={styles.profileAvatarPlaceholder}>
             {profile.username[0].toUpperCase()}

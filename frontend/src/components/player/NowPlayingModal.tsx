@@ -30,7 +30,7 @@ const REPEAT_LABEL = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' }
 
 function Art({ mashup, className }: { mashup: Track; className: string }) {
   if (mashup.thumbnail) {
-    return <img className={className} src={mashup.thumbnail} alt="" />
+    return <img className={className} src={mashup.thumbnail} alt="" loading="lazy" decoding="async" />
   }
   return (
     <div className={className} style={{ background: tintForId(mashup.id) }}>

@@ -51,8 +51,8 @@ func (uc *TrackUsecase) List(query, sort string, limit, offset int, viewerID str
 	return toDicts(items), nil
 }
 
-func (uc *TrackUsecase) ListMine(ownerID string) ([]map[string]any, error) {
-	items, err := uc.repo.ListByOwner(ownerID)
+func (uc *TrackUsecase) ListMine(ownerID string, limit, offset int) ([]map[string]any, error) {
+	items, err := uc.repo.ListByOwner(ownerID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

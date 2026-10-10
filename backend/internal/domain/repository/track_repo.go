@@ -22,7 +22,7 @@ type TrackRepository interface {
 	// "top" = most liked first), paginated. viewerID drives the per-row
 	// liked flag.
 	List(query, sort string, limit, offset int, viewerID string) ([]*entity.Track, error)
-	ListByOwner(ownerID string) ([]*entity.Track, error)
+	ListByOwner(ownerID string, limit, offset int) ([]*entity.Track, error)
 	ListLikedByUser(userID string, limit, offset int) ([]*entity.Track, error)
 	CountByOwner(ownerID string) (int, error)
 	ListProcessing() ([]*entity.Track, error)

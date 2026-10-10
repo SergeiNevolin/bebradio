@@ -163,6 +163,8 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`,
 		// 009: stream rooms
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_stream BOOLEAN NOT NULL DEFAULT FALSE`,
+		// 010: индекс под список публичных комнат (WHERE is_private + ORDER BY created_at)
+		`CREATE INDEX IF NOT EXISTS idx_rooms_public_created ON rooms (is_private, created_at DESC)`,
 	}
 
 	for _, m := range migrations {

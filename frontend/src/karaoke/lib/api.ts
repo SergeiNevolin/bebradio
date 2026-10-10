@@ -113,9 +113,9 @@ export async function apiFetch(url: string, init?: RequestInit, ms = 15_000): Pr
 }
 
 /** каталог: сначала пробуем API бэкенда, иначе статический manifest */
-export async function fetchManifest(): Promise<SongMeta[]> {
+export async function fetchManifest(limit = 200): Promise<SongMeta[]> {
   try {
-    const r = await apiFetch('/api/songs')
+    const r = await apiFetch(`/api/songs?limit=${limit}`)
     if (r.status === 401) throw new AuthRequiredError(AUTH_REQUIRED)
     if (r.ok) {
       const data = (await r.json()) as Manifest
@@ -191,6 +191,20 @@ export async function fetchGeniusLines(url: string): Promise<string[]> {
 /** удалить песню целиком (только владелец; 404 — нет песни) */
 export async function deleteSong(id: string): Promise<void> {
   const r = await apiFetch(`/api/songs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (r.status === 401) throw new AuthRequiredError(AUTH_REQUIRED)
+  if (!r.ok) throw new Error(await errorBody(r))
+}
+
+/** Название и автор — отдельным контрактом PUT /meta (только владелец). */
+export async function saveSongMeta(
+  id: string,
+  meta: { title: string; artist: string | null },
+): Promise<void> {
+  const r = await apiFetch(`/api/songs/${encodeURIComponent(id)}/meta`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(meta),
+  })
   if (r.status === 401) throw new AuthRequiredError(AUTH_REQUIRED)
   if (!r.ok) throw new Error(await errorBody(r))
 }

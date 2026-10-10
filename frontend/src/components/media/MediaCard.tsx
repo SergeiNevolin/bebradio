@@ -38,6 +38,11 @@ interface MediaCardProps {
   asButton?: boolean
   /** md — крупные 176px, sm — стандарт 144px для всех полок. */
   size?: 'md' | 'sm'
+  /**
+   * true — карточка в первом видимом ряду (LCP-кандидат): грузим eager
+   * с высоким приоритетом, а не lazy. Для остальных — lazy по умолчанию.
+   */
+  eager?: boolean
 }
 
 /**
@@ -65,6 +70,7 @@ export default function MediaCard({
   pressed,
   asButton = false,
   size = 'sm',
+  eager = false,
 }: MediaCardProps) {
   const cls = `${styles.card}${size === 'sm' ? ` ${styles.cardSm}` : ''}${active ? ` ${styles.cardOn}` : ''}${disabled ? '' : ` ${styles.cardClickable}`}`
   const roundCls = shape === 'round' ? ` ${styles.coverRound}` : ''
@@ -72,7 +78,7 @@ export default function MediaCard({
   const coverInner = (
     <>
       {coverUrl ? (
-        <img className={styles.img} src={coverUrl} alt="" />
+        <img className={styles.img} src={coverUrl} alt="" loading={eager ? 'eager' : 'lazy'} decoding="async" fetchPriority={eager ? 'high' : 'auto'} width={144} height={144} />
       ) : (
         <span className={styles.glyph} aria-hidden="true">
           {glyph}

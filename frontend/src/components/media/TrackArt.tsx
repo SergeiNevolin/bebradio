@@ -30,6 +30,8 @@ function TrackArt({ id, title, thumbnail, size, height, radius = 6, className }:
       <img
         src={thumbnail}
         alt=""
+        loading="lazy"
+        decoding="async"
         width={size}
         height={h}
         style={{ borderRadius: radius }}

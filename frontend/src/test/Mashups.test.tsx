@@ -198,7 +198,7 @@ describe('Mashups page', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Play Alpha Bootleg' })[0])
 
     fireEvent.click(await screen.findByRole('button', { name: 'Expand player' }))
-    expect(screen.getByRole('dialog', { name: 'Now playing' })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Now playing' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse player' }))
     expect(screen.queryByRole('dialog', { name: 'Now playing' })).not.toBeInTheDocument()
@@ -213,7 +213,8 @@ describe('Mashups page', () => {
     expect(panel()).toHaveLength(0)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Queue' }))
-    expect(panel()).toHaveLength(1)
+    // Оверлей ленивый — чанк подгружается асинхронно.
+    await waitFor(() => expect(panel()).toHaveLength(1))
     // Панель знает о видимой плашке и резервирует место под неё.
     expect(panel()[0].className).toMatch(/withPlayer/)
 

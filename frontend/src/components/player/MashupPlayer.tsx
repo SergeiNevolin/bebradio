@@ -76,7 +76,7 @@ export default function MashupPlayer({
           {/* ── left: now-playing meta ─────────────────────────────── */}
           <div className={styles.meta}>
             {current.thumbnail ? (
-              <img className={styles.cover} src={current.thumbnail} alt="" />
+              <img className={styles.cover} src={current.thumbnail} alt="" loading="lazy" decoding="async" width={54} height={54} />
             ) : (
               <div className={styles.cover} style={{ background: tintForId(current.id) }}>
                 <span className={styles.glyph} aria-hidden="true">{monoGlyph(current.title)}</span>

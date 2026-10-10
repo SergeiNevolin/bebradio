@@ -17,7 +17,7 @@ export default function Rooms() {
 
   const fetchRooms = async () => {
     try {
-      const rooms = await api.getRooms()
+      const rooms = await api.getRooms(100)
       setRooms(rooms)
     } catch { /* ignore */ }
     setRoomsLoading(false)

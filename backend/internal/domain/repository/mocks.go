@@ -143,6 +143,7 @@ func (m *MockRoomRepo) ListPublic() ([]map[string]any, error) {
 				"name":       r.Name,
 				"auto_radio": r.AutoRadio,
 				"is_stream":  r.IsStream,
+				"has_password": r.PasswordHash != nil,
 			})
 		}
 	}
@@ -368,7 +369,7 @@ func (m *MockTrackRepo) List(query, sort string, limit, offset int, viewerID str
 	return out, nil
 }
 
-func (m *MockTrackRepo) ListByOwner(ownerID string) ([]*entity.Track, error) {
+func (m *MockTrackRepo) ListByOwner(ownerID string, limit, offset int) ([]*entity.Track, error) {
 	out := make([]*entity.Track, 0)
 	for id, v := range m.Items {
 		if v.OwnerID == ownerID {
@@ -376,6 +377,16 @@ func (m *MockTrackRepo) ListByOwner(ownerID string) ([]*entity.Track, error) {
 			cp.Liked = m.liked(id, ownerID)
 			out = append(out, &cp)
 		}
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(out) {
+		return []*entity.Track{}, nil
+	}
+	out = out[offset:]
+	if limit >= 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }

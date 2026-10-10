@@ -102,7 +102,7 @@ describe('Rooms page', () => {
 
   it('prompts for a password when opening a locked room card, then joins', async () => {
     mockFetch((url) => {
-      if (url === '/api/rooms') return rooms
+      if (url.startsWith('/api/rooms?')) return rooms
       if (url === '/api/rooms/BBB222') {
         return { id: 'BBB222', name: 'Closed', locked: true, has_password: true }
       }
@@ -136,7 +136,7 @@ describe('Rooms page', () => {
     mockUser = { id: 'u1', username: 'alice' }
     mockFetch((url) => {
       if (url === '/api/rooms/recent') return [rooms[0]]
-      if (url === '/api/rooms') return rooms
+      if (url.startsWith('/api/rooms?')) return rooms
       return []
     })
     render(<MemoryRouter><Rooms /></MemoryRouter>)

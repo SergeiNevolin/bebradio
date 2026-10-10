@@ -62,9 +62,9 @@ const karaokeSongs = [
 
 function mockHomeApis(roomList = rooms, songList: unknown[] = karaokeSongs) {
   mockFetch((url) => {
-    if (url === '/api/rooms') return roomList
+    if (url.startsWith('/api/rooms')) return roomList
     if (url.startsWith('/api/tracks/')) return tracks
-    if (url === '/api/karaoke/api/songs') return { songs: songList }
+    if (url.startsWith('/api/karaoke/api/songs')) return { songs: songList }
     return []
   })
 }
@@ -225,7 +225,8 @@ describe('Home', () => {
     await screen.findByRole('button', { name: 'Expand player' })
     expect(screen.queryByRole('complementary', { name: 'Now playing' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Queue' }))
-    expect(screen.getByRole('complementary', { name: 'Now playing' })).toBeInTheDocument()
+    // Панель очереди ленивая — ждём подгрузку чанка.
+    expect(await screen.findByRole('complementary', { name: 'Now playing' })).toBeInTheDocument()
   })
 
   it('keeps the player on the karaoke page and hides only while a karaoke song sings', async () => {

@@ -1,12 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { Suspense, lazy, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { usePlayer, isPlayerHiddenPath, isOnKaraoke } from '../../context/PlayerContext'
 import { useKaraoke } from '../../karaoke/store'
 import MashupPlayer from './MashupPlayer'
-import NowPlayingPanel from './NowPlayingPanel'
-import NowPlayingModal from './NowPlayingModal'
-import KaraokePreviewPanel from './KaraokePreviewPanel'
-import ProfileModal from '../ProfileModal'
+
+// Оверлеи открываются только по действию (превью/очередь/разворот/профиль) —
+// ленивые чанки, чтобы не парсить их на первой загрузке.
+const KaraokePreviewPanel = lazy(() => import('./KaraokePreviewPanel'))
+const NowPlayingPanel = lazy(() => import('./NowPlayingPanel'))
+const NowPlayingModal = lazy(() => import('./NowPlayingModal'))
+const ProfileModal = lazy(() => import('../ProfileModal'))
 
 /**
  * Стыковка правой панели: пока видна очередь или превью, страница ужимается
@@ -49,7 +52,7 @@ export function GlobalPlayerBar() {
   if (isPlayerHiddenPath(location.pathname) || singingKaraoke) {
     // В комнате свой эфир и своя плашка; в караоке поёт минус. UI плеера
     // прячем, но <audio> держим смонтированным, чтобы не рвать состояние.
-    return <audio ref={player.audioRef} preload="auto" />
+    return <audio ref={player.audioRef} preload="none" />
   }
   // У превью караоке нет библиотечного трека — лайкать нечего.
   const likeHandler =
@@ -124,7 +127,7 @@ export function GlobalPlayerOverlays() {
         }
 
   return (
-    <>
+    <Suspense fallback={null}>
       {previewSong && !playerHidden && <KaraokePreviewPanel />}
 
       {queueOpen && !playerHidden && !previewSong && (
@@ -153,6 +156,6 @@ export function GlobalPlayerOverlays() {
       {profileUserId && (
         <ProfileModal userId={profileUserId} onClose={() => setProfileUserId(null)} />
       )}
-    </>
+    </Suspense>
   )
 }

@@ -6,6 +6,8 @@ type RoomRepository interface {
 	Save(room *entity.Room) error
 	FindByID(id string) (*entity.Room, error)
 	Delete(id string) error
+	// ListPublic возвращает все публичные комнаты (сырые строки каталога).
+	// Пагинацию делает usecase после сортировки по онлайну.
 	ListPublic() ([]map[string]any, error)
 	SaveTracks(room *entity.Room) error
 	SaveTracksFromSlice(roomID string, tracks []*entity.Track) error

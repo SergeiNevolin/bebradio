@@ -60,7 +60,18 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListRooms(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	rooms, err := s.room.ListPublicRooms(ctx)
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 50)
+	offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+	if limit < 0 {
+		limit = 0
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rooms, err := s.room.ListPublicRooms(ctx, limit, offset)
 	if err != nil {
 		s.log.Error("list rooms failed", "error", err)
 		s.writeError(w, 500, "Failed to list rooms")

@@ -18,7 +18,7 @@ afterEach(() => {
 describe('fetchManifest', () => {
   it('берёт каталог из API', async () => {
     const songs = [{ id: 'a' }]
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => json(url === '/api/songs' ? { songs } : {})))
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => json(String(url).startsWith('/api/songs') ? { songs } : {})))
     expect(await fetchManifest()).toEqual(songs)
   })
 
@@ -34,7 +34,7 @@ describe('fetchManifest', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
-        if (url === '/api/songs') throw new Error('down')
+        if (String(url).startsWith('/api/songs')) throw new Error('down')
         return json({ songs })
       }),
     )
@@ -45,7 +45,7 @@ describe('fetchManifest', () => {
     const songs = [{ id: 'c' }]
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) => (url === '/api/songs' ? json({ nope: 1 }) : json({ songs }))),
+      vi.fn(async (url: string) => (String(url).startsWith('/api/songs') ? json({ nope: 1 }) : json({ songs }))),
     )
     expect(await fetchManifest()).toEqual(songs)
   })
@@ -166,7 +166,7 @@ describe('префикс и вход', () => {
     const fetch = vi.fn(async (_url: string, _init?: RequestInit) => json({ songs: [] }))
     vi.stubGlobal('fetch', fetch)
     await api.fetchManifest()
-    expect(fetch.mock.calls[0][0]).toBe('/karaoke/api/songs')
+    expect(fetch.mock.calls[0][0]).toBe('/karaoke/api/songs?limit=200')
   })
 
   it('слэш на конце префикса не плодит двойной', async () => {
@@ -174,7 +174,15 @@ describe('префикс и вход', () => {
     const fetch = vi.fn(async (_url: string, _init?: RequestInit) => json({ songs: [] }))
     vi.stubGlobal('fetch', fetch)
     await api.fetchManifest()
-    expect(fetch.mock.calls[0][0]).toBe('/karaoke/api/songs')
+    expect(fetch.mock.calls[0][0]).toBe('/karaoke/api/songs?limit=200')
+  })
+
+  it('лимит пробрасывается в запрос', async () => {
+    const api = await freshApi({ VITE_API_BASE: '/karaoke/' })
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) => json({ songs: [] }))
+    vi.stubGlobal('fetch', fetch)
+    await api.fetchManifest(28)
+    expect(fetch.mock.calls[0][0]).toBe('/karaoke/api/songs?limit=28')
   })
 
   it('Bearer из localStorage при заданном ключе', async () => {

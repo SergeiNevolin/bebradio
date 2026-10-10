@@ -1,5 +1,5 @@
 import type { PitchTrack, Segment, SkipRange, SongData, SongMeta, WaveformData, Word } from './types'
-import { AUTH_REQUIRED, AuthRequiredError, apiFetch, assetUrl, errorBody, fetchManifest } from './api'
+import { AUTH_REQUIRED, AuthRequiredError, apiFetch, assetUrl, fetchManifest } from './api'
 import { displayPitchTrack, gatePitchToSegments, quantizePitchTrack } from './pitch'
 import { evenWords } from './wordModel'
 
@@ -9,9 +9,9 @@ async function getJSON<T>(url: string): Promise<T> {
   return (await r.json()) as T
 }
 
-export async function loadManifest(): Promise<SongMeta[]> {
+export async function loadManifest(limit = 200): Promise<SongMeta[]> {
   try {
-    return await fetchManifest()
+    return await fetchManifest(limit)
   } catch (e) {
     if (e instanceof AuthRequiredError) throw e
     return []
@@ -78,20 +78,6 @@ export async function saveSongLyrics(
   saveLocalLyrics(id, language, segments)
   saveLocalSkips(id, skips)
   return 'local'
-}
-
-/** Название и автор — отдельным контрактом PUT /meta (только владелец). */
-export async function saveSongMeta(
-  id: string,
-  meta: { title: string; artist: string | null },
-): Promise<void> {
-  const r = await apiFetch(`/api/songs/${encodeURIComponent(id)}/meta`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(meta),
-  })
-  if (r.status === 401) throw new AuthRequiredError(AUTH_REQUIRED)
-  if (!r.ok) throw new Error(await errorBody(r))
 }
 
 export function clearLocalLyrics(id: string): void {

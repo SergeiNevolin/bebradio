@@ -68,7 +68,7 @@ export default function EditMashupModal({
         <div className="modal-body">
           <div className={styles.summary}>
             {mashup.thumbnail ? (
-              <img className={styles.cover} src={mashup.thumbnail} alt="" />
+              <img className={styles.cover} src={mashup.thumbnail} alt="" loading="lazy" decoding="async" width={64} height={64} />
             ) : (
               <div className={styles.cover} style={{ background: tintForId(mashup.id) }}>
                 <span className={styles.glyph} aria-hidden="true">{monoGlyph(mashup.title)}</span>

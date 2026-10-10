@@ -78,7 +78,7 @@ export function TrackRow({
         ) : (
           <>
             {artUrl ? (
-              <img className={styles.img} src={artUrl} alt="" />
+              <img className={styles.img} src={artUrl} alt="" loading="lazy" decoding="async" width={44} height={44} />
             ) : (
               <span className={styles.glyph} aria-hidden="true">
                 {glyph}
