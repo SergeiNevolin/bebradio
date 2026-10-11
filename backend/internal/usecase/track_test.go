@@ -48,15 +48,23 @@ func TestTrackCreateSuccess(t *testing.T) {
 	}
 }
 
-func TestTrackCreateQuotaExceeded(t *testing.T) {
-	uc, repo, _ := newTrackUC(t)
-	for i := 0; i < 3; i++ {
+func TestTrackCreateNoQuota(t *testing.T) {
+	uc, repo, media := newTrackUC(t)
+	media.UploadTrackFn = func(filename string, body io.Reader) (map[string]any, error) {
+		io.Copy(io.Discard, body)
+		return map[string]any{"id": "t9", "media_id": "m9", "status": "processing"}, nil
+	}
+	for i := 0; i < 10; i++ {
 		repo.Create(&entity.Track{ID: string(rune('a' + i)), OwnerID: "owner1"})
 	}
 
-	_, err := uc.Create("owner1", "x", "", "x.mp3", strings.NewReader("d"))
-	if !errors.Is(err, ErrTrackQuota) {
-		t.Fatalf("expected ErrTrackQuota, got %v", err)
+	// Квоты больше нет: и 11-й трек создаётся.
+	m, err := uc.Create("owner1", "x", "", "x.mp3", strings.NewReader("d"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m.ID != "t9" {
+		t.Errorf("expected t9, got %q", m.ID)
 	}
 }
 

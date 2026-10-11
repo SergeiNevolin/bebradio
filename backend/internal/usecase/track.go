@@ -13,7 +13,6 @@ import (
 )
 
 var (
-	ErrTrackQuota      = &BusinessError{Code: 409, Message: "Upload quota reached, delete an old track first"}
 	ErrTrackNotFound   = &BusinessError{Code: 404, Message: "Track not found"}
 	ErrTrackNotOwner   = &BusinessError{Code: 403, Message: "You can only modify your own tracks"}
 	ErrTrackUploadFail = &BusinessError{Code: 502, Message: "music service could not accept the upload"}
@@ -157,14 +156,7 @@ func (uc *TrackUsecase) SetCover(trackID, userID, filename string, body io.Reade
 // the row starts "processing" and the poller flips it once music-service
 // transcodes. The cover is best-effort: a failed cover never fails the import.
 func (uc *TrackUsecase) Import(ownerID, title, artist, filename string, audio io.Reader, coverName string, cover io.Reader) (*entity.Track, error) {
-	count, err := uc.repo.CountByOwner(ownerID)
-	if err != nil {
-		return nil, err
-	}
-	if count >= uc.config.MashupUserQuota {
-		return nil, ErrTrackQuota
-	}
-
+	// Без квоты: число треков на юзера не ограничено.
 	res, err := uc.mediaClient.UploadTrack(filename, audio)
 	if err != nil {
 		uc.log.Error("track import to music service failed", "error", err)
@@ -196,19 +188,10 @@ func (uc *TrackUsecase) Import(ownerID, title, artist, filename string, audio io
 	return m, nil
 }
 
-// Create enforces the per-user quota, streams the file to music-service —
-// which mints the track id and the media id along with the data — then
-// inserts the processing row and starts a poller that flips it to
-// ready/failed.
+// Create streams the file to music-service — which mints the track id and
+// the media id along with the data — then inserts the processing row and
+// starts a poller that flips it to ready/failed. Без квоты и лимита размера.
 func (uc *TrackUsecase) Create(ownerID, title, artist, filename string, body io.Reader) (*entity.Track, error) {
-	count, err := uc.repo.CountByOwner(ownerID)
-	if err != nil {
-		return nil, err
-	}
-	if count >= uc.config.MashupUserQuota {
-		return nil, ErrTrackQuota
-	}
-
 	res, err := uc.mediaClient.UploadTrack(filename, body)
 	if err != nil {
 		uc.log.Error("track upload to music service failed", "error", err)

@@ -151,12 +151,6 @@ func (s *Server) handleUploadTrackCover(w http.ResponseWriter, r *http.Request) 
 		s.writeError(w, 401, "Not authenticated")
 		return
 	}
-	admin, _ := s.isAdmin(userID)
-	if !admin && !s.uploadLimiter.Allow(userID) {
-		w.Header().Set("Retry-After", "3600")
-		s.writeError(w, 429, "Upload rate limit reached, try again later")
-		return
-	}
 
 	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(2 * time.Minute))
 	r.Body = http.MaxBytesReader(w, r.Body, s.config.MashupCoverMaxSize+(4<<10))
@@ -228,12 +222,6 @@ func (s *Server) handleUploadTrack(w http.ResponseWriter, r *http.Request) {
 	userID, ok := s.getUserRequired(r)
 	if !ok {
 		s.writeError(w, 401, "Not authenticated")
-		return
-	}
-	admin, _ := s.isAdmin(userID)
-	if !admin && !s.uploadLimiter.Allow(userID) {
-		w.Header().Set("Retry-After", "3600")
-		s.writeError(w, 429, "Upload rate limit reached, try again later")
 		return
 	}
 

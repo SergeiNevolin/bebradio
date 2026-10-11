@@ -9,7 +9,6 @@ import (
 
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/delivery/ws"
-	"github.com/bebradio/backend-go/internal/pkg/ratelimit"
 	"github.com/bebradio/backend-go/internal/usecase"
 	authsvc "github.com/bebradio/backend-go/internal/infrastructure/auth"
 	"github.com/go-chi/chi/v5"
@@ -31,7 +30,6 @@ type Server struct {
 	manager       *ws.ConnectionManager
 	rdb           *redis.Client
 	refresh       *authsvc.RefreshStore
-	uploadLimiter *ratelimit.SlidingWindowLimiter
 	// addMu serializes the check-and-append critical section of handleAddToQueue
 	// (duplicate check + RPush must be atomic, otherwise a double-click adds
 	// the same track twice and the "extra" copy later plays as if resurrected).
@@ -52,25 +50,20 @@ func NewServer(
 	manager *ws.ConnectionManager,
 	rdb *redis.Client,
 ) *Server {
-	uploadLimit := config.RateLimitUpload
-	if uploadLimit <= 0 {
-		uploadLimit = 5
-	}
 	s := &Server{
-		Router:        chi.NewRouter(),
-		config:        config,
-		log:           log,
-		auth:          auth,
-		room:          room,
-		user:          user,
-		search:        search,
-		media:         media,
-		playback:      playback,
-		tracks:        tracks,
-		manager:       manager,
-		rdb:           rdb,
-		refresh:       authsvc.NewRefreshStore(rdb, config.JWTRefreshDays),
-		uploadLimiter: ratelimit.New(uploadLimit, 3600),
+		Router:   chi.NewRouter(),
+		config:   config,
+		log:      log,
+		auth:     auth,
+		room:     room,
+		user:     user,
+		search:   search,
+		media:    media,
+		playback: playback,
+		tracks:   tracks,
+		manager:  manager,
+		rdb:      rdb,
+		refresh:  authsvc.NewRefreshStore(rdb, config.JWTRefreshDays),
 	}
 	s.setupRoutes()
 	return s

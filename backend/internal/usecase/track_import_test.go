@@ -91,15 +91,15 @@ func TestTrackImportWithoutCover(t *testing.T) {
 	}
 }
 
-func TestTrackImportQuotaExceeded(t *testing.T) {
+func TestTrackImportNoQuota(t *testing.T) {
 	uc, _, _ := newTrackUC(t)
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 10; i++ {
 		_ = uc.repo.Create(&entity.Track{ID: string(rune('a' + i)), OwnerID: "admin1"})
 	}
 
-	_, err := uc.Import("admin1", "x", "", "x.m4a", strings.NewReader("d"), "", nil)
-	if !errors.Is(err, ErrTrackQuota) {
-		t.Fatalf("expected ErrTrackQuota, got %v", err)
+	// Квоты больше нет: импорт проходит при любом числе треков.
+	if _, err := uc.Import("admin1", "x", "", "x.m4a", strings.NewReader("d"), "", nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
