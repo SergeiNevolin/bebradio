@@ -103,11 +103,11 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access, userID s
 		case "reaction":
 			h.handleReaction(ctx, rm, conn, msg, roomID)
 		case "next":
-			h.handleNext(ctx, rm, roomID)
+			h.handleNext(ctx, rm, conn, roomID)
 		case "prev":
-			h.handlePrev(ctx, roomID)
+			h.handlePrev(ctx, rm, conn, roomID)
 		case "jump":
-			h.handleJump(ctx, msg, roomID)
+			h.handleJump(ctx, rm, conn, msg, roomID)
 		case "seek", "sync":
 			h.handleSeek(ctx, msg, roomID)
 		case "chat":
@@ -124,6 +124,9 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access, userID s
 
 		if h.radio.NeedsRefill(ctx, roomID, rm.AutoRadio) {
 			go h.backgroundRefill(ctx, rm, roomID)
+		}
+		if rm.IsStream && h.radio.NeedsMashupRefill(ctx, roomID, rm) {
+			go h.backgroundMashupRefill(ctx, rm, roomID)
 		}
 	}
 }
@@ -168,7 +171,13 @@ func (h *Handler) handleReaction(ctx context.Context, rm *entity.Room, conn *web
 	})
 }
 
-func (h *Handler) handleNext(ctx context.Context, rm *entity.Room, roomID string) {
+func (h *Handler) handleNext(ctx context.Context, rm *entity.Room, conn *websocket.Conn, roomID string) {
+	// Streams are admin-driven: listeners must not skip tracks manually.
+	// Auto-advance (client onEnded at track end + server tick) still works:
+	// the tick bypasses this gate.
+	if rm.IsStream && !h.room.IsStreamController(rm, h.manager.GetUserID(roomID, conn)) {
+		return
+	}
 	changed := h.playback.GoNext(ctx, roomID)
 	if changed {
 		h.media.EnsureRoomMedia(ctx, roomID)
@@ -178,11 +187,17 @@ func (h *Handler) handleNext(ctx context.Context, rm *entity.Room, roomID string
 	}
 }
 
-func (h *Handler) handlePrev(ctx context.Context, roomID string) {
+func (h *Handler) handlePrev(ctx context.Context, rm *entity.Room, conn *websocket.Conn, roomID string) {
+	if rm.IsStream && !h.room.IsStreamController(rm, h.manager.GetUserID(roomID, conn)) {
+		return
+	}
 	h.playback.GoPrev(ctx, roomID)
 }
 
-func (h *Handler) handleJump(ctx context.Context, msg map[string]any, roomID string) {
+func (h *Handler) handleJump(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
+	if rm.IsStream && !h.room.IsStreamController(rm, h.manager.GetUserID(roomID, conn)) {
+		return
+	}
 	if index, ok := msg["index"].(float64); ok {
 		h.playback.JumpTo(ctx, roomID, int(index))
 	}
@@ -286,6 +301,39 @@ func (h *Handler) backgroundRefill(ctx context.Context, rm *entity.Room, roomID 
 		}
 	}
 
+	h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
+}
+
+func (h *Handler) backgroundMashupRefill(ctx context.Context, rm *entity.Room, roomID string) {
+	h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
+
+	picks, err := h.radio.RefillMashups(ctx, roomID, rm)
+	if err != nil {
+		h.log.Error("mashup refill failed", "room_id", roomID, "error", err)
+		return
+	}
+	appended := 0
+	for _, t := range picks {
+		if ok, _ := redisc.AppendFreshTrack(ctx, h.rdb, roomID, t); ok {
+			appended++
+			if t.ID != "" {
+				redisc.AddRadioSeen(ctx, h.rdb, roomID, t.ID)
+			}
+		}
+	}
+	if appended > 0 {
+		ps, _ := redisc.GetPlayback(ctx, h.rdb, roomID)
+		if ps != nil && !ps.IsPlaying {
+			ps.IsPlaying = true
+			ps.Position = 0
+			ps.LastSyncAt = time.Now()
+			ps.CurrentStartedAt = time.Now()
+			redisc.SetPlayback(ctx, h.rdb, roomID, ps)
+		}
+		if err := h.room.SaveTracks(ctx, rm); err != nil {
+			h.log.Error("save tracks after mashup refill failed", "room_id", roomID, "error", err)
+		}
+	}
 	h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
 }
 

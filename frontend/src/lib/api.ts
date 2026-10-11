@@ -308,6 +308,31 @@ export const api = {
       `/api/rooms/${roomId}`, { method: 'PATCH', body: JSON.stringify(settings) }
     ),
 
+  // ── Stream filter (24/7 mashup stream: author/title narrowing) ──
+  // GET /api/rooms/:roomID/stream-filter → { q, title, artist, owner }
+  getStreamFilter: (roomId: string) => {
+    const access = getRoomAccess(roomId)
+    const query = access ? `?access=${encodeURIComponent(access)}` : ''
+    return request<{ q: string; title: string; artist: string; owner: string }>(
+      `/api/rooms/${roomId}/stream-filter${query}`,
+    )
+  },
+
+  // PUT /api/rooms/:roomID/stream-filter → { q, title, artist, owner }
+  // Owner/admin on stream rooms only; empty strings clear the filter.
+  setStreamFilter: (roomId: string, filter: { q?: string; title?: string; artist?: string; owner?: string }) =>
+    request<{ q: string; title: string; artist: string; owner: string }>(
+      `/api/rooms/${roomId}/stream-filter`, { method: 'PUT', body: JSON.stringify(filter) }
+    ),
+
+  // POST /api/rooms/:roomID/stream-refill → { added: Track[] }
+  // Owner/admin on stream rooms only. Enqueues N random mashups honouring
+  // the current stream filter. The 24/7 auto-refill keeps running regardless.
+  triggerStreamRefill: (roomId: string, count = 3) =>
+    request<{ added: Track[] }>(
+      `/api/rooms/${roomId}/stream-refill`, { method: 'POST', body: JSON.stringify({ count }) }
+    ),
+
   // DELETE /api/rooms/:roomID → { ok: true }
   deleteRoom: (roomId: string) =>
     authFetch(`/api/rooms/${roomId}`, { method: 'DELETE' }, 'Failed to delete room').then(() => {}),
@@ -334,14 +359,26 @@ export const api = {
     request<{ user: UserProfile }>(`/api/users/${userId}`),
 
   // ── Tracks (uploads library) ──────────────────────────────────────────
-  // GET /api/tracks?q=&sort=recent|top&limit=&offset= → []Track.ToDict()
-  listTracks: (q = '', sort: 'recent' | 'top' = 'recent', limit = 30, offset = 0) => {
+  // GET /api/tracks?q=&title=&artist=&owner=&status=&sort=recent|top&limit=&offset= → []Track.ToDict()
+  // q = free text over title/artist/uploader; title/artist/owner narrow it down
+  // (used by the 24/7 stream filter and server-side mashup search).
+  listTracks: (
+    q = '',
+    sort: 'recent' | 'top' = 'recent',
+    limit = 30,
+    offset = 0,
+    filters?: { title?: string; artist?: string; owner?: string; status?: string },
+  ) => {
     const params = new URLSearchParams({
       sort,
       limit: String(limit),
       offset: String(offset),
     })
     if (q) params.set('q', q)
+    if (filters?.title) params.set('title', filters.title)
+    if (filters?.artist) params.set('artist', filters.artist)
+    if (filters?.owner) params.set('owner', filters.owner)
+    if (filters?.status) params.set('status', filters.status)
     return request<Track[]>(`/api/tracks/?${params.toString()}`)
   },
 

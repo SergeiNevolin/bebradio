@@ -8,6 +8,7 @@ import MediaCard from '../components/media/MediaCard'
 import { HeartFillIcon } from '../components/player/icons'
 import { tintForId, monoGlyph } from '../lib/mashupArt'
 import type { KaraokePreview } from '../lib/karaokePreview'
+import { karaokeCoverUrl } from '../lib/karaokePreview'
 import { type RoomListItem, type Track } from '../types'
 import styles from './Home.module.css'
 
@@ -116,7 +117,7 @@ export default function Home() {
           ) : undefined
         }
       >
-        {shelfSongs.slice(0, KARAOKE_SHELF_VISIBLE).map((song) => {
+        {shelfSongs.slice(0, KARAOKE_SHELF_VISIBLE).map((song, i) => {
           const open = previewSong?.id === song.id
           return (
             <MediaCard
@@ -129,12 +130,14 @@ export default function Home() {
                   {formatDuration(song.duration) && <span>{formatDuration(song.duration)}</span>}
                 </>
               }
+              coverUrl={karaokeCoverUrl(song) ?? undefined}
               tint={tintForId(song.id)}
               glyph={monoGlyph(song.title)}
               active={open}
               playing={false}
               playLabel={`Превью: ${song.title}`}
               pressed={open}
+              eager={i < 4}
               onToggle={() => {
                 setQueueOpen(false)
                 setPreviewSong(open ? null : song)

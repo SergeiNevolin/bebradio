@@ -40,14 +40,38 @@ func NewTrackUsecase(repo repository.TrackRepository, mediaClient repository.Med
 }
 
 func (uc *TrackUsecase) List(query, sort string, limit, offset int, viewerID string) ([]map[string]any, error) {
+	return uc.ListFiltered(repository.TrackFilter{Query: strings.TrimSpace(query)}, sort, limit, offset, viewerID)
+}
+
+func (uc *TrackUsecase) ListFiltered(f repository.TrackFilter, sort string, limit, offset int, viewerID string) ([]map[string]any, error) {
 	if sort != "top" {
 		sort = "recent"
 	}
-	items, err := uc.repo.List(strings.TrimSpace(query), sort, limit, offset, viewerID)
+	f.Query = strings.TrimSpace(f.Query)
+	f.Title = strings.TrimSpace(f.Title)
+	f.Artist = strings.TrimSpace(f.Artist)
+	f.Owner = strings.TrimSpace(f.Owner)
+	items, err := uc.repo.ListFiltered(f, sort, limit, offset, viewerID)
 	if err != nil {
 		return nil, err
 	}
 	return toDicts(items), nil
+}
+
+// RandomForStream picks ready library tracks for the 24/7 stream refill,
+// honouring the stream filter (title/artist/owner). Empty filter = whole base.
+func (uc *TrackUsecase) RandomForStream(f repository.TrackFilter, limit int, excludeIDs []string) ([]*entity.Track, error) {
+	f.Query = strings.TrimSpace(f.Query)
+	f.Title = strings.TrimSpace(f.Title)
+	f.Artist = strings.TrimSpace(f.Artist)
+	f.Owner = strings.TrimSpace(f.Owner)
+	if limit <= 0 {
+		limit = uc.config.RadioBatch
+	}
+	if limit <= 0 {
+		limit = 3
+	}
+	return uc.repo.ListRandomReady(f, limit, excludeIDs)
 }
 
 func (uc *TrackUsecase) ListMine(ownerID string, limit, offset int) ([]map[string]any, error) {

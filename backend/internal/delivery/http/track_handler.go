@@ -10,12 +10,20 @@ import (
 	"time"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
+	"github.com/bebradio/backend-go/internal/domain/repository"
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 )
 
 func (s *Server) handleListTracks(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
+	filter := repository.TrackFilter{
+		Query:  q,
+		Title:  r.URL.Query().Get("title"),
+		Artist: r.URL.Query().Get("artist"),
+		Owner:  r.URL.Query().Get("owner"),
+		Status: r.URL.Query().Get("status"),
+	}
 	sort := r.URL.Query().Get("sort")
 	limit := parseIntDefault(r.URL.Query().Get("limit"), 30)
 	offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
@@ -23,7 +31,7 @@ func (s *Server) handleListTracks(w http.ResponseWriter, r *http.Request) {
 		limit = 100
 	}
 
-	items, err := s.tracks.List(q, sort, limit, offset, s.getUserOptional(r))
+	items, err := s.tracks.ListFiltered(filter, sort, limit, offset, s.getUserOptional(r))
 	if err != nil {
 		s.log.Error("list tracks failed", "error", err)
 		s.writeError(w, 500, "Failed to list tracks")

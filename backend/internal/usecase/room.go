@@ -63,6 +63,16 @@ func (uc *RoomUsecase) GetOrLoadRoom(ctx context.Context, roomID string) (*entit
 		uc.rdb.Set(ctx, redisc.RoomKey(roomID, "hydrated"), "1", 0)
 	}
 
+	// Streams must be discoverable by the autoadvance tick: a room with no
+	// Redis keys at all (never played, Redis flushed) is invisible to the
+	// SCAN-based tick, so its 24/7 refill would never start. Any room access
+	// via HTTP/WS recreates the playback hash; the next tick fills the queue.
+	if rm.IsStream {
+		if ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID); ps == nil {
+			redisc.SetPlayback(ctx, uc.rdb, roomID, &redisc.PlaybackState{})
+		}
+	}
+
 	return rm, nil
 }
 
@@ -174,6 +184,20 @@ func (uc *RoomUsecase) HasRoomAccess(rm *entity.Room, userID, access string) boo
 	return uc.auth.VerifyRoomToken(access, rm.ID)
 }
 
+// IsStreamController reports whether userID may drive playback in a stream
+// room (owner or admin). Streams have no voting, so manual next/prev/jump/
+// seek must be gated; the server-side autoadvance tick is unaffected.
+func (uc *RoomUsecase) IsStreamController(rm *entity.Room, userID string) bool {
+	if userID == "" {
+		return false
+	}
+	if userID == rm.OwnerID {
+		return true
+	}
+	user, err := uc.userRepo.FindByID(userID)
+	return err == nil && user.IsAdmin()
+}
+
 func (uc *RoomUsecase) JoinRoom(rm *entity.Room, password string, userID string) (string, error) {
 	if rm.PasswordHash != nil {
 		if userID != "" {
@@ -189,7 +213,7 @@ func (uc *RoomUsecase) JoinRoom(rm *entity.Room, password string, userID string)
 	return uc.auth.CreateRoomToken(rm.ID)
 }
 
-func (uc *RoomUsecase) UpdateRoomSettings(ctx context.Context, rm *entity.Room, allowAnon, isPrivate, autoRadio *bool, password *string) error {
+func (uc *RoomUsecase) UpdateRoomSettings(ctx context.Context, rm *entity.Room, allowAnon, isPrivate, autoRadio, mashupRadio *bool, password *string) error {
 	if allowAnon != nil {
 		rm.AllowAnonymousAdd = *allowAnon
 	}
@@ -198,6 +222,9 @@ func (uc *RoomUsecase) UpdateRoomSettings(ctx context.Context, rm *entity.Room, 
 	}
 	if autoRadio != nil {
 		rm.AutoRadio = *autoRadio
+	}
+	if mashupRadio != nil {
+		rm.MashupRadio = *mashupRadio
 	}
 	if password != nil {
 		if *password == "" {

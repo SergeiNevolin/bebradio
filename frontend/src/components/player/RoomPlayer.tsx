@@ -26,6 +26,8 @@ interface RoomPlayerProps {
   currentUserId: string
   /** Voting UI (likes/dislikes/skip). Streams disable it. */
   canVote?: boolean
+  /** Manual skip button (admin in stream rooms). */
+  canSkip?: boolean
 }
 
 function RoomPlayer({
@@ -42,6 +44,7 @@ function RoomPlayer({
   skipVoters,
   currentUserId,
   canVote = true,
+  canSkip = false,
 }: RoomPlayerProps) {
   const onEnded = useCallback(() => onPlayback('next'), [onPlayback])
   const onSync = useCallback(
@@ -140,6 +143,16 @@ function RoomPlayer({
               onToggleMute={toggleMute}
             />
             <div className={styles.playerControlsGap} />
+            {canSkip && (
+              <button
+                type="button"
+                className={styles.playerChip}
+                onClick={() => onPlayback('next')}
+                title="Skip to next track"
+              >
+                <SkipIcon size={14} /> Skip
+              </button>
+            )}
             {canVote && (
               <button
                 type="button"

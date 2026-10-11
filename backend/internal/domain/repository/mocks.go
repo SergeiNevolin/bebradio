@@ -139,10 +139,11 @@ func (m *MockRoomRepo) ListPublic() ([]map[string]any, error) {
 	for _, r := range m.Rooms {
 		if !r.IsPrivate {
 			result = append(result, map[string]any{
-				"id":         r.ID,
-				"name":       r.Name,
-				"auto_radio": r.AutoRadio,
-				"is_stream":  r.IsStream,
+				"id":           r.ID,
+				"name":         r.Name,
+				"auto_radio":   r.AutoRadio,
+				"is_stream":    r.IsStream,
+				"mashup_radio": r.MashupRadio,
 				"has_password": r.PasswordHash != nil,
 			})
 		}
@@ -360,11 +361,73 @@ func (m *MockTrackRepo) SetCoverUploaded(id string) error {
 }
 
 func (m *MockTrackRepo) List(query, sort string, limit, offset int, viewerID string) ([]*entity.Track, error) {
+	return m.ListFiltered(TrackFilter{Query: query}, sort, limit, offset, viewerID)
+}
+
+func matchFilter(v *entity.Track, ownerName string, f TrackFilter) bool {
+	if s := strings.TrimSpace(f.Status); s != "" && v.Status != s {
+		return false
+	}
+	contains := func(hay, needle string) bool {
+		return strings.Contains(strings.ToLower(hay), strings.ToLower(strings.TrimSpace(needle)))
+	}
+	if q := strings.TrimSpace(f.Query); q != "" {
+		if !(contains(v.Title, q) || contains(v.Artist, q) || contains(ownerName, q) || contains(v.OwnerID, q)) {
+			return false
+		}
+	}
+	if t := strings.TrimSpace(f.Title); t != "" && !contains(v.Title, t) {
+		return false
+	}
+	if a := strings.TrimSpace(f.Artist); a != "" && !contains(v.Artist, a) {
+		return false
+	}
+	if o := strings.TrimSpace(f.Owner); o != "" && !(contains(ownerName, o) || contains(v.OwnerID, o)) {
+		return false
+	}
+	return true
+}
+
+func (m *MockTrackRepo) ListFiltered(f TrackFilter, sort string, limit, offset int, viewerID string) ([]*entity.Track, error) {
 	out := make([]*entity.Track, 0)
 	for id, v := range m.Items {
 		cp := *v
 		cp.Liked = m.liked(id, viewerID)
-		out = append(out, &cp)
+		if matchFilter(&cp, cp.OwnerName, f) {
+			out = append(out, &cp)
+		}
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(out) {
+		return []*entity.Track{}, nil
+	}
+	out = out[offset:]
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (m *MockTrackRepo) ListRandomReady(f TrackFilter, limit int, excludeIDs []string) ([]*entity.Track, error) {
+	f.Status = entity.TrackStatusReady
+	excluded := make(map[string]bool, len(excludeIDs))
+	for _, id := range excludeIDs {
+		excluded[id] = true
+	}
+	out := make([]*entity.Track, 0)
+	for id, v := range m.Items {
+		if excluded[id] {
+			continue
+		}
+		cp := *v
+		if matchFilter(&cp, cp.OwnerName, f) {
+			out = append(out, &cp)
+		}
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }

@@ -3,8 +3,10 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
+	"github.com/bebradio/backend-go/internal/domain/repository"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -116,29 +118,99 @@ func (r *TrackRepo) SetCoverUploaded(id string) error {
 }
 
 func (r *TrackRepo) List(query, sort string, limit, offset int, viewerID string) ([]*entity.Track, error) {
+	return r.ListFiltered(repository.TrackFilter{Query: query}, sort, limit, offset, viewerID)
+}
+
+func orderClause(sort string) string {
+	if sort == "top" {
+		return ` ORDER BY t.likes DESC, t.added_at DESC`
+	}
+	return ` ORDER BY t.added_at DESC`
+}
+
+// filterClauses builds the WHERE tail (after libraryFilter) and args for a
+// TrackFilter. base is the next placeholder index ($1 is always viewerID).
+// Query matches title/artist/owner username; Title/Artist/Owner narrow further.
+func filterClauses(f repository.TrackFilter, base int) (string, []any) {
+	var sb strings.Builder
+	var args []any
+	idx := base
+	add := func(cond string, v any) {
+		sb.WriteString(fmt.Sprintf(" AND "+cond, idx))
+		args = append(args, v)
+		idx++
+	}
+	if q := strings.TrimSpace(f.Query); q != "" {
+		like := "%" + q + "%"
+		sb.WriteString(fmt.Sprintf(` AND (t.title ILIKE $%d OR t.artist ILIKE $%d OR COALESCE(u.username,'') ILIKE $%d)`, idx, idx+1, idx+2))
+		args = append(args, like, like, like)
+		idx += 3
+	}
+	if t := strings.TrimSpace(f.Title); t != "" {
+		add(`t.title ILIKE $%d`, "%"+t+"%")
+	}
+	if a := strings.TrimSpace(f.Artist); a != "" {
+		add(`t.artist ILIKE $%d`, "%"+a+"%")
+	}
+	if o := strings.TrimSpace(f.Owner); o != "" {
+		like := "%" + o + "%"
+		sb.WriteString(fmt.Sprintf(` AND (COALESCE(u.username,'') ILIKE $%d OR t.owner_id ILIKE $%d)`, idx, idx+1))
+		args = append(args, like, like)
+		idx += 2
+	}
+	switch f.Status {
+	case entity.TrackStatusReady, entity.TrackStatusProcessing, entity.TrackStatusFailed:
+		add(`t.status = $%d`, f.Status)
+	}
+	return sb.String(), args
+}
+
+func (r *TrackRepo) ListFiltered(f repository.TrackFilter, sort string, limit, offset int, viewerID string) ([]*entity.Track, error) {
 	if limit <= 0 {
 		limit = 30
 	}
 	if offset < 0 {
 		offset = 0
 	}
-	order := ` ORDER BY t.added_at DESC`
-	if sort == "top" {
-		order = ` ORDER BY t.likes DESC, t.added_at DESC`
+	where, args := filterClauses(f, 2)
+	queryArgs := append([]any{viewerID}, args...)
+	// LIMIT/OFFSET placeholders follow the filter args.
+	limPos := len(queryArgs) + 1
+	offPos := len(queryArgs) + 2
+	queryArgs = append(queryArgs, limit, offset)
+	rows, err := r.pool.Query(context.Background(),
+		trackDetailSelect+` WHERE `+libraryFilter+where+orderClause(sort)+fmt.Sprintf(` LIMIT $%d OFFSET $%d`, limPos, offPos),
+		queryArgs...)
+	if err != nil {
+		return nil, err
 	}
-	ctx := context.Background()
-	if query == "" {
-		rows, err := r.pool.Query(ctx,
-			trackDetailSelect+` WHERE `+libraryFilter+order+` LIMIT $2 OFFSET $3`,
-			viewerID, limit, offset)
-		if err != nil {
-			return nil, err
+	return collectTracks(rows)
+}
+
+// ListRandomReady feeds the 24/7 stream: only ready rows, random order,
+// excluding already queued / recently played ids.
+func (r *TrackRepo) ListRandomReady(f repository.TrackFilter, limit int, excludeIDs []string) ([]*entity.Track, error) {
+	if limit <= 0 {
+		limit = 3
+	}
+	f.Status = entity.TrackStatusReady
+	// $1 is viewerID ("" for stream picks), filter args start at $2.
+	where, args := filterClauses(f, 2)
+	queryArgs := append([]any{""}, args...)
+	if len(excludeIDs) > 0 {
+		placeholders := make([]string, len(excludeIDs))
+		for i, id := range excludeIDs {
+			placeholders[i] = fmt.Sprintf("$%d", len(queryArgs)+1)
+			queryArgs = append(queryArgs, id)
 		}
-		return collectTracks(rows)
+		where += ` AND t.id NOT IN (` + strings.Join(placeholders, ",") + `)`
 	}
-	rows, err := r.pool.Query(ctx,
-		trackDetailSelect+` WHERE `+libraryFilter+` AND (t.title ILIKE $2 OR t.artist ILIKE $2)`+order+` LIMIT $3 OFFSET $4`,
-		viewerID, "%"+query+"%", limit, offset)
+	limPos := len(queryArgs) + 1
+	queryArgs = append(queryArgs, limit)
+	// queryArgs[0] is viewerID "" — liked flag always false for stream picks.
+	rows, err := r.pool.Query(context.Background(),
+		trackDetailSelect+` WHERE `+libraryFilter+where+` ORDER BY RANDOM()`+fmt.Sprintf(` LIMIT $%d`, limPos),
+		queryArgs...)
 	if err != nil {
 		return nil, err
 	}

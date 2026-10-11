@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
+	"github.com/bebradio/backend-go/internal/domain/repository"
 	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
 	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
@@ -51,6 +52,13 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("create room failed", "error", err, "user_id", userID)
 		s.writeError(w, 500, "Failed to create room")
 		return
+	}
+
+	// Streams must be discoverable by the autoadvance tick from birth:
+	// create the playback hash now so the 24/7 mashup refill finds the room
+	// even before the first track is queued. The tick fills the queue itself.
+	if req.IsStream {
+		redisc.SetPlayback(ctx, s.rdb, rm.ID, &redisc.PlaybackState{})
 	}
 
 	result := redisc.BuildToDict(ctx, s.rdb, rm)
@@ -169,14 +177,56 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 		AllowAnonymousAdd *bool   `json:"allow_anonymous_add"`
 		IsPrivate         *bool   `json:"is_private"`
 		AutoRadio         *bool   `json:"auto_radio"`
+		MashupRadio       *bool   `json:"mashup_radio"`
 		Password          *string `json:"password"`
+		StreamFilter      *struct {
+			Q      *string `json:"q"`
+			Title  *string `json:"title"`
+			Artist *string `json:"artist"`
+			Owner  *string `json:"owner"`
+		} `json:"stream_filter"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
-	if err := s.room.UpdateRoomSettings(ctx, rm, req.AllowAnonymousAdd, req.IsPrivate, req.AutoRadio, req.Password); err != nil {
+	if err := s.room.UpdateRoomSettings(ctx, rm, req.AllowAnonymousAdd, req.IsPrivate, req.AutoRadio, req.MashupRadio, req.Password); err != nil {
 		s.log.Error("update room settings failed", "error", err, "room_id", roomID)
 		s.writeError(w, 500, "Failed to update room settings")
 		return
+	}
+
+	// Stream filter (24/7 mashup stream): author/title narrowing for the
+	// library refill. Owner or admin, streams only.
+	if req.StreamFilter != nil {
+		if !rm.IsStream {
+			s.writeError(w, 400, "Stream filter is only available for stream rooms")
+			return
+		}
+		admin, _ := s.isAdmin(userID)
+		if rm.OwnerID != userID && !admin {
+			s.writeError(w, 403, "Only the room owner can change settings")
+			return
+		}
+		cur, _ := redisc.GetStreamFilter(ctx, s.rdb, roomID)
+		if cur == nil {
+			cur = &redisc.StreamFilter{}
+		}
+		if req.StreamFilter.Q != nil {
+			cur.Query = strings.TrimSpace(*req.StreamFilter.Q)
+		}
+		if req.StreamFilter.Title != nil {
+			cur.Title = strings.TrimSpace(*req.StreamFilter.Title)
+		}
+		if req.StreamFilter.Artist != nil {
+			cur.Artist = strings.TrimSpace(*req.StreamFilter.Artist)
+		}
+		if req.StreamFilter.Owner != nil {
+			cur.Owner = strings.TrimSpace(*req.StreamFilter.Owner)
+		}
+		if err := redisc.SetStreamFilter(ctx, s.rdb, roomID, cur); err != nil {
+			s.log.Error("set stream filter failed", "error", err, "room_id", roomID)
+			s.writeError(w, 500, "Failed to update stream filter")
+			return
+		}
 	}
 
 	result := redisc.BuildToDict(ctx, s.rdb, rm)
@@ -600,7 +650,7 @@ func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subs, _ := s.media.FetchSubtitles(track.MediaID, lang)
+		subs, _ := s.media.FetchSubtitles(track.MediaID, lang)
 	cues, _ := subs["cues"].([]any)
 	s.writeJSON(w, 200, map[string]any{
 		"available": len(cues) > 0,
@@ -609,4 +659,235 @@ func (s *Server) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 		"auto":      subs["auto"],
 		"cues":      cues,
 	})
+}
+
+// Stream filter: which mashups the 24/7 stream refills from (author/title).
+// GET is open to anyone with room access; PUT is owner/admin on stream rooms.
+
+func (s *Server) handleGetStreamFilter(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomID")
+	access := r.URL.Query().Get("access")
+	userID := s.getUserOptional(r)
+	ctx := r.Context()
+
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
+	if err != nil {
+		s.writeError(w, 404, "Room not found")
+		return
+	}
+	if !s.room.HasRoomAccess(rm, userID, access) {
+		s.writeError(w, 403, "This room is password protected")
+		return
+	}
+	sf, _ := redisc.GetStreamFilter(ctx, s.rdb, roomID)
+	if sf == nil {
+		sf = &redisc.StreamFilter{}
+	}
+	s.writeJSON(w, 200, map[string]any{
+		"q": sf.Query, "title": sf.Title, "artist": sf.Artist, "owner": sf.Owner,
+	})
+}
+
+func (s *Server) handleSetStreamFilter(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomID")
+	userID, ok := s.getUserRequired(r)
+	if !ok {
+		s.writeError(w, 401, "Not authenticated")
+		return
+	}
+	ctx := r.Context()
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
+	if err != nil {
+		s.writeError(w, 404, "Room not found")
+		return
+	}
+	if !rm.IsStream {
+		s.writeError(w, 400, "Stream filter is only available for stream rooms")
+		return
+	}
+	admin, _ := s.isAdmin(userID)
+	if rm.OwnerID != userID && !admin {
+		s.writeError(w, 403, "Only the room owner can change the stream filter")
+		return
+	}
+	var req struct {
+		Q      *string `json:"q"`
+		Title  *string `json:"title"`
+		Artist *string `json:"artist"`
+		Owner  *string `json:"owner"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, 400, "Invalid request body")
+		return
+	}
+	cur, _ := redisc.GetStreamFilter(ctx, s.rdb, roomID)
+	if cur == nil {
+		cur = &redisc.StreamFilter{}
+	}
+	if req.Q != nil {
+		cur.Query = strings.TrimSpace(*req.Q)
+	}
+	if req.Title != nil {
+		cur.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.Artist != nil {
+		cur.Artist = strings.TrimSpace(*req.Artist)
+	}
+	if req.Owner != nil {
+		cur.Owner = strings.TrimSpace(*req.Owner)
+	}
+	if err := redisc.SetStreamFilter(ctx, s.rdb, roomID, cur); err != nil {
+		s.writeError(w, 500, "Failed to update stream filter")
+		return
+	}
+	s.manager.Broadcast(roomID, redisc.BuildToDict(ctx, s.rdb, rm))
+	s.writeJSON(w, 200, map[string]any{
+		"q": cur.Query, "title": cur.Title, "artist": cur.Artist, "owner": cur.Owner,
+	})
+}
+
+// Stream refill: manually enqueue N random mashups honouring the room's
+// stream filter. Owner/admin on stream rooms only. The automatic 24/7 refill
+// keeps running regardless; this is the "add some randomness now" button.
+func (s *Server) handleStreamRefill(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomID")
+	userID, ok := s.getUserRequired(r)
+	if !ok {
+		s.writeError(w, 401, "Not authenticated")
+		return
+	}
+	ctx := r.Context()
+	rm, err := s.room.GetOrLoadRoom(ctx, roomID)
+	if err != nil {
+		s.writeError(w, 404, "Room not found")
+		return
+	}
+	if !rm.IsStream {
+		s.writeError(w, 400, "Stream refill is only available for stream rooms")
+		return
+	}
+	admin, _ := s.isAdmin(userID)
+	if rm.OwnerID != userID && !admin {
+		s.writeError(w, 403, "Only the room owner can refill the stream")
+		return
+	}
+
+	var req struct {
+		Count int `json:"count"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	count := req.Count
+	if count <= 0 {
+		count = s.config.RadioBatch
+	}
+	if count <= 0 {
+		count = 3
+	}
+	if count > 10 {
+		count = 10
+	}
+
+	sf, _ := redisc.GetStreamFilter(ctx, s.rdb, roomID)
+	filter := repository.TrackFilter{}
+	if sf != nil {
+		filter = repository.TrackFilter{Query: sf.Query, Title: sf.Title, Artist: sf.Artist, Owner: sf.Owner}
+	}
+
+	queue, _ := redisc.GetQueue(ctx, s.rdb, roomID)
+	exclude := make([]string, 0, len(queue))
+	queued := make(map[string]bool, len(queue))
+	for _, t := range queue {
+		exclude = append(exclude, t.ID)
+		queued[t.ID] = true
+	}
+
+	addedBy := "Radio"
+	if u, err := s.auth.GetUserByID(userID); err == nil {
+		addedBy = u.Username
+	}
+
+	libs, err := s.tracks.RandomForStream(filter, count, exclude)
+	if err != nil {
+		s.log.Error("stream refill failed", "error", err, "room_id", roomID)
+		s.writeError(w, 500, "Refill failed")
+		return
+	}
+	if len(libs) == 0 {
+		// Base smaller than the queue (or filter too narrow): loop once
+		// without exclusions rather than returning nothing.
+		libs, err = s.tracks.RandomForStream(filter, count, nil)
+		if err != nil {
+			s.log.Error("stream refill retry failed", "error", err, "room_id", roomID)
+			s.writeError(w, 500, "Refill failed")
+			return
+		}
+		kept := libs[:0]
+		for _, l := range libs {
+			if !queued[l.ID] {
+				kept = append(kept, l)
+			}
+		}
+		libs = kept
+	}
+	if len(libs) == 0 {
+		s.writeError(w, 404, "No mashups match the stream filter")
+		return
+	}
+
+	s.addMu.Lock()
+	added := make([]map[string]any, 0, len(libs))
+	for _, lib := range libs {
+		if !entity.IsQueueableLibraryTrack(lib) {
+			continue
+		}
+		track := entity.QueueCopyFromLibrary(lib, addedBy)
+		// Re-check under lock: a concurrent refill may have queued it.
+		dup := false
+		if fresh, _ := redisc.GetQueue(ctx, s.rdb, roomID); fresh != nil {
+			for _, q := range fresh {
+				if isDuplicateQueueTrack(q, track) {
+					dup = true
+					break
+				}
+			}
+		}
+		if dup {
+			continue
+		}
+		redisc.AppendTrack(ctx, s.rdb, roomID, track)
+		if track.ID != "" {
+			redisc.AddRadioSeen(ctx, s.rdb, roomID, track.ID)
+		}
+		added = append(added, track.ToDict())
+	}
+	// Ensure the stream (re)starts once tracks are queued.
+	if len(added) > 0 {
+		ps, _ := redisc.GetPlayback(ctx, s.rdb, roomID)
+		if ps == nil {
+			ps = &redisc.PlaybackState{}
+		}
+		if !ps.IsPlaying {
+			ps.IsPlaying = true
+			ps.Position = 0
+			ps.LastSyncAt = time.Now()
+			if len(added) > 0 {
+				ps.CurrentStartedAt = time.Now()
+			}
+			redisc.SetPlayback(ctx, s.rdb, roomID, ps)
+		}
+	}
+	s.addMu.Unlock()
+
+	if len(added) == 0 {
+		s.writeError(w, 404, "No mashups match the stream filter")
+		return
+	}
+	go func() {
+		if err := s.room.SaveTracks(ctx, rm); err != nil {
+			s.log.Error("save tracks after stream refill failed", "error", err, "room_id", roomID)
+		}
+	}()
+
+	s.manager.Broadcast(roomID, redisc.BuildToDict(ctx, s.rdb, rm))
+	s.writeJSON(w, 200, map[string]any{"added": added})
 }

@@ -404,6 +404,50 @@ func GetRadioSeen(ctx context.Context, rdb *redis.Client, roomID string) (map[st
 	return seen, nil
 }
 
+// ---------- Stream filter (24/7 mashup stream) ----------
+
+// StreamFilter narrows which library mashups the 24/7 stream refills from.
+// Empty = whole base. Stored as a Redis hash room:{id}:stream_filter so the
+// autoadvance worker sees it without touching Postgres.
+type StreamFilter struct {
+	Query  string `json:"q"`
+	Title  string `json:"title"`
+	Artist string `json:"artist"`
+	Owner  string `json:"owner"`
+}
+
+func (f StreamFilter) Empty() bool {
+	return f.Query == "" && f.Title == "" && f.Artist == "" && f.Owner == ""
+}
+
+func GetStreamFilter(ctx context.Context, rdb *redis.Client, roomID string) (*StreamFilter, error) {
+	vals, err := rdb.HGetAll(ctx, RoomKey(roomID, "stream_filter")).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(vals) == 0 {
+		return &StreamFilter{}, nil
+	}
+	return &StreamFilter{
+		Query:  vals["q"],
+		Title:  vals["title"],
+		Artist: vals["artist"],
+		Owner:  vals["owner"],
+	}, nil
+}
+
+func SetStreamFilter(ctx context.Context, rdb *redis.Client, roomID string, f *StreamFilter) error {
+	if f == nil || f.Empty() {
+		return rdb.Del(ctx, RoomKey(roomID, "stream_filter")).Err()
+	}
+	return rdb.HSet(ctx, RoomKey(roomID, "stream_filter"), map[string]any{
+		"q":      f.Query,
+		"title":  f.Title,
+		"artist": f.Artist,
+		"owner":  f.Owner,
+	}).Err()
+}
+
 // ---------- Cleanup ----------
 
 func DeleteRoom(ctx context.Context, rdb *redis.Client, roomID string) error {
@@ -491,6 +535,7 @@ func BuildToDict(ctx context.Context, rdb *redis.Client, rm *entity.Room) map[st
 	}
 
 	skipVoters, _ := rdb.SMembers(ctx, RoomKey(rm.ID, "skip_votes")).Result()
+	sf, _ := GetStreamFilter(ctx, rdb, rm.ID)
 
 	result := map[string]any{
 		"id":                  rm.ID,
@@ -506,11 +551,18 @@ func BuildToDict(ctx context.Context, rdb *redis.Client, rm *entity.Room) map[st
 		"is_private":          rm.IsPrivate,
 		"auto_radio":          rm.AutoRadio,
 		"is_stream":           rm.IsStream,
+		"mashup_radio":        rm.MashupRadio,
 		"radio_searching":     ps.RadioFilling,
 		"has_password":        rm.PasswordHash != nil,
 		"track_votes":         map[string]int{"likes": trackVotes[0], "dislikes": trackVotes[1]},
 		"skip_voters":         skipVoters,
 		"messages":            msgDicts,
+		"stream_filter": map[string]any{
+			"q":      sf.Query,
+			"title":  sf.Title,
+			"artist": sf.Artist,
+			"owner":  sf.Owner,
+		},
 	}
 
 	if currentTrackDict != nil {

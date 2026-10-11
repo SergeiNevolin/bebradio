@@ -68,22 +68,30 @@ func (w *AutoAdvance) Run(ctx context.Context) {
 }
 
 func (w *AutoAdvance) tick(ctx context.Context) {
-	// Scan Redis for room keys to find active rooms.
-	iter := w.rdb.Scan(ctx, 0, "room:*:state", 100).Iterator()
-	for iter.Next(ctx) {
-		key := iter.Val()
-		// Extract roomID from "room:{id}:state"
-		roomID := extractRoomID(key)
-		if roomID == "" {
-			continue
+	// Discover rooms from every Redis slice we own: a fresh/cold stream may
+	// have a queue or a stream_filter but no state hash yet (nothing ever
+	// played). Scanning only *:state would leave such rooms undiscovered
+	// forever, so the 24/7 refill would never kick in without a manual add.
+	seen := make(map[string]bool)
+	for _, pattern := range []string{"room:*:state", "room:*:queue", "room:*:stream_filter"} {
+		iter := w.rdb.Scan(ctx, 0, pattern, 100).Iterator()
+		for iter.Next(ctx) {
+			if roomID := extractRoomID(iter.Val()); roomID != "" && !seen[roomID] {
+				seen[roomID] = true
+				w.processRoom(ctx, roomID)
+			}
 		}
-		w.processRoom(ctx, roomID)
 	}
 }
 
 func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
 	count, _ := redisc.GetPresenceCount(ctx, w.rdb, roomID)
+
+	// Fast path: rooms with listeners use the classic flow below.
+	// Rooms without listeners are skipped unless they are 24/7 streams,
+	// which must keep playing (and refilling from mashups) with 0 online.
 	if count == 0 {
+		w.processStreamRoom(ctx, roomID)
 		return
 	}
 
@@ -94,6 +102,13 @@ func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
 
 	track := redisc.CurrentTrack(ctx, w.rdb, roomID)
 	if track == nil {
+		// Queue drained while listeners are online: streams loop from the
+		// library, plain rooms wait for manual adds.
+		if rm, err := w.room.GetOrLoadRoom(ctx, roomID); err == nil {
+			if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
+				go w.backgroundMashupRefill(ctx, rm, roomID)
+			}
+		}
 		return
 	}
 
@@ -118,6 +133,9 @@ func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
 	if w.radio.NeedsRefill(ctx, roomID, rm.AutoRadio) {
 		go w.backgroundRefill(ctx, rm, roomID)
 	}
+	if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
+		go w.backgroundMashupRefill(ctx, rm, roomID)
+	}
 
 	if advanced || refreshed {
 		if err := w.room.SaveTracks(ctx, rm); err != nil {
@@ -125,6 +143,115 @@ func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
 		}
 		w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
 	}
+}
+
+// processStreamRoom keeps IsStream rooms alive with zero listeners: advances
+// finished tracks by wall clock and refills the queue from the mashup library
+// (honouring the room's stream filter). Plain rooms stay paused here.
+func (w *AutoAdvance) processStreamRoom(ctx context.Context, roomID string) {
+	rm, err := w.room.GetOrLoadRoom(ctx, roomID)
+	if err != nil || !rm.IsStream {
+		return
+	}
+
+	track := redisc.CurrentTrack(ctx, w.rdb, roomID)
+	if track == nil {
+		// Nothing queued: refill synchronously so the stream restarts even
+		// if RefillMashups is the only source of tracks. With MashupRadio
+		// off this is a no-op and the stream stays paused for manual adds.
+		if picks, err := w.radio.RefillMashups(ctx, roomID, rm); err == nil && len(picks) > 0 {
+			for _, t := range picks {
+				redisc.AppendFreshTrack(ctx, w.rdb, roomID, t)
+			}
+			w.ensureStreamPlaying(ctx, roomID)
+			_ = w.room.SaveTracks(ctx, rm)
+			w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
+		} else if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
+			go w.backgroundMashupRefill(ctx, rm, roomID)
+		}
+		return
+	}
+
+	ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
+	if ps == nil {
+		// Playback hash lost (e.g. Redis flush) but queue survived:
+		// restart playback instead of stalling the stream.
+		w.ensureStreamPlaying(ctx, roomID)
+		if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
+			go w.backgroundMashupRefill(ctx, rm, roomID)
+		}
+		return
+	}
+	// Nobody sends sync/position updates, so drive by wall clock from
+	// CurrentStartedAt/LastSyncAt via GetCurrentPosition.
+	advanced := false
+	if track.Duration > 0 {
+		if pos := redisc.GetCurrentPosition(ctx, w.rdb, roomID); pos >= float64(track.Duration)+w.config.AutoAdvanceGrace {
+			advanced = w.playback.GoNext(ctx, roomID)
+		}
+	} else if !ps.CurrentStartedAt.IsZero() && time.Since(ps.CurrentStartedAt) > durationZeroSkipAfter {
+		advanced = w.playback.GoNext(ctx, roomID)
+	}
+	// A stream that was paused with tracks queued resumes on its own.
+	if !ps.IsPlaying {
+		w.ensureStreamPlaying(ctx, roomID)
+		advanced = true
+	}
+
+	if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
+		go w.backgroundMashupRefill(ctx, rm, roomID)
+	}
+
+	if advanced {
+		_ = w.room.SaveTracks(ctx, rm)
+		w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
+	}
+}
+
+func (w *AutoAdvance) ensureStreamPlaying(ctx context.Context, roomID string) {
+	ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
+	if ps == nil {
+		ps = &redisc.PlaybackState{}
+	}
+	tracks, _ := redisc.GetQueue(ctx, w.rdb, roomID)
+	if len(tracks) == 0 {
+		return
+	}
+	if ps.CurrentIndex < 0 || ps.CurrentIndex >= len(tracks) {
+		ps.CurrentIndex = 0
+	}
+	ps.IsPlaying = true
+	ps.Position = 0
+	now := time.Now()
+	ps.LastSyncAt = now
+	ps.CurrentStartedAt = now
+	redisc.SetPlayback(ctx, w.rdb, roomID, ps)
+}
+
+func (w *AutoAdvance) backgroundMashupRefill(ctx context.Context, rm *entity.Room, roomID string) {
+	w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
+
+	picks, err := w.radio.RefillMashups(ctx, roomID, rm)
+	if err != nil {
+		w.log.Error("mashup refill failed", "room_id", roomID, "error", err)
+		return
+	}
+	appended := 0
+	for _, t := range picks {
+		if ok, _ := redisc.AppendFreshTrack(ctx, w.rdb, roomID, t); ok {
+			appended++
+			if t.ID != "" {
+				redisc.AddRadioSeen(ctx, w.rdb, roomID, t.ID)
+			}
+		}
+	}
+	if appended > 0 {
+		w.ensureStreamPlaying(ctx, roomID)
+		if err := w.room.SaveTracks(ctx, rm); err != nil {
+			w.log.Error("save tracks after mashup refill failed", "room_id", roomID, "error", err)
+		}
+	}
+	w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
 }
 
 func (w *AutoAdvance) backgroundRefill(ctx context.Context, rm *entity.Room, roomID string) {

@@ -6,6 +6,25 @@ import (
 	"github.com/bebradio/backend-go/internal/domain/entity"
 )
 
+// TrackFilter narrows the library slice of the tracks table.
+//
+//	Query  — free text over title + artist + owner username (legacy ?q=).
+//	Title  — substring of t.title.
+//	Artist — substring of t.artist.
+//	Owner  — substring of owner username OR owner_id (uploader filter).
+//	Status — ready|processing|failed, empty = any.
+type TrackFilter struct {
+	Query  string
+	Title  string
+	Artist string
+	Owner  string
+	Status string
+}
+
+func (f TrackFilter) Empty() bool {
+	return f.Query == "" && f.Title == "" && f.Artist == "" && f.Owner == "" && f.Status == ""
+}
+
 // TrackRepository persists the library slice of the tracks table:
 // user uploads (room_id IS NULL). Room queue rows stay with RoomRepository.
 type TrackRepository interface {
@@ -22,6 +41,12 @@ type TrackRepository interface {
 	// "top" = most liked first), paginated. viewerID drives the per-row
 	// liked flag.
 	List(query, sort string, limit, offset int, viewerID string) ([]*entity.Track, error)
+	// ListFiltered is List with field filters (title/artist/owner/status).
+	// Empty filter behaves like List.
+	ListFiltered(filter TrackFilter, sort string, limit, offset int, viewerID string) ([]*entity.Track, error)
+	// ListRandomReady returns up to limit ready library tracks matching filter,
+	// in random order, excluding excludeIDs. Used by the 24/7 stream refill.
+	ListRandomReady(filter TrackFilter, limit int, excludeIDs []string) ([]*entity.Track, error)
 	ListByOwner(ownerID string, limit, offset int) ([]*entity.Track, error)
 	ListLikedByUser(userID string, limit, offset int) ([]*entity.Track, error)
 	CountByOwner(ownerID string) (int, error)

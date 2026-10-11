@@ -301,7 +301,7 @@ func TestUpdateRoomSettings(t *testing.T) {
 
 	f := false
 	tr := true
-	if err := uc.UpdateRoomSettings(ctx, rm, &tr, &f, nil, nil); err != nil {
+	if err := uc.UpdateRoomSettings(ctx, rm, &tr, &f, nil, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -310,6 +310,31 @@ func TestUpdateRoomSettings(t *testing.T) {
 	}
 	if rm.IsPrivate {
 		t.Error("expected IsPrivate false")
+	}
+}
+
+func TestUpdateRoomSettingsMashupRadio(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+
+	roomRepo := repository.NewMockRoomRepo()
+	userRepo := repository.NewMockUserRepo()
+	mediaClient := repository.NewMockMediaClient()
+	auth := repository.NewMockAuthBridge()
+	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
+
+	rm := entity.NewRoom("X", "R", "O")
+	if !rm.MashupRadio {
+		t.Fatal("expected MashupRadio default true")
+	}
+
+	off := false
+	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, &off, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rm.MashupRadio {
+		t.Error("expected MashupRadio false after update")
 	}
 }
 
@@ -327,7 +352,7 @@ func TestUpdateRoomSettingsSetPassword(t *testing.T) {
 	rm := entity.NewRoom("X", "R", "O")
 
 	pw := "newpassword"
-	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, &pw); err != nil {
+	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, nil, &pw); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -352,7 +377,7 @@ func TestUpdateRoomSettingsRemovePassword(t *testing.T) {
 	rm.PasswordHash = &hash
 
 	pw := ""
-	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, &pw); err != nil {
+	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, nil, &pw); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

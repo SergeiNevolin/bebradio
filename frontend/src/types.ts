@@ -48,6 +48,14 @@ export interface RoomListItem {
   is_stream?: boolean
 }
 
+// Which library mashups the 24/7 stream refills from. Empty = whole base.
+export interface StreamFilter {
+  q: string
+  title: string
+  artist: string
+  owner: string
+}
+
 export interface RoomState {
   id: string
   name: string
@@ -64,6 +72,10 @@ export interface RoomState {
   auto_radio?: boolean
   // Admin-run stream: only admins add tracks, voting is disabled.
   is_stream?: boolean
+  // 24/7 mashup auto-refill kill switch (streams). Default true.
+  mashup_radio?: boolean
+  // 24/7 mashup refill filter (author/title). Present on stream rooms.
+  stream_filter?: StreamFilter
   // True while auto-radio is fetching related tracks in the background.
   radio_searching?: boolean
   has_password: boolean

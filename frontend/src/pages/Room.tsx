@@ -119,9 +119,16 @@ export default function Room() {
     is_private?: boolean
     auto_radio?: boolean
     password?: string
+    stream_filter?: { q?: string; title?: string; artist?: string; owner?: string }
   }) => {
     if (settings.password === undefined) {
-      setRoom((prev) => prev ? { ...prev, ...settings } : prev)
+      setRoom((prev) => prev ? {
+        ...prev,
+        ...settings,
+        stream_filter: settings.stream_filter
+          ? { q: '', title: '', artist: '', owner: '', ...prev.stream_filter, ...settings.stream_filter }
+          : prev.stream_filter,
+      } : prev)
     }
     try {
       const data = await api.updateRoom(roomId!, settings) as unknown as RoomState
@@ -196,16 +203,6 @@ export default function Room() {
         />
       )}
 
-      {!canAddTrack && (
-        <div className={styles.authBanner}>
-          <span>
-            {isStream
-              ? 'Поток — треки добавляет админ, голосования нет'
-              : 'Sign in to add tracks to the queue'}
-          </span>
-        </div>
-      )}
-
       {canAddTrack && (
         <div className={styles.roomSearch}>
           <AddTrack onAdd={handleAddTrack} onAddById={handleAddMashup} />
@@ -230,6 +227,7 @@ export default function Room() {
               skipVoters={room?.skip_voters ?? []}
               currentUserId={user?.id || ''}
               canVote={!isStream}
+              canSkip={!!isStream && !!isAdmin}
             />
           </div>
           <Queue

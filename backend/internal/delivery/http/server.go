@@ -95,6 +95,9 @@ func (s *Server) setupRoutes() {
 			r.Post("/{roomID}/queue/{trackID}/import", s.handleImportQueueTrack)
 			r.Post("/{roomID}/visit", s.handleRecordVisit)
 			r.Get("/{roomID}/lyrics", s.handleGetLyrics)
+			r.Get("/{roomID}/stream-filter", s.handleGetStreamFilter)
+			r.Put("/{roomID}/stream-filter", s.handleSetStreamFilter)
+			r.Post("/{roomID}/stream-refill", s.handleStreamRefill)
 		})
 
 		r.Post("/search", s.handleSearch)

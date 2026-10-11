@@ -88,6 +88,7 @@ func main() {
 	playbackUC := usecase.NewPlaybackUsecase(rdb)
 	chatUC := usecase.NewChatUsecase(roomRepo, log, rdb)
 	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, log, rdb)
+	radioUC.SetTrackRepo(trackRepo)
 
 	// Re-poll any track left "processing" by a previous run.
 	go trackUC.ResumeProcessing()
