@@ -246,6 +246,55 @@ test.describe('Karaoke catalog (mocked service)', () => {
   })
 })
 
+test.describe('Karaoke session refresh', () => {
+  test('expired access token silently refreshes, no relogin needed', async ({
+    page,
+  }) => {
+    const uid = Math.random().toString(36).slice(2, 8)
+    await page.goto('/register')
+    await page.getByPlaceholder('Email').fill(`refresh-${uid}@e2e.test`)
+    await page.getByPlaceholder('Username').fill(`refresh-${uid}`)
+    await page.getByPlaceholder('Password').fill('Test123!')
+    await page.getByRole('button', { name: 'Register' }).click()
+    await expect(page).toHaveURL('/')
+
+    // Access протух (15 минут жизни), refresh-сессия в куке жива.
+    // Караоке читает Bearer напрямую из localStorage.
+    await page.evaluate(() => localStorage.setItem('token', 'expired-fake'))
+    const staleAuth = 'Bearer expired-fake'
+
+    // Сервис отвечает 401 только на протухший токен.
+    await page.route('**/api/karaoke/api/songs*', async (route: Route) => {
+      const auth = route.request().headers()['authorization']
+      if (auth === staleAuth) {
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'expired' }),
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ songs: [SONGS[0]] }),
+      })
+    })
+
+    await page.locator('nav a[href="/karaoke"]').first().click()
+    await expect(page).toHaveURL('/karaoke')
+    // Каталог загрузился после молчаливого рефреша, а не «Требуется вход».
+    await expect(songRow(page, 'E2E Song One')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('Требуется вход в bebradio')).toBeHidden()
+    // Токен в localStorage ротирован, сессия цела: настройки открываются.
+    await expect(async () => {
+      expect(await page.evaluate(() => localStorage.getItem('token'))).not.toBe('expired-fake')
+    }).toPass({ timeout: 10000 })
+    await page.goto('/settings')
+    await expect(page).toHaveURL('/settings')
+  })
+})
+
 test.describe('Karaoke shelf on home (mocked service)', () => {
   test.beforeEach(async ({ page }) => {
     await mockKaraokeService(page)

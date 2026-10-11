@@ -1,6 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { refreshAuth } from '../../lib/api'
 import { apiAvailable, fetchGeniusLines, fetchManifest, getJob, uploadSong } from './api'
+
+vi.mock('../../lib/api', () => ({
+  refreshAuth: vi.fn(),
+  RefreshUnavailableError: class RefreshUnavailableError extends Error {
+    constructor() {
+      super('Сервер обновления недоступен — проверьте связь и попробуйте снова')
+      this.name = 'RefreshUnavailableError'
+    }
+  },
+}))
 
 const json = (data: unknown, ok = true, status = 200) => ({
   ok,
@@ -13,6 +24,7 @@ afterEach(() => {
   vi.unstubAllEnvs()
   vi.resetModules()
   localStorage.clear()
+  vi.mocked(refreshAuth).mockReset()
 })
 
 describe('fetchManifest', () => {
@@ -211,6 +223,73 @@ describe('префикс и вход', () => {
     await expect(api.fetchManifest()).rejects.toBeInstanceOf(api.AuthRequiredError)
     await expect(api.fetchManifest()).rejects.toThrow('Требуется вход в bebradio')
     expect(fetch).toHaveBeenCalledTimes(2) // только API, fallback-а songs/manifest.json не было
+  })
+
+  it('протухший токен молча обновляется и запрос повторяется', async () => {
+    const api = await freshApi({ VITE_API_BASE: '/karaoke' })
+    localStorage.setItem('token', 'stale')
+    vi.mocked(refreshAuth).mockImplementation(async () => {
+      // настоящий refreshAuth кладёт свежий токен в localStorage
+      localStorage.setItem('token', 'fresh')
+      return { ok: true, token: 'fresh' }
+    })
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) => {
+      const auth = new Headers(_init?.headers).get('Authorization')
+      if (auth === 'Bearer stale') return json({ error: 'expired' }, false, 401)
+      return json({ songs: [{ id: 'a' }] })
+    })
+    vi.stubGlobal('fetch', fetch)
+    expect(await api.fetchManifest()).toEqual([{ id: 'a' }])
+    expect(refreshAuth).toHaveBeenCalledTimes(1)
+    expect(new Headers(fetch.mock.calls[1][1]?.headers).get('Authorization')).toBe('Bearer fresh')
+  })
+
+  it('повторный 401 — AuthRequiredError, без петли', async () => {
+    const api = await freshApi({ VITE_API_BASE: '/karaoke' })
+    localStorage.setItem('token', 'stale')
+    vi.mocked(refreshAuth).mockImplementation(async () => {
+      localStorage.setItem('token', 'fresh')
+      return { ok: true, token: 'fresh' }
+    })
+    const fetch = vi.fn(async () => json({ error: 'no' }, false, 401))
+    vi.stubGlobal('fetch', fetch)
+    await expect(api.fetchManifest()).rejects.toBeInstanceOf(api.AuthRequiredError)
+    // первая попытка + ровно один повтор
+    expect(fetch.mock.calls.filter(([u]) => String(u).startsWith('/karaoke/api/songs')).length).toBe(2)
+  })
+
+  it('без токена — refresh не дёргаем, 401 как есть', async () => {
+    const api = await freshApi({ VITE_API_BASE: '/karaoke' })
+    const fetch = vi.fn(async () => json({ error: 'no' }, false, 401))
+    vi.stubGlobal('fetch', fetch)
+    await expect(api.fetchManifest()).rejects.toBeInstanceOf(api.AuthRequiredError)
+    expect(refreshAuth).not.toHaveBeenCalled()
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('сессия мертва (rejected) — 401 как есть, без исключений рефреша', async () => {
+    const api = await freshApi({ VITE_API_BASE: '/karaoke' })
+    localStorage.setItem('token', 'stale')
+    vi.mocked(refreshAuth).mockResolvedValue({ ok: false, rejected: true })
+    const fetch = vi.fn(async () => json({ error: 'no' }, false, 401))
+    vi.stubGlobal('fetch', fetch)
+    await expect(api.fetchManifest()).rejects.toThrow('Требуется вход в bebradio')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('рефреш недоступен (transient) — понятная ошибка, в каталоге fallback', async () => {
+    const api = await freshApi({ VITE_API_BASE: '/karaoke' })
+    localStorage.setItem('token', 'stale')
+    vi.mocked(refreshAuth).mockResolvedValue({ ok: false, rejected: false })
+    const songs = [{ id: 'b' }]
+    const fetch = vi.fn(async (url: string) => {
+      if (String(url).startsWith('/karaoke/api/songs')) return json({ error: 'expired' }, false, 401)
+      return json({ songs })
+    })
+    vi.stubGlobal('fetch', fetch)
+    // каталог деградирует в статику, а не требует вход
+    expect(await api.fetchManifest()).toEqual(songs)
+    await expect(api.apiFetch('/api/songs')).rejects.toThrow('Сервер обновления недоступен')
   })
 
   it('hasAuthToken: встроенный режим — по токену, standalone — всегда true', async () => {

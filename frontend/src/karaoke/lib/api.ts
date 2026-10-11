@@ -1,4 +1,5 @@
 import type { Manifest, SongMeta } from './types'
+import { refreshAuth, RefreshUnavailableError } from '../../lib/api'
 
 /**
  * Базовый префикс API. Приоритет — VITE_API_BASE (standalone сборка караоке).
@@ -105,11 +106,34 @@ async function fetchTo(url: string, init?: RequestInit, ms = 15_000): Promise<Re
   }
 }
 
-/** fetch к API: базовый префикc + Bearer из localStorage */
+/**
+ * fetch к API: базовый префикc + Bearer из localStorage.
+ * Протухший access (живёт минуты) молча обновляем через общий refreshAuth
+ * основного слоя — тот же single-flight, что и у остального приложения,
+ * поэтому параллельные 401 делят один POST /api/auth/refresh. Иначе долгое
+ * висение на /karaoke без перезагрузки превращается в «Требуется вход»
+ * при живой сессии. Повтор — ровно один (FormData переиспользуем);
+ * rejected (сессия мертва) отдаём как есть — вызыватели мапят 401
+ * в AuthRequiredError; transient бросаем как в основном слое, чтобы
+ * сработали локальные фолбэки (текст в localStorage, статический манифест).
+ */
 export async function apiFetch(url: string, init?: RequestInit, ms = 15_000): Promise<Response> {
-  const headers = new Headers(init?.headers)
-  for (const [k, v] of Object.entries(authHeaders())) if (!headers.has(k)) headers.set(k, v)
-  return fetchTo(`${BASE}${url}`, { ...init, headers }, ms)
+  const buildHeaders = () => {
+    const headers = new Headers(init?.headers)
+    for (const [k, v] of Object.entries(authHeaders())) if (!headers.has(k)) headers.set(k, v)
+    return headers
+  }
+  const headers = buildHeaders()
+  const sentToken = headers.has('Authorization')
+  const res = await fetchTo(`${BASE}${url}`, { ...init, headers }, ms)
+  if (res.status !== 401 || !sentToken) return res
+  const outcome = await refreshAuth()
+  if (!outcome.ok) {
+    if (outcome.rejected) return res
+    throw new RefreshUnavailableError()
+  }
+  // refreshAuth уже положил свежий токен в localStorage — перечитываем.
+  return fetchTo(`${BASE}${url}`, { ...init, headers: buildHeaders() }, ms)
 }
 
 /** каталог: сначала пробуем API бэкенда, иначе статический manifest */
