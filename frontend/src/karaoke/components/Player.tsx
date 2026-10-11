@@ -34,7 +34,7 @@ const TopBar = memo(function TopBar({ title, timeSec, duration, withMic, micLive
   return (
     <div className="flex items-center gap-2.5 py-3">
       <button onClick={onBack} title="Вернуться в каталог" aria-label="Вернуться в каталог"
-        className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-surface-hover px-3.5 text-[13px] font-medium text-text transition hover:bg-border hover:text-text">
+        className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-surface-hover px-3.5 text-[13px] font-medium text-text transition hover:bg-border hover:text-text max-sm:hidden">
         <ArrowLeft className="h-4 w-4" />
         <span className="hidden sm:inline">Каталог</span>
       </button>
@@ -68,17 +68,17 @@ interface ControlsBarProps {
 /** управление: перерисовывается только по действиям, не по тикам */
 const ControlsBar = memo(function ControlsBar({ phase, volume, onVolume, backing, hasOriginal, onToggle, onRestart, onBacking }: ControlsBarProps) {
   return (
-    <div className="flex items-center gap-3 py-4">
+    <div className="flex items-center gap-2 py-2 sm:gap-3 sm:py-4">
       {(phase === 'playing' || phase === 'paused') && (
         <>
           <button onClick={onToggle} title={phase === 'playing' ? 'Пауза (пробел)' : 'Продолжить (пробел)'}
             aria-label={phase === 'playing' ? 'Пауза' : 'Продолжить'}
-            className="grid h-12 w-12 place-items-center rounded-full bg-primary text-white transition hover:bg-primary-hover">
+            className="grid h-10 w-10 place-items-center rounded-full bg-primary text-white transition hover:bg-primary-hover sm:h-12 sm:w-12">
             {phase === 'playing' ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
           </button>
           <button onClick={onRestart} title="Начать песню сначала"
             aria-label="Начать песню сначала"
-            className="flex h-10 items-center gap-1.5 rounded-full bg-surface-hover px-3.5 text-[13px] font-medium text-text transition hover:bg-border hover:text-text">
+            className="flex h-10 items-center gap-1.5 rounded-full bg-surface-hover px-3.5 text-[13px] font-medium text-text transition hover:bg-border hover:text-text max-sm:hidden">
             <RotateCcw className="h-4 w-4" />
             Сначала
           </button>
@@ -713,8 +713,8 @@ export default function Player() {
 
       {/* полоса тона: показываем гладкий контур, очки — по строгому */}
       {(song.pitchSmooth ?? song.pitch) && (phase === 'playing' || phase === 'paused') && (
-        <div className="mt-3 rounded-2xl border border-border bg-surface-hover px-4 pb-1 pt-2">
-          <div className="px-1 text-[11px] text-muted/70">Попадание в ноты · золото — точно, светлые — почти, розовые — мимо</div>
+        <div className="mt-2 rounded-2xl border border-border bg-surface-hover px-3 pb-1 pt-1.5 sm:mt-3 sm:px-4 sm:pt-2">
+          <div className="hidden px-1 text-[11px] text-muted/70 sm:block">Попадание в ноты · золото — точно, светлые — почти, розовые — мимо</div>
           <PitchStrip pitch={(song.pitchSmooth ?? song.pitch)!} duration={duration || song.duration} time={Math.floor(time * 10) / 10} dotsRef={dotsRef} skips={song.skips} />
         </div>
       )}

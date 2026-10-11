@@ -138,6 +138,6 @@ export default function PitchStrip({ pitch, duration, time, dotsRef, skips }: Pr
   }, [pitch, duration, time, dotsRef, skips, themeTick])
 
   return (
-    <canvas ref={ref} className="h-44 w-full" aria-label="Высота тона" />
+    <canvas ref={ref} className="h-24 w-full sm:h-44" aria-label="Высота тона" />
   )
 }
