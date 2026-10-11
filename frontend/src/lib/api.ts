@@ -2,7 +2,7 @@ import { getRoomAccess } from './roomAccess'
 import type { Track } from '../types'
 
 let authToken: string | null = null
-let refreshPromise: Promise<string | null> | null = null
+let refreshPromise: Promise<RefreshOutcome> | null = null
 let unauthorizedHandler: (() => void) | null = null
 let tokenRefreshedHandler: ((token: string) => void) | null = null
 // после явного logout refresh запрещён: гонка «logout пришёл раньше refresh»
@@ -26,6 +26,24 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 // ротированный access → AuthContext синкает state
 export function setTokenRefreshedHandler(handler: ((token: string) => void) | null) {
   tokenRefreshedHandler = handler
+}
+
+/**
+ * Исход refresh: ok — новый access; rejected — сервер явно отказал (401:
+ * чужой/протухший/отозванный RT — только тут разлогиниваем);
+ * transient — сеть легла или бэкенд чихнул (5xx/503/обрыв): сессию храним,
+ * следующий запрос попробует refresh снова.
+ */
+export type RefreshOutcome =
+  | { ok: true; token: string }
+  | { ok: false; rejected: boolean }
+
+/** refresh упёрся не в 401, а в сеть/5xx: не разлогин, а «попробуйте снова». */
+export class RefreshUnavailableError extends Error {
+  constructor() {
+    super('Сервер обновления недоступен — проверьте связь и попробуйте снова')
+    this.name = 'RefreshUnavailableError'
+  }
 }
 
 function authHeaders(): Record<string, string> {
@@ -52,10 +70,10 @@ function isAuthMutation(url: string): boolean {
 }
 
 // single-flight: параллельные 401 делят один POST /api/auth/refresh
-export function refreshAuth(): Promise<string | null> {
-  if (refreshForbidden) return Promise.resolve(null)
+export function refreshAuth(): Promise<RefreshOutcome> {
+  if (refreshForbidden) return Promise.resolve({ ok: false, rejected: true })
   if (!refreshPromise) {
-    refreshPromise = (async () => {
+    refreshPromise = (async (): Promise<RefreshOutcome> => {
       // snapshot for the quiet-restore case (no token in localStorage yet)
       const tokenAtStart = localStorage.getItem('token')
       try {
@@ -63,20 +81,23 @@ export function refreshAuth(): Promise<string | null> {
           method: 'POST',
           credentials: 'same-origin',
         })
-        if (!res.ok) return null
+        if (!res.ok) {
+          // 401 — сессия мертва; всё остальное — чих сети/бэкенда, не разлогин
+          return { ok: false, rejected: res.status === 401 }
+        }
         const data = (await res.json()) as { token?: string }
-        if (!data.token) return null
+        if (!data.token) return { ok: false, rejected: true }
         // while the restore was in flight the user may have logged in or
         // registered — never overwrite that fresh session with the old token
         if (tokenAtStart === null && localStorage.getItem('token') !== null) {
-          return null
+          return { ok: false, rejected: true }
         }
         authToken = data.token
         localStorage.setItem('token', data.token)
         tokenRefreshedHandler?.(data.token)
-        return data.token
+        return { ok: true, token: data.token }
       } catch {
-        return null
+        return { ok: false, rejected: false }
       } finally {
         refreshPromise = null
       }
@@ -85,15 +106,18 @@ export function refreshAuth(): Promise<string | null> {
   return refreshPromise
 }
 
-// 401 → refresh (одна попытка) → повтор; при неудаче refresh — unauthorizedHandler
+// 401 → refresh (одна попытка) → повтор; rejected — unauthorizedHandler,
+// transient — бросаем RefreshUnavailableError (сессия живёт)
 async function withRefresh(fetcher: () => Promise<Response>, url: string): Promise<Response> {
   let res = await fetcher()
   if (res.status === 401 && !isAuthMutation(url)) {
-    const fresh = await refreshAuth()
-    if (fresh) {
+    const outcome = await refreshAuth()
+    if (outcome.ok) {
       res = await fetcher()
-    } else {
+    } else if (outcome.rejected) {
       unauthorizedHandler?.()
+    } else {
+      throw new RefreshUnavailableError()
     }
   }
   return res

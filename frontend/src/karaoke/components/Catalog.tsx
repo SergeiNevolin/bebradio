@@ -62,6 +62,7 @@ function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number
         original: song.original ?? null,
         owner_id: song.owner_id ?? null,
         owner_name: song.owner_name ?? null,
+        cover: song.cover ?? null,
       })
     }
   }
@@ -106,6 +107,7 @@ function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number
       error={loadError}
       number={index + 1}
       duration={formatTime(song.duration)}
+      artUrl={song.cover ?? undefined}
       tint={`linear-gradient(135deg, hsl(${hue} 45% 32%), hsl(${(hue + 40) % 360} 50% 20%))`}
       glyph={<Disc3 className="h-5 w-5 text-white/70" />}
       busy={busy}
@@ -282,6 +284,7 @@ export default function Catalog() {
       original: s.original ?? null,
       owner_id: s.owner_id ?? null,
       owner_name: s.owner_name ?? null,
+      cover: s.cover ?? null,
     }
     setPreview(preview)
   }
@@ -388,6 +391,7 @@ export default function Catalog() {
                           {s.lines} строк · {formatTime(s.duration)}
                         </>
                       }
+                      coverUrl={s.cover ?? undefined}
                       tint={tintForId(s.id)}
                       glyph={monoGlyph(parsed.title)}
                       playLabel={`Превью: ${parsed.title}`}
@@ -411,6 +415,7 @@ export default function Catalog() {
                           {s.lines} строк · {formatTime(s.duration)}
                         </>
                       }
+                      coverUrl={s.cover ?? undefined}
                       tint={tintForId(s.id)}
                       glyph={monoGlyph(parsed.title)}
                       playLabel={`Превью: ${parsed.title}`}

@@ -40,6 +40,8 @@ export interface SongMeta {
   duration: number
   /** автор из метаданных (редактор); пусто — разбираем из названия */
   artist?: string | null
+  /** обложка (cover.jpg в статике); пусто — рисуем tint+glyph */
+  cover?: string | null
   /** владелец-загрузчик; пусто — легаси без автора */
   owner_id?: string | null
   owner_name?: string | null

@@ -136,6 +136,39 @@ describe('KaraokePreviewPanel: владелец', () => {
     ).toBe(true)
   })
 
+  it('обложка из модалки уходит PUT-ом и кладёт стор', async () => {
+    mockUser = { id: 'u1', username: 'Биба' }
+    useKaraoke.getState().setSongs([
+      { id: 't', title: 'Песня', audio: 'x', lines: 1, duration: 40 },
+    ])
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    vi.stubGlobal(
+      'fetch',
+      (async (url: string, init?: RequestInit) => {
+        calls.push({ url: String(url), init })
+        return { ok: true, json: async () => ({ cover: 'songs/t/cover.jpg' }) }
+      }) as unknown as typeof fetch,
+    )
+    renderPanel('/karaoke')
+    await openPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Изменить' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Загрузить обложку' }))
+    const file = new File(['bytes'], 'cover.png', { type: 'image/png' })
+    const input = document.querySelector(
+      '.modal input[type="file"]',
+    ) as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('Обложка обновлена', 'success')
+    })
+    expect(
+      calls.some((c) => c.url.endsWith('/api/songs/t/cover') && c.init?.method === 'PUT'),
+    ).toBe(true)
+    expect(useKaraoke.getState().songs.find((s) => s.id === 't')?.cover).toBe(
+      'songs/t/cover.jpg',
+    )
+  })
+
   it('Редактировать караоке ставит заявку и закрывает панель', async () => {
     mockUser = { id: 'u1', username: 'Биба' }
     renderPanel('/karaoke')

@@ -63,7 +63,7 @@ export default function Waveform({ wave, segments, activeSeg, time, skips, selec
 
     // регионы строк
     segments.forEach((s, i) => {
-      ctx.fillStyle = i === activeSeg ? hexRgba(HL, 0.16) : hexRgba(TX, 0.045)
+      ctx.fillStyle = i === activeSeg ? hexRgba(HL, 0.16) : hexRgba(TX, 0.07)
       ctx.fillRect(x(s.start), 0, Math.max(2, x(s.end) - x(s.start)), H)
     })
 
@@ -87,7 +87,7 @@ export default function Waveform({ wave, segments, activeSeg, time, skips, selec
     // волны
     const n = wave.peaks.length
     const bw = W / n
-    ctx.fillStyle = hexRgba(TX, 0.38)
+    ctx.fillStyle = hexRgba(TX, 0.45)
     for (let i = 0; i < n; i++) {
       const h = Math.max(1, wave.peaks[i] * (H - 8))
       const bx = i * bw
@@ -95,7 +95,7 @@ export default function Waveform({ wave, segments, activeSeg, time, skips, selec
     }
 
     // сыгранная часть
-    ctx.fillStyle = hexRgba(TX, 0.45)
+    ctx.fillStyle = hexRgba(TX, 0.5)
     ctx.fillRect(x(time), 0, W - x(time), H)
 
     // курсор

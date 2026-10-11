@@ -86,6 +86,18 @@ describe('useKaraoke', () => {
     expect(st.plays['a']).toBeUndefined()
   })
 
+  it('updateSongCover правит каталог и открытую песню', () => {
+    const s = useKaraoke.getState()
+    s.setSongs([{ id: 'a', title: 'a', audio: 'x', lines: 1, duration: 10 }])
+    s.openSong(song('a'))
+    s.updateSongCover('a', 'songs/a/cover.jpg')
+    const st = useKaraoke.getState()
+    expect(st.songs.find((x) => x.id === 'a')?.cover).toBe('songs/a/cover.jpg')
+    expect(st.song?.cover).toBe('songs/a/cover.jpg')
+    s.updateSongCover('a', null)
+    expect(useKaraoke.getState().songs.find((x) => x.id === 'a')?.cover).toBeNull()
+  })
+
   it('updateSongMeta правит каталог и открытую песню', () => {
     const s = useKaraoke.getState()
     s.setSongs([

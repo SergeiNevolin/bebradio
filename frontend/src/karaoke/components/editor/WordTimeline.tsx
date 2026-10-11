@@ -110,6 +110,9 @@ export default function WordTimeline({
     // цвета темы (читаем на каждый кадр — тема может смениться)
     const HL = cssVar('--color-highlight')
     const TX = cssVar('--color-text')
+    // чернила подписей на жёлтой заливке: в светлой теме тёмная охра
+    // (жёлтый текст на белом нечитаем), в тёмной — сам хайлайт
+    const INK = cssVar('--color-highlight-ink') || HL
 
     // активная дорожка подсвечена (шахматка строк)
     blocks.forEach((blk, li) => {
@@ -121,7 +124,7 @@ export default function WordTimeline({
     // волны — отдельной полосой НИЖЕ слов, слова её не перекрывают
     const dur = Math.max(1, wave.duration)
     const waveMid = WAVE_Y + WAVE_H / 2
-    ctx.fillStyle = hexRgba(TX, 0.28)
+    ctx.fillStyle = hexRgba(TX, 0.36)
     const step = Math.max(1, Math.floor(W / 220))
     for (let px = 0; px < W; px += step) {
       const t = t0 + (px / W) * (t1 - t0)
@@ -143,14 +146,14 @@ export default function WordTimeline({
       const isSel = selected !== null && selected.key === blk.key && selected.wi === f.wi
       const isTap = tapPos !== null && tapPos.key === blk.key && tapPos.wi === f.wi
       const isMulti = multi.has(mkKey(blk.key, f.wi))
-      ctx.globalAlpha = blk.active ? 1 : 0.45
+      ctx.globalAlpha = blk.active ? 1 : 0.55
       ctx.fillStyle = isTap
         ? hexRgba(HL, 0.30)
         : active
           ? hexRgba(HL, 0.22)
           : sung
-            ? hexRgba(TX, 0.10)
-            : hexRgba(TX, 0.05)
+            ? hexRgba(TX, 0.14)
+            : hexRgba(TX, 0.07)
       const bw = Math.max(3, x2 - x1)
       if (typeof ctx.roundRect === 'function') {
         ctx.beginPath()
@@ -165,16 +168,16 @@ export default function WordTimeline({
         ctx.stroke()
       }
       // подпись
-      ctx.fillStyle = sung || active || isTap || isMulti ? HL : TX
+      ctx.fillStyle = sung || active || isTap || isMulti ? INK : TX
       const label = w.w.length * 6.6 > bw - 6 ? w.w.slice(0, Math.max(1, Math.floor((bw - 6) / 6.6))) : w.w
       ctx.fillText(label, x1 + 5, laneY + 18)
       // время
-      ctx.fillStyle = hexRgba(TX, 0.35)
+      ctx.fillStyle = hexRgba(TX, 0.5)
       ctx.font = '9px Inter, system-ui, sans-serif'
       ctx.fillText(`${w.s.toFixed(2)}`, x1 + 5, laneY + 32)
       ctx.font = '11px Inter, system-ui, sans-serif'
       // ручки краёв
-      ctx.fillStyle = isSel ? HL : hexRgba(TX, 0.35)
+      ctx.fillStyle = isSel ? HL : hexRgba(TX, 0.5)
       ctx.fillRect(x1 - 1.5, laneY + 3, 3, 22)
       ctx.fillRect(x2 - 1.5, laneY + 3, 3, 22)
       ctx.globalAlpha = 1
@@ -193,10 +196,10 @@ export default function WordTimeline({
     for (let tt = Math.floor(t0 * 2) / 2; tt <= t1 + 1e-6; tt += 0.5) {
       const xx = X(tt)
       const isSec = Math.abs(tt - Math.round(tt)) < 1e-6
-      ctx.fillStyle = hexRgba(TX, 0.4)
+      ctx.fillStyle = hexRgba(TX, 0.55)
       ctx.fillRect(xx, H - 6, 1, isSec ? 6 : 3)
       if (isSec && Math.round(tt) % labelStep === 0) {
-        ctx.fillStyle = hexRgba(TX, 0.45)
+        ctx.fillStyle = hexRgba(TX, 0.65)
         ctx.fillText(`${Math.round(tt)}с`, xx + 3, H - 9)
       }
     }

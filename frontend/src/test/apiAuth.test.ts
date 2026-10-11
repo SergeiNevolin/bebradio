@@ -67,7 +67,7 @@ describe('api refresh flow', () => {
     expect(refreshCalls).toHaveLength(1)
   })
 
-  it('calls unauthorized handler when refresh fails', async () => {
+  it('calls unauthorized handler when refresh is rejected (401)', async () => {
     const handler = vi.fn()
     setUnauthorizedHandler(handler)
     vi.mocked(fetch)
@@ -76,6 +76,31 @@ describe('api refresh flow', () => {
 
     await expect(api.getMe()).rejects.toMatchObject({ status: 401 })
     expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps session on transient refresh failure (network down)', async () => {
+    const handler = vi.fn()
+    setUnauthorizedHandler(handler)
+    localStorage.setItem('token', 'expired')
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'Not authenticated' }))
+      .mockRejectedValueOnce(new TypeError('network down'))
+
+    await expect(api.getMe()).rejects.toMatchObject({ name: 'RefreshUnavailableError' })
+    expect(handler).not.toHaveBeenCalled()
+    // access в LS не тронут — следующий запрос попробует refresh снова
+    expect(localStorage.getItem('token')).toBe('expired')
+  })
+
+  it('keeps session on refresh 503 (backend/redis hiccup)', async () => {
+    const handler = vi.fn()
+    setUnauthorizedHandler(handler)
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'Not authenticated' }))
+      .mockResolvedValueOnce(jsonResponse(503, { error: 'Refresh unavailable' }))
+
+    await expect(api.getMe()).rejects.toMatchObject({ name: 'RefreshUnavailableError' })
+    expect(handler).not.toHaveBeenCalled()
   })
 
   it('does not refresh on login 401', async () => {
@@ -90,11 +115,22 @@ describe('api refresh flow', () => {
     setTokenRefreshedHandler(onRefreshed)
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { token: 'fresh' }))
 
-    const token = await refreshAuth()
+    const outcome = await refreshAuth()
 
-    expect(token).toBe('fresh')
+    expect(outcome).toEqual({ ok: true, token: 'fresh' })
     expect(localStorage.getItem('token')).toBe('fresh')
     expect(onRefreshed).toHaveBeenCalledWith('fresh')
+  })
+
+  it('refreshAuth reports rejected vs transient', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { error: 'nope' }))
+    expect(await refreshAuth()).toEqual({ ok: false, rejected: true })
+
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(503, { error: 'down' }))
+    expect(await refreshAuth()).toEqual({ ok: false, rejected: false })
+
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError('down'))
+    expect(await refreshAuth()).toEqual({ ok: false, rejected: false })
   })
 
   it('visitRoom retries after refresh', async () => {
@@ -117,9 +153,9 @@ describe('api refresh flow', () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { ok: true }))
 
     await api.logout()
-    const token = await refreshAuth()
+    const outcome = await refreshAuth()
 
-    expect(token).toBeNull()
+    expect(outcome).toEqual({ ok: false, rejected: true })
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1) // только сам logout
   })
 })

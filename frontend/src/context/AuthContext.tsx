@@ -67,11 +67,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     // localStorage пуст, но httpOnly-кука может жить → тихий restore
     let cancelled = false
-    refreshAuth().then((fresh) => {
+    refreshAuth().then((outcome) => {
       if (cancelled) return
-      if (fresh) {
-        setAuthToken(fresh)
-        setToken(fresh) // триггерит эффект выше → fetchUser
+      if (outcome.ok) {
+        setAuthToken(outcome.token)
+        setToken(outcome.token) // триггерит эффект выше → fetchUser
       } else {
         setLoading(false)
       }

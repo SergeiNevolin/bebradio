@@ -13,11 +13,24 @@ export interface KaraokePreview {
   /** Владелец-загрузчик; пусто — легаси без автора. */
   owner_id?: string | null
   owner_name?: string | null
+  /** Обложка (относительный путь в статике караоке либо абсолютный). */
+  cover?: string | null
 }
 
 /** Превью — оригинал с вокалом, иначе минус; пути резолвятся через прокси /api/karaoke/. */
 export function karaokePreviewUrl(song: KaraokePreview): string {
   const rel = song.original || song.audio || `songs/${song.id}/minus.mp3`
+  if (/^(https?:)?\/\//.test(rel) || rel.startsWith('data:') || rel.startsWith('blob:')) return rel
+  // Уже абсолютный путь встроенного режима (манифест с префиксом) — как есть.
+  if (rel.startsWith('/api/karaoke/')) return rel
+  const clean = rel.replace(/^\/+/, '')
+  return `/api/karaoke/${clean}`
+}
+
+/** Обложка для <img>: относительные пути — через прокси /api/karaoke/. Нет обложки — null. */
+export function karaokeCoverUrl(song: Pick<KaraokePreview, 'cover'>): string | null {
+  const rel = song.cover
+  if (!rel) return null
   if (/^(https?:)?\/\//.test(rel) || rel.startsWith('data:') || rel.startsWith('blob:')) return rel
   // Уже абсолютный путь встроенного режима (манифест с префиксом) — как есть.
   if (rel.startsWith('/api/karaoke/')) return rel

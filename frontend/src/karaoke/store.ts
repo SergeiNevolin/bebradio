@@ -72,6 +72,8 @@ interface KaraokeState {
   removeSong: (id: string) => void
   /** Обновить название/автора песни в каталоге и в открытой песне. */
   updateSongMeta: (id: string, title: string, artist: string | null) => void
+  /** Обновить обложку песни в каталоге и в открытой песне. */
+  updateSongCover: (id: string, cover: string | null) => void
   /** Идёт ли сейчас пение в караоке — общий плеер при этом прячется и молчит. */
   soundActive: boolean
   setSoundActive: (v: boolean) => void
@@ -130,6 +132,11 @@ export const useKaraoke = create<KaraokeState>((set, get) => ({
     const songs = get().songs.map((s) => (s.id === id ? { ...s, title, artist } : s))
     const cur = get().song
     set({ songs, song: cur && cur.id === id ? { ...cur, title, artist } : cur })
+  },
+  updateSongCover: (id, cover) => {
+    const songs = get().songs.map((s) => (s.id === id ? { ...s, cover } : s))
+    const cur = get().song
+    set({ songs, song: cur && cur.id === id ? { ...cur, cover } : cur })
   },
   setSoundActive: (v) => set({ soundActive: v }),
   requestEdit: (id) => set({ editRequest: id }),

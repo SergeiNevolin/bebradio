@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { SongMeta } from '../../karaoke/lib/types'
+import { karaokeCoverUrl } from '../../lib/karaokePreview'
 import { tintForId } from '../../lib/mashupArt'
 import { MicIcon } from '../player/icons'
 import styles from './EditKaraokeModal.module.css'
@@ -7,15 +8,17 @@ import styles from './EditKaraokeModal.module.css'
 interface EditKaraokeModalProps {
   song: SongMeta
   onSaveMeta: (title: string, artist: string) => Promise<void>
+  onChangeCover: (file: File) => void
   onClose: () => void
 }
 
 /**
- * Настройки песни караоке: название и автор.
+ * Настройки песни караоке: название, автор и обложка.
  * Тот же контракт, что у EditMashupModal: форма меты отдельно от редактора
  * (тайминг правится в редакторе караоке, а не здесь).
  */
-export default function EditKaraokeModal({ song, onSaveMeta, onClose }: EditKaraokeModalProps) {
+export default function EditKaraokeModal({ song, onSaveMeta, onChangeCover, onClose }: EditKaraokeModalProps) {
+  const coverInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState(song.title)
   const [artist, setArtist] = useState(song.artist ?? '')
   const [saving, setSaving] = useState(false)
@@ -57,9 +60,13 @@ export default function EditKaraokeModal({ song, onSaveMeta, onClose }: EditKara
         </div>
         <div className="modal-body">
           <div className={styles.summary}>
-            <div className={styles.cover} style={{ background: tintForId(song.id) }}>
-              <MicIcon size={28} />
-            </div>
+            {karaokeCoverUrl({ cover: song.cover }) ? (
+              <img className={styles.cover} src={karaokeCoverUrl({ cover: song.cover }) as string} alt="" />
+            ) : (
+              <div className={styles.cover} style={{ background: tintForId(song.id) }}>
+                <MicIcon size={28} />
+              </div>
+            )}
             <div className={styles.meta}>
               <div className={styles.title} title={song.title}>{song.title}</div>
               <div className={styles.artist}>{song.artist || 'Автор неизвестен'}</div>
@@ -102,6 +109,31 @@ export default function EditKaraokeModal({ song, onSaveMeta, onClose }: EditKara
                 {saving ? 'Сохранение…' : saved ? 'Сохранено' : 'Сохранить'}
               </button>
             </div>
+          </section>
+
+          <section className={styles.section}>
+            <h4 className={styles.sectionTitle}>Обложка</h4>
+            <p className={styles.hint}>
+              Квадратный PNG или JPG лучше всего. До 5&nbsp;МБ; ужмётся до 1000&nbsp;px.
+            </p>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => coverInputRef.current?.click()}
+            >
+              {song.cover ? 'Заменить обложку' : 'Загрузить обложку'}
+            </button>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) onChangeCover(file)
+                e.target.value = ''
+              }}
+            />
           </section>
 
           <div className={styles.footer}>

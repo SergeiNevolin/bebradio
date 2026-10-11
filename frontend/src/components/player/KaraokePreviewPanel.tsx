@@ -4,8 +4,8 @@ import { usePlayer, isOnKaraoke } from '../../context/PlayerContext'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useKaraoke } from '../../karaoke/store'
-import { deleteSong, saveSongMeta } from '../../karaoke/lib/api'
-import { karaokePreviewTrack } from '../../lib/karaokePreview'
+import { deleteSong, saveSongMeta, uploadSongCover } from '../../karaoke/lib/api'
+import { karaokeCoverUrl, karaokePreviewTrack } from '../../lib/karaokePreview'
 import { tintForId } from '../../lib/mashupArt'
 import EditKaraokeModal from '../karaoke/EditKaraokeModal'
 import { MicIcon, PauseIcon, PlayIcon } from './icons'
@@ -38,6 +38,7 @@ export default function KaraokePreviewPanel() {
   if (!previewSong) return null
 
   const track = karaokePreviewTrack(previewSong)
+  const coverUrl = karaokeCoverUrl(previewSong) ?? karaokeCoverUrl({ cover: liveMeta?.cover })
   const active = player.current?.id === track.id
   const playing = active && player.isPlaying
   // Править/удалять может загрузивший; легаси без владельца — любой вошедший.
@@ -76,6 +77,14 @@ export default function KaraokePreviewPanel() {
     await saveSongMeta(songId, { title, artist: artist || null })
     useKaraoke.getState().updateSongMeta(songId, title, artist || null)
     setPreviewSong({ ...previewSong, title })
+  }
+
+  const handleChangeCover = async (file: File) => {
+    const songId = previewSong.id
+    const cover = await uploadSongCover(songId, file)
+    useKaraoke.getState().updateSongCover(songId, cover)
+    setPreviewSong({ ...previewSong, cover })
+    showToast('Обложка обновлена', 'success')
   }
 
   const handleSing = async () => {
@@ -117,8 +126,12 @@ export default function KaraokePreviewPanel() {
       closeLabel="Закрыть превью"
     >
       <div className={styles.bodyPad}>
-          <div className={styles.bigArt} style={{ background: tintForId(previewSong.id) }}>
-            <MicIcon size={56} />
+          <div className={styles.bigArt} style={coverUrl ? undefined : { background: tintForId(previewSong.id) }}>
+            {coverUrl ? (
+              <img src={coverUrl} alt="" />
+            ) : (
+              <MicIcon size={56} />
+            )}
           </div>
           <div className={styles.bigTitle} title={previewSong.title}>
             {previewSong.title}
@@ -169,8 +182,10 @@ export default function KaraokePreviewPanel() {
             lines: 0,
             duration: previewSong.duration ?? 0,
             language: previewSong.language ?? undefined,
+            cover: previewSong.cover ?? null,
           }}
           onSaveMeta={handleSaveMeta}
+          onChangeCover={handleChangeCover}
           onClose={() => setMetaOpen(false)}
         />
       )}

@@ -57,6 +57,12 @@
   margin-bottom: 4px;
 }
 
+.hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
 .footer {
   display: flex;
   justify-content: flex-end;

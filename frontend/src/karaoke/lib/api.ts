@@ -139,6 +139,7 @@ function prefixSong(s: SongMeta): SongMeta {
     audio: s.audio ? assetUrl(s.audio) : s.audio,
     original: s.original ? assetUrl(s.original) : s.original,
     vocals: s.vocals ? assetUrl(s.vocals) : s.vocals,
+    cover: s.cover ? assetUrl(s.cover) : s.cover,
   }
 }
 
@@ -193,6 +194,18 @@ export async function deleteSong(id: string): Promise<void> {
   const r = await apiFetch(`/api/songs/${encodeURIComponent(id)}`, { method: 'DELETE' })
   if (r.status === 401) throw new AuthRequiredError(AUTH_REQUIRED)
   if (!r.ok) throw new Error(await errorBody(r))
+}
+
+/** Поставить обложку (multipart, только владелец). Возвращает public-путь. */
+export async function uploadSongCover(id: string, file: File): Promise<string> {
+  const fd = new FormData()
+  fd.append('file', file)
+  const r = await apiFetch(`/api/songs/${encodeURIComponent(id)}/cover`, { method: 'PUT', body: fd }, 60_000)
+  if (r.status === 401) throw new AuthRequiredError(AUTH_REQUIRED)
+  if (!r.ok) throw new Error(await errorBody(r))
+  const data = (await r.json()) as { cover?: string }
+  if (!data.cover) throw new Error('Нет cover в ответе')
+  return data.cover
 }
 
 /** Название и автор — отдельным контрактом PUT /meta (только владелец). */

@@ -54,3 +54,31 @@
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
+
+/*
+ * Контраст редактора тайминга. Общие токены bebradio бледноваты для мелкого
+ * (10–11px) текста редактора: в светлой теме muted #737373 и primary #1db954
+ * на белом/сером не дотягивают до AA, в тёмной — растворяются hairline-бордеры.
+ * Переопределяем токены ТОЛЬКО внутри редактора (скоуп класса на портале),
+ * остальной сайт не трогаем.
+ */
+:root {
+  /* чернила подписей на жёлтой заливке: в тёмной — сам хайлайт, в светлой — тёмная охра */
+  --color-highlight-ink: #7c4a03;
+}
+[data-theme='dark'] {
+  --color-highlight-ink: #fcd34d;
+}
+
+.karaoke-editor {
+  --color-muted: #454545;
+  --color-primary: #15803d;
+  --color-primary-hover: #166534;
+  --color-border: #d6d6d6;
+}
+[data-theme='dark'] .karaoke-editor {
+  --color-muted: #c9c9c9;
+  --color-primary: #1db954;
+  --color-primary-hover: #1ed760;
+  --color-border: #4a4a53;
+}
