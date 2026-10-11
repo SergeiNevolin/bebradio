@@ -251,11 +251,15 @@ describe('префикс и вход', () => {
       localStorage.setItem('token', 'fresh')
       return { ok: true, token: 'fresh' }
     })
-    const fetch = vi.fn(async () => json({ error: 'no' }, false, 401))
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) =>
+      json({ error: 'no' }, false, 401),
+    )
     vi.stubGlobal('fetch', fetch)
     await expect(api.fetchManifest()).rejects.toBeInstanceOf(api.AuthRequiredError)
     // первая попытка + ровно один повтор
-    expect(fetch.mock.calls.filter(([u]) => String(u).startsWith('/karaoke/api/songs')).length).toBe(2)
+    expect(
+      fetch.mock.calls.filter(([u]) => String(u).startsWith('/karaoke/api/songs')).length,
+    ).toBe(2)
   })
 
   it('без токена — refresh не дёргаем, 401 как есть', async () => {
