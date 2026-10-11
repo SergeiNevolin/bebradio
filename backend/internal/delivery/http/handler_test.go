@@ -912,9 +912,40 @@ func TestRefreshRotatesSession(t *testing.T) {
 	if w2 := postRefresh(t, d, c2); w2.Code != 200 {
 		t.Errorf("refresh #2 (rotated): expected 200, got %d: %s", w2.Code, w2.Body.String())
 	}
-	// старый отозван
-	if w3 := postRefresh(t, d, c1); w3.Code != 401 {
-		t.Errorf("refresh #3 (old, revoked): expected 401, got %d", w3.Code)
+	// старый живёт grace-период: параллельная вкладка с тем же access
+	// идёт в /refresh одновременно и не должна получить 401 → разлогин
+	if w3 := postRefresh(t, d, c1); w3.Code != 200 {
+		t.Errorf("refresh #3 (old, grace): expected 200, got %d: %s", w3.Code, w3.Body.String())
+	}
+}
+
+func TestRefreshConcurrentTabs(t *testing.T) {
+	d := setupTestServer(t)
+	c1 := loginRefreshCookie(t, d)
+
+	// две вкладки с протухшим access обновляются одновременно одним jti
+	w1 := postRefresh(t, d, c1)
+	w2 := postRefresh(t, d, c1)
+	if w1.Code != 200 {
+		t.Fatalf("tab1 refresh: expected 200, got %d: %s", w1.Code, w1.Body.String())
+	}
+	if w2.Code != 200 {
+		t.Fatalf("tab2 refresh: expected 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+	// обе новые цепочки живы — чья бы кука ни победила в браузере
+	for i, w := range []*httptest.ResponseRecorder{w1, w2} {
+		var c string
+		for _, ck := range w.Result().Cookies() {
+			if ck.Name == "bebradio_refresh" {
+				c = ck.Value
+			}
+		}
+		if c == "" {
+			t.Fatalf("tab%d: expected rotated cookie", i+1)
+		}
+		if w := postRefresh(t, d, c); w.Code != 200 {
+			t.Errorf("tab%d chain: expected 200, got %d", i+1, w.Code)
+		}
 	}
 }
 

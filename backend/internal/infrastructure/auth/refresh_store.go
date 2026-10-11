@@ -52,3 +52,19 @@ func (st *RefreshStore) Alive(ctx context.Context, jti string) (bool, error) {
 	}
 	return n > 0, nil
 }
+
+// Grace — мягкий отзыв после ротации: старый jti живёт ещё d.
+// Параллельный refresh из второй вкладки (тот же access протух везде
+// одновременно — классика «долго висела страница») успевает обновиться
+// вместо 401 → разлогин всей сессии. Logout по-прежнему отзывает
+// мгновенно через Revoke. XX: уже мёртвый ключ не воскрешаем.
+func (st *RefreshStore) Grace(ctx context.Context, jti, userID string, d time.Duration) error {
+	if st == nil || st.rdb == nil {
+		return ErrNoStore
+	}
+	err := st.rdb.SetArgs(ctx, refreshKeyPrefix+jti, userID, redis.SetArgs{Mode: "XX", TTL: d}).Err()
+	if err == redis.Nil {
+		return nil // ключа уже нет — воскрешать нечего
+	}
+	return err
+}

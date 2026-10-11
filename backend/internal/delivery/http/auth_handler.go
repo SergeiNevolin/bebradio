@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bebradio/backend-go/internal/usecase"
 )
@@ -150,6 +151,11 @@ func (s *Server) clearRefreshCookie(w http.ResponseWriter) {
 	})
 }
 
+// refreshRotationGrace — сколько живёт старый refresh после ротации.
+// Две вкладки с одним протухшим access идут в /refresh почти одновременно:
+// без grace вторая получает 401 и фронт разлогинивает всю сессию.
+const refreshRotationGrace = time.Minute
+
 // handleRefresh — POST /api/auth/refresh: валидирует куку, ротирует refresh,
 // отдаёт новый access. Любой отказ — 401 (фронт разлогинивает).
 func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
@@ -214,8 +220,8 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		Secure:   s.config.AuthCookieSecure,
 		MaxAge:   s.refreshCookieMaxAge(),
 	})
-	if err := s.refresh.Revoke(r.Context(), jti); err != nil {
-		s.log.Error("revoke old refresh token failed", "error", err)
+	if err := s.refresh.Grace(r.Context(), jti, sub, refreshRotationGrace); err != nil {
+		s.log.Error("grace old refresh token failed", "error", err)
 	}
 
 	s.writeJSON(w, 200, map[string]any{"token": access})

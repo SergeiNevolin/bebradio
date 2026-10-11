@@ -69,6 +69,21 @@ function isAuthMutation(url: string): boolean {
   )
 }
 
+// exp access-токена (мс, Unix): нужен проактивному refresh в AuthContext.
+// Не-JWT (моки в тестах) → null, тогда живём как раньше — только по факту 401.
+export function getAccessExpiry(token: string): number | null {
+  const part = token.split('.')[1]
+  if (!part) return null
+  try {
+    const payload = JSON.parse(
+      atob(part.replace(/-/g, '+').replace(/_/g, '/')),
+    ) as { exp?: unknown }
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
 // single-flight: параллельные 401 делят один POST /api/auth/refresh
 export function refreshAuth(): Promise<RefreshOutcome> {
   if (refreshForbidden) return Promise.resolve({ ok: false, rejected: true })
@@ -77,25 +92,41 @@ export function refreshAuth(): Promise<RefreshOutcome> {
       // snapshot for the quiet-restore case (no token in localStorage yet)
       const tokenAtStart = localStorage.getItem('token')
       try {
-        const res = await fetch('/api/auth/refresh', {
+        const apply = async (res: Response): Promise<RefreshOutcome> => {
+          if (!res.ok) {
+            // 401 — сессия мертва; всё остальное — чих сети/бэкенда, не разлогин
+            return { ok: false, rejected: res.status === 401 }
+          }
+          const data = (await res.json()) as { token?: string }
+          if (!data.token) return { ok: false, rejected: true }
+          // while the restore was in flight the user may have logged in or
+          // registered — never overwrite that fresh session with the old token
+          if (tokenAtStart === null && localStorage.getItem('token') !== null) {
+            return { ok: false, rejected: true }
+          }
+          authToken = data.token
+          localStorage.setItem('token', data.token)
+          tokenRefreshedHandler?.(data.token)
+          return { ok: true, token: data.token }
+        }
+        const first = await fetch('/api/auth/refresh', {
           method: 'POST',
           credentials: 'same-origin',
         })
-        if (!res.ok) {
-          // 401 — сессия мертва; всё остальное — чих сети/бэкенда, не разлогин
-          return { ok: false, rejected: res.status === 401 }
+        const outcome = await apply(first)
+        // повтор при 401: гонка вкладок — соседняя уже ротировала куку,
+        // повтор уходит с новым значением из cookie jar и спасает сессию
+        if (outcome.ok || !outcome.rejected) return outcome
+        await new Promise((r) => setTimeout(r, 300))
+        try {
+          const second = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            credentials: 'same-origin',
+          })
+          return await apply(second)
+        } catch {
+          return { ok: false, rejected: false }
         }
-        const data = (await res.json()) as { token?: string }
-        if (!data.token) return { ok: false, rejected: true }
-        // while the restore was in flight the user may have logged in or
-        // registered — never overwrite that fresh session with the old token
-        if (tokenAtStart === null && localStorage.getItem('token') !== null) {
-          return { ok: false, rejected: true }
-        }
-        authToken = data.token
-        localStorage.setItem('token', data.token)
-        tokenRefreshedHandler?.(data.token)
-        return { ok: true, token: data.token }
       } catch {
         return { ok: false, rejected: false }
       } finally {
@@ -361,32 +392,53 @@ export const api = {
       form.append('artist', data.artist)
       if (data.cover) form.append('cover', data.cover)
       form.append('file', data.file) // file LAST: the Go handler reads title/artist/cover before it
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', '/api/tracks/')
-      const headers = authHeaders()
-      if (headers.Authorization) xhr.setRequestHeader('Authorization', headers.Authorization)
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
-      }
-      xhr.onload = () => {
-        if (xhr.status === 202 || xhr.status === 200) {
-          try {
-            resolve(JSON.parse(xhr.responseText) as Track)
-          } catch {
-            reject(new ApiError(xhr.status, 'Malformed server response'))
+      // 401 → refresh (одна попытка) → повтор; rejected — разлогин через
+      // общий handler, transient — RefreshUnavailableError (сессия живёт).
+      // Без этого загрузка после простоя (> жизни access) всегда падала в 401.
+      const send = (retried: boolean) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', '/api/tracks/')
+        const headers = authHeaders()
+        if (headers.Authorization) xhr.setRequestHeader('Authorization', headers.Authorization)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
+        }
+        xhr.onload = () => {
+          if (xhr.status === 202 || xhr.status === 200) {
+            try {
+              resolve(JSON.parse(xhr.responseText) as Track)
+            } catch {
+              reject(new ApiError(xhr.status, 'Malformed server response'))
+            }
+            return
           }
-          return
+          if (xhr.status === 401 && !retried) {
+            void refreshAuth().then((outcome) => {
+              if (outcome.ok) {
+                send(true)
+              } else {
+                if (outcome.rejected) unauthorizedHandler?.()
+                reject(
+                  outcome.rejected
+                    ? new ApiError(xhr.status, 'Not authenticated')
+                    : new RefreshUnavailableError(),
+                )
+              }
+            })
+            return
+          }
+          let message = `Upload failed (${xhr.status})`
+          try {
+            message = (JSON.parse(xhr.responseText) as { error?: string }).error || message
+          } catch {
+            /* keep default */
+          }
+          reject(new ApiError(xhr.status, message))
         }
-        let message = `Upload failed (${xhr.status})`
-        try {
-          message = (JSON.parse(xhr.responseText) as { error?: string }).error || message
-        } catch {
-          /* keep default */
-        }
-        reject(new ApiError(xhr.status, message))
+        xhr.onerror = () => reject(new ApiError(0, 'Network error during upload'))
+        xhr.send(form)
       }
-      xhr.onerror = () => reject(new ApiError(0, 'Network error during upload'))
-      xhr.send(form)
+      send(false)
     }),
 
   // ── Admin ────────────────────────────────────────────────────────────

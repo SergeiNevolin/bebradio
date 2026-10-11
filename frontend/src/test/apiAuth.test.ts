@@ -73,6 +73,7 @@ describe('api refresh flow', () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse(401, { error: 'Not authenticated' }))
       .mockResolvedValueOnce(jsonResponse(401, { error: 'Not authenticated' }))
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'Not authenticated' }))
 
     await expect(api.getMe()).rejects.toMatchObject({ status: 401 })
     expect(handler).toHaveBeenCalledTimes(1)
@@ -123,7 +124,9 @@ describe('api refresh flow', () => {
   })
 
   it('refreshAuth reports rejected vs transient', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { error: 'nope' }))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'nope' }))
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'nope' }))
     expect(await refreshAuth()).toEqual({ ok: false, rejected: true })
 
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(503, { error: 'down' }))
@@ -131,6 +134,29 @@ describe('api refresh flow', () => {
 
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError('down'))
     expect(await refreshAuth()).toEqual({ ok: false, rejected: false })
+  })
+
+  it('refreshAuth retries once on 401 (multi-tab rotation race)', async () => {
+    // соседняя вкладка уже ротировала куку: первый 401, повтор с новым
+    // значением из cookie jar — успех, сессия спасена
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'rotated away' }))
+      .mockResolvedValueOnce(jsonResponse(200, { token: 'fresh' }))
+
+    const outcome = await refreshAuth()
+
+    expect(outcome).toEqual({ ok: true, token: 'fresh' })
+    expect(localStorage.getItem('token')).toBe('fresh')
+    expect(vi.mocked(fetch).mock.calls.filter(([u]) => String(u).includes('/api/auth/refresh'))).toHaveLength(2)
+  })
+
+  it('getAccessExpiry reads exp or returns null', async () => {
+    const { getAccessExpiry } = await import('../lib/api')
+    const b64 = (o: unknown) => btoa(JSON.stringify(o))
+    expect(getAccessExpiry(`h.${b64({ exp: 1700000000 })}.s`)).toBe(1700000000000)
+    expect(getAccessExpiry('tok123')).toBeNull()
+    expect(getAccessExpiry(`h.${b64({})}.s`)).toBeNull()
+    expect(getAccessExpiry('not.a.jwt.at.all.extra')).toBeNull()
   })
 
   it('visitRoom retries after refresh', async () => {

@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
-import { api, setAuthToken, setUnauthorizedHandler, setTokenRefreshedHandler, refreshAuth, ApiError } from '../lib/api'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { api, setAuthToken, setUnauthorizedHandler, setTokenRefreshedHandler, refreshAuth, getAccessExpiry, ApiError } from '../lib/api'
 
 interface User {
   id: string
@@ -24,6 +24,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
   const [loading, setLoading] = useState(true)
+  const tokenRef = useRef<string | null>(token)
+  tokenRef.current = token
 
   const clearSession = useCallback(() => {
     localStorage.removeItem('token')
@@ -80,6 +82,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cancelled = true
     }
   }, [token, fetchUser])
+
+  // проактивный refresh: access живёт минуты, а вкладка может висеть часами
+  // (кейс «долго не обновлял караоке — потребовало вход»). Обновляемся за
+  // минуту до смерти токена и при возврате на вкладку — тогда первое действие
+  // пользователя уже идёт со свежим access, а не упирается в 401. Rejected
+  // здесь — честно мёртвая сессия (retry гонки вкладок уже внутри refreshAuth),
+  // чистим сразу, чтобы UI не врал про «вошёл».
+  useEffect(() => {
+    if (!token) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const exp = getAccessExpiry(token)
+    if (exp !== null) {
+      const delay = exp - Date.now() - 60_000
+      if (delay <= 0) {
+        void refreshAuth().then((outcome) => {
+          if (!outcome.ok && outcome.rejected) clearSession()
+        })
+      } else {
+        timer = setTimeout(() => {
+          void refreshAuth().then((outcome) => {
+            if (!outcome.ok && outcome.rejected) clearSession()
+          })
+        }, delay)
+      }
+    }
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      const t = tokenRef.current
+      if (!t) return
+      const e = getAccessExpiry(t)
+      if (e === null) return
+      if (e - Date.now() < 60_000) {
+        void refreshAuth().then((outcome) => {
+          if (!outcome.ok && outcome.rejected) clearSession()
+        })
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      if (timer) clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [token, clearSession])
 
   const login = useCallback(async (email: string, password: string) => {
     try {

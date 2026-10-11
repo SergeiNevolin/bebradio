@@ -73,7 +73,12 @@ describe('AuthContext', () => {
         ok: false,
         status: 401,
         json: () => Promise.resolve({ error: 'Not authenticated' }),
-      } as Response) // refresh
+      } as Response) // refresh #1
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ error: 'Not authenticated' }),
+      } as Response) // refresh #2 (retry при гонке вкладок — тоже отказ)
     renderWithAuth()
     await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
     expect(screen.getByTestId('user').textContent).toBe('null')
@@ -215,5 +220,67 @@ describe('AuthContext', () => {
 
     screen.getByText('headers').click()
     expect(document.title).toBe('{}')
+  })
+
+  // access живёт минуты — вкладка, провисевшая дольше, не должна требовать вход
+  const fakeJwt = (expSec: number) => `h.${btoa(JSON.stringify({ exp: expSec }))}.s`
+  const okUser = () => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ user: { id: '1', email: 'a@b.com', username: 'alice' } }),
+  } as Response)
+
+  it('proactively refreshes expired access on mount', async () => {
+    const expired = fakeJwt(Math.floor(Date.now() / 1000) - 60)
+    const fresh = fakeJwt(Math.floor(Date.now() / 1000) + 900)
+    localStorage.setItem('token', expired)
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url).includes('/api/auth/refresh')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: fresh }) } as Response)
+      }
+      return okUser()
+    })
+    renderWithAuth()
+    await waitFor(() => expect(localStorage.getItem('token')).toBe(fresh))
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('alice'))
+  })
+
+  it('clears session when proactive refresh is finally rejected', async () => {
+    localStorage.setItem('token', fakeJwt(Math.floor(Date.now() / 1000) - 60))
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url).includes('/api/auth/refresh')) {
+        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({ error: 'nope' }) } as Response)
+      }
+      return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({ error: 'nope' }) } as Response)
+    })
+    renderWithAuth()
+    await waitFor(() => expect(localStorage.getItem('token')).toBeNull())
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
+    expect(screen.getByTestId('user').textContent).toBe('null')
+  })
+
+  it('refreshes on visibilitychange when access is about to expire', async () => {
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    const soon = fakeJwt(Math.floor(Date.now() / 1000) + 30)
+    const fresh = fakeJwt(Math.floor(Date.now() / 1000) + 900)
+    localStorage.setItem('token', soon)
+    let refreshCalls = 0
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url).includes('/api/auth/refresh')) {
+        refreshCalls += 1
+        // первая (со старта) — обрыв сети: сессия живёт, токен прежний
+        if (refreshCalls === 1) return Promise.reject(new TypeError('down'))
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: fresh }) } as Response)
+      }
+      return okUser()
+    })
+    renderWithAuth()
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('alice'))
+    await waitFor(() => expect(refreshCalls).toBeGreaterThanOrEqual(1))
+    expect(localStorage.getItem('token')).toBe(soon)
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => expect(localStorage.getItem('token')).toBe(fresh))
   })
 })
