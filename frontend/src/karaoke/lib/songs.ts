@@ -4,7 +4,9 @@ import { displayPitchTrack, gatePitchToSegments, quantizePitchTrack } from './pi
 import { evenWords } from './wordModel'
 
 async function getJSON<T>(url: string): Promise<T> {
-  const r = await fetch(url)
+  // no-store: после PUT /lyrics браузер/прокси иначе отдают закэшированный
+  // lyrics.json и редактор при повторном открытии показывает старые данные
+  const r = await fetch(url, { cache: 'no-store' })
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`)
   return (await r.json()) as T
 }
@@ -46,7 +48,11 @@ export function saveLocalLyrics(id: string, language: string | undefined, segmen
 /**
  * Сохранить правки текста+пропусков: сначала на бэкенд (канон data/songs),
  * при недоступности — в localStorage как раньше. Возвращает, куда легло.
- * При успехе локальный оверрайд стираем (дальше читаем канон).
+ * Локальную копию держим в синхроне ВСЕГДА (и после успеха сервера тоже):
+ * loadSong приоритизирует localStorage, поэтому повторное открытие песни
+ * и редактора покажет именно сохранённое — даже если сервер при следующем
+ * GET отдаст stale lyrics.json (кэш/статика не обновилась).
+ * Убрать локальные правки и перечитать канон — кнопка «Сбросить» в плеере.
  */
 export async function saveSongLyrics(
   id: string,
@@ -64,10 +70,10 @@ export async function saveSongLyrics(
     const data = (await r.json()) as { ok?: boolean; error?: string }
     if (r.ok && data.ok) {
       try {
-        localStorage.removeItem(lyricsKey(id))
-        clearLocalSkips(id)
+        saveLocalLyrics(id, language, segments)
+        saveLocalSkips(id, skips)
       } catch {
-        /* ignore */
+        /* приватный режим — сервер уже сохранил, идём дальше */
       }
       return 'server'
     }

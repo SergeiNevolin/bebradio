@@ -80,13 +80,13 @@ describe('saveSongLyrics', () => {
   const segs = [{ start: 0, end: 1, text: 'а', words: [{ w: 'а', s: 0, e: 1 }] }]
   const skips = [{ s: 2, e: 3 }]
 
-  it('сервер ок — чистим локальное', async () => {
+  it('сервер ок — локальную копию держим в синхроне (переоткрытие покажет сохранённое)', async () => {
     localStorage.setItem('karaoke:lyrics:t', '???')
     localStorage.setItem('karaoke:skips:t', '???')
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })))
     expect(await saveSongLyrics('t', 'ru', segs, skips)).toBe('server')
-    expect(localStorage.getItem('karaoke:lyrics:t')).toBe(null)
-    expect(localStorage.getItem('karaoke:skips:t')).toBe(null)
+    expect(JSON.parse(localStorage.getItem('karaoke:lyrics:t')!).segments).toEqual(segs)
+    expect(JSON.parse(localStorage.getItem('karaoke:skips:t')!)).toEqual({ skips })
   })
 
   it('сервер ругается — пишем локально', async () => {

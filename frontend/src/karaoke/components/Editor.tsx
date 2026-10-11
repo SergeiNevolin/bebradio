@@ -724,11 +724,17 @@ export default function Editor({ song, onClose, onSave, onReset, onSeek, resetSi
   }, [tap, step, playing, selWord, doTap, play, pause, nudge, cancelTap, deleteWord, confirmStep, cancelStep, undo, redo, closeMaybe])
 
   // «Сбросить» при открытом редакторе: перечитать song.segments, выйти из режимов.
-  // Через ref-метку, чтобы сохранение (тоже меняющее song) ничего не трогало.
+  // Через ref-метку, чтобы сохранение (тоже меняющее song) ничего не трогало:
+  // сохранили — rows уже равны сохранённому, перечитывать не надо.
+  // А вот смена песни (другой song.id при живом редакторе) — обязана
+  // перечитать строки, иначе редактор показывает данные прошлой песни.
   const resetSeen = useRef(resetSignal)
+  const songIdSeen = useRef(song.id)
   useEffect(() => {
-    if (resetSeen.current === resetSignal) return
+    const songChanged = songIdSeen.current !== song.id
+    if (!songChanged && resetSeen.current === resetSignal) return
     resetSeen.current = resetSignal
+    songIdSeen.current = song.id
     pause()
     const fresh = toRows(song.segments)
     setRows(fresh)
@@ -740,8 +746,8 @@ export default function Editor({ song, onClose, onSave, onReset, onSeek, resetSi
     setStep(null)
     hist.current = { past: [], future: [], lastPush: 0 }
     setDirty(false)
-    flash('Сброшено к версии из каталога')
-  })
+    if (!songChanged) flash('Сброшено к версии из каталога')
+  }, [resetSignal, song, pause])
 
   /* ---------- строки ---------- */
 
