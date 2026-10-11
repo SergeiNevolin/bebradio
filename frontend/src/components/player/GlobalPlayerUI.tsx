@@ -49,11 +49,6 @@ export function GlobalPlayerBar() {
   }, [karaokeActive, player.pause])
 
   const singingKaraoke = isOnKaraoke(location.pathname) && karaokeActive
-  if (isPlayerHiddenPath(location.pathname) || singingKaraoke) {
-    // В комнате свой эфир и своя плашка; в караоке поёт минус. UI плеера
-    // прячем, но <audio> держим смонтированным, чтобы не рвать состояние.
-    return <audio ref={player.audioRef} preload="none" />
-  }
   // У превью караоке нет библиотечного трека — лайкать нечего.
   const likeHandler =
     player.current?.source === 'karaoke'
@@ -61,6 +56,14 @@ export function GlobalPlayerBar() {
       : (m: Parameters<typeof toggleLike>[0]) => {
           void toggleLike(m)
         }
+  // В комнате свой эфир и своя плашка; в караоке поёт минус. UI плеера
+  // прячем флагом hidden при СТАБИЛЬНОЙ позиции в дереве: любая смена ветки
+  // (голый <audio>, обёртка-div) размонтирует MashupPlayer — у нового
+  // элемента нет ни src, ни слушателей хука (его эффекты не перестреляют
+  // на том же треке), и возврат из комнаты/пения оставляет немую плашку
+  // с врущим значком Pause. Паузу при входе берут на себя комната
+  // и эффект пения выше.
+  const hidden = isPlayerHiddenPath(location.pathname) || singingKaraoke
   return (
     <MashupPlayer
       player={player}
@@ -68,6 +71,7 @@ export function GlobalPlayerBar() {
       onExpand={openExpanded}
       queueOpen={queueOpen}
       onToggleQueue={() => setQueueOpen((v) => !v)}
+      hidden={hidden}
     />
   )
 }

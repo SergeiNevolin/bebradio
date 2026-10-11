@@ -26,6 +26,9 @@ interface MashupPlayerProps {
   /** Whether the side "Now playing" panel is currently shown. */
   queueOpen: boolean
   onToggleQueue: () => void
+  /** Hide the bar without unmounting (rooms, karaoke singing): the same
+   * <audio> and its listeners survive, coming back needs no reload. */
+  hidden?: boolean
 }
 
 const REPEAT_LABEL: Record<MashupPlayerState['repeat'], string> = {
@@ -40,6 +43,7 @@ export default function MashupPlayer({
   onExpand,
   queueOpen,
   onToggleQueue,
+  hidden = false,
 }: MashupPlayerProps) {
   const {
     audioRef,
@@ -67,7 +71,7 @@ export default function MashupPlayer({
   const queueCount = index >= 0 ? Math.max(0, list.length - index - 1) : 0
 
   return (
-    <div className={styles.bar} hidden={!current}>
+    <div className={styles.bar} hidden={!current || hidden}>
       {/* Always mounted so the hook's ref is available even with nothing playing. */}
       <audio ref={audioRef} preload="auto" />
 
