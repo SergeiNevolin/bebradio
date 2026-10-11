@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useKaraoke } from '../../karaoke/store'
 import { deleteSong, saveSongMeta, uploadSongCover } from '../../karaoke/lib/api'
+import { warmSongAudio } from '../../karaoke/lib/audioCache'
 import { karaokeCoverUrl, karaokePreviewTrack } from '../../lib/karaokePreview'
 import { tintForId } from '../../lib/mashupArt'
 import EditKaraokeModal from '../karaoke/EditKaraokeModal'
@@ -100,6 +101,9 @@ export default function KaraokePreviewPanel() {
     if (st.loadingSong) return
     const meta = st.songs.find((s) => s.id === songId)
     if (!meta) return
+    // Греем аудио заранее: пока открываем песню — байты уже текут.
+    void warmSongAudio(songId, 'minus', meta.audio)
+    if (meta.original) void warmSongAudio(songId, 'orig', meta.original)
     st.setLoadingSong(true)
     try {
       // Тяжёлый код пения (pitchy/fft) — отдельным чанком, только по клику «Спеть».

@@ -11,6 +11,7 @@ import { apiAvailable, hasAuthToken, BASE } from '../lib/api'
 import { loadSong } from '../lib/songs'
 import { formatTime } from '../lib/songs'
 import { hasLocalLyrics, loadManifest, plural } from '../lib/songs'
+import { warmSongAudio } from '../lib/audioCache'
 import { useKaraoke } from '../store'
 import { usePlayer } from '../../context/PlayerContext'
 import { useAuth } from '../../context/AuthContext'
@@ -70,6 +71,9 @@ function SongCard({ song, index, activeArtist }: { song: SongMeta; index: number
   const sing = async () => {
     if (busy || loadingSong) return
     setBusy(true)
+    // Греем аудио заранее: байты текут параллельно загрузке текста.
+    void warmSongAudio(song.id, 'minus', song.audio)
+    if (song.original) void warmSongAudio(song.id, 'orig', song.original)
     setLoadingSong(true)
     setLoadError(null)
     setPreviewSong(null)
@@ -255,6 +259,8 @@ export default function Catalog() {
         setRefreshError('Песни нет в каталоге — обновите страницу')
         return
       }
+      void warmSongAudio(meta.id, 'minus', meta.audio)
+      if (meta.original) void warmSongAudio(meta.id, 'orig', meta.original)
       pushRecent(meta.id)
       openSong(await loadSong(meta))
     } catch (e) {

@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SongData } from '../lib/types'
+import { dropSongAudio } from '../lib/audioCache'
 import { useKaraoke } from '../store'
 import Player from './Player'
 
@@ -153,5 +154,40 @@ describe('Player: старт', () => {  it('просто подпевать: о�
     // игра пошла: есть пауза, отсчёта нет
     expect(screen.getByTitle('Пауза (пробел)')).toBeInTheDocument()
     expect(screen.queryByText('3')).not.toBeInTheDocument()
+  })
+})
+
+describe('Player: предзагрузка аудио', () => {
+  it('догревшееся аудио подменяет src на blob', async () => {
+    dropSongAudio()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, blob: async () => new Blob(['bytes']) })),
+    )
+    let n = 0
+    vi.stubGlobal('URL', {
+      createObjectURL: () => `blob:t-${++n}`,
+      revokeObjectURL: vi.fn(),
+    })
+    render(<Player />)
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+    })
+    expect(audioEl().getAttribute('src')).toBe('blob:t-1')
+  })
+
+  it('без сети src остаётся стримовым', async () => {
+    dropSongAudio()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('down')
+      }),
+    )
+    render(<Player />)
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+    })
+    expect(audioEl().getAttribute('src')).toBe('songs/t/minus.mp3')
   })
 })

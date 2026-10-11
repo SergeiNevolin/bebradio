@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, Loader2, Pause, Play, RotateCcw, Volume2, Mic, MicOff } from 'lucide-react'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { formatTime, loadSong, clearLocalLyrics, clearLocalSkips, inSkip, wantOriginal } from '../lib/songs'
+import { warmSongAudio } from '../lib/audioCache'
 import { ballProgress, ballXY, karaokeFrame, lineTextSize } from '../lib/karaoke'
 import { gradeText, LivePitch, makeRefLookup, micLag, pitchClassError, sampleFrame, PERFECT_ERR, GOOD_ERR } from '../lib/pitch'
 import { buildSongScore, extractNotes, scoreNotes, scoreTiming, scoreWords, applySkips } from '../lib/score'
@@ -222,6 +223,8 @@ export default function Player() {
   const [editorReset, setEditorReset] = useState(0)
   // позиция пальца на ползунке во время драга — чтобы не дёргался за звуком
   const [scrub, setScrub] = useState<number | null>(null)
+  // ждём байты с сети (seek в непрогретое место): показываем «Буферизация…»
+  const [waiting, setWaiting] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement>(null)
   /** вторая дорожка (оригинал с вокалом): глушим/даём звук на пропусках «не поём» */
@@ -483,7 +486,23 @@ export default function Player() {
               setPhase('playing')
               startLoop()
             })
-            .catch(() => {
+            .catch((e: unknown) => {
+              // Подмена src на blob могла оборвать этот play (AbortError) —
+              // это не блок автоплея: дожимаем один раз.
+              if ((e as Error | null)?.name === 'AbortError' && audioRef.current) {
+                void audioRef.current
+                  .play()
+                  .then(() => {
+                    setPhase('playing')
+                    startLoop()
+                  })
+                  .catch(() => {
+                    setPhase('ready')
+                    setSoundActive(false)
+                    setMicError('Браузер заблокировал автоплей — нажмите «Петь» ещё раз')
+                  })
+                return
+              }
               setPhase('ready')
               setSoundActive(false)
               setMicError('Браузер заблокировал автоплей — нажмите «Петь» ещё раз')
@@ -661,6 +680,43 @@ export default function Player() {
       .catch(() => undefined)
   }, [])
 
+  // Предзагрузка аудио в blob: греем с открытия песни, подменяем src как только
+  // догрелось (blob локальный — подмена бесшовна, позицию сохраняем).
+  // Дальше перемотки идут из памяти, без сети вообще.
+  useEffect(() => {
+    if (!song) return
+    const id = song.id
+    let cancelled = false
+    const swapToBlob = (el: HTMLAudioElement | null, url: string): void => {
+      if (cancelled || !el || el.getAttribute('src') === url) return
+      const t = Number.isFinite(el.currentTime) ? el.currentTime : 0
+      const ph = phaseRef.current
+      el.src = url
+      try {
+        el.currentTime = t
+      } catch {
+        /* ignore */
+      }
+      // Подмена могла оборвать стартующий play() (AbortError): если поём
+      // или стартуем — дожимаем play, иначе begin/пользователь сделают сами.
+      if (ph === 'countdown' || ph === 'playing') {
+        void el.play().catch(() => undefined)
+      }
+    }
+    void warmSongAudio(id, 'minus', song.audio).then((url) => {
+      if (url) swapToBlob(audioRef.current, url)
+    })
+    if (song.original) {
+      void warmSongAudio(id, 'orig', song.original).then((url) => {
+        if (url) swapToBlob(origRef.current, url)
+      })
+    }
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song?.id])
+
   if (!song) return null
   const segs = segsSorted
   // окно: крупная + 2 следующие; спетость первой строки — прямо по часам, без гейтов
@@ -672,6 +728,9 @@ export default function Player() {
     <div className={`flex w-full flex-col px-5 max-sm:pb-[env(safe-area-inset-bottom)] ${singing ? 'h-full' : 'h-[calc(100%-64px)]'}`}>
       <audio ref={audioRef} src={song.audio}
         preload="auto" onEnded={onEnded}
+        onWaiting={() => setWaiting(true)}
+        onPlaying={() => setWaiting(false)}
+        onCanPlay={() => setWaiting(false)}
         onLoadedMetadata={(e) => onBackingLoaded(e.currentTarget)} />
       {/* вторая дорожка: оригинал с вокалом для пропусков «не поём» */}
       {song.original && (
@@ -735,6 +794,9 @@ export default function Player() {
         onKeyUp={() => setScrub(null)}
         onBlur={() => setScrub(null)}
         className="mt-3 w-full accent-primary" aria-label="Позиция в песне" />
+      {waiting && (phase === 'playing' || phase === 'paused') && (
+        <p className="mt-1 text-center text-xs text-muted tabular-nums">Буферизация…</p>
+      )}
 
       {/* управление */}
       <ControlsBar
