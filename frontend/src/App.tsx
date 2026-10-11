@@ -108,7 +108,7 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <PlayerProvider>
-        <div className={`app-root ${sidebarClass}`}>
+        <div className={`app-root ${sidebarClass} ${isOnKaraoke(location.pathname) && karaokeActive ? 'singing' : ''}`}>
           <Navbar onBurger={toggleSidebar} />
           <div className="app-body">
             <Sidebar

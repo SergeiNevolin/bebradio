@@ -669,7 +669,7 @@ export default function Player() {
   const curLine = visible[0] ?? null
 
   return (
-    <div className={`flex w-full flex-col px-5 ${singing ? 'h-full' : 'h-[calc(100%-64px)]'}`}>
+    <div className={`flex w-full flex-col px-5 max-sm:pb-[env(safe-area-inset-bottom)] ${singing ? 'h-full' : 'h-[calc(100%-64px)]'}`}>
       <audio ref={audioRef} src={song.audio}
         preload="auto" onEnded={onEnded}
         onLoadedMetadata={(e) => onBackingLoaded(e.currentTarget)} />

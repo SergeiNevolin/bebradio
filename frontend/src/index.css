@@ -180,8 +180,11 @@ input:focus {
   display: flex;
   flex-direction: column;
   width: 100%;
-  /* Единственный скролл страницы: шапка и сайдбар стоят, едет контент. */
+  /* Единственный скролл страницы: шапка и сайдбар стоят, едет контент.
+     По горизонтали только clip: 100vw-математика + вертикальный скроллбар
+     иначе дают паразитный горизонтальный скролл. */
   overflow-y: auto;
+  overflow-x: clip;
 }
 
 /* Строка контента под шапкой: сайдбар + страница. */
@@ -535,6 +538,11 @@ input:focus {
   /* Clearance for the fixed bottom tab bar. */
   .app-root {
     padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+
+  /* При пении таб-бар скрыт — зазор не нужен, иначе внизу дырка в 60px. */
+  .app-root.singing {
+    padding-bottom: 0;
   }
 
   .app {
