@@ -214,6 +214,9 @@ export default function Player() {
   const [score, setScore] = useState<ScoreResult | null>(null)
   const [scored, setScored] = useState(false)
   const editorOpen = useKaraoke((s) => s.editorOpen)
+  // При пении таб-бар скрыт (см. App) — занимаем всю высоту до самого низа.
+  // Вне пения оставляем запас 64px под нижнюю навигацию.
+  const singing = useKaraoke((s) => s.soundActive)
   const setEditorOpen = useKaraoke((s) => s.setEditorOpen)
   // счётчик сбросов: заставляет открытый редактор перечитать song.segments
   const [editorReset, setEditorReset] = useState(0)
@@ -666,7 +669,7 @@ export default function Player() {
   const curLine = visible[0] ?? null
 
   return (
-    <div className="flex h-[calc(100%-64px)] w-full flex-col px-5">
+    <div className={`flex w-full flex-col px-5 ${singing ? 'h-full' : 'h-[calc(100%-64px)]'}`}>
       <audio ref={audioRef} src={song.audio}
         preload="auto" onEnded={onEnded}
         onLoadedMetadata={(e) => onBackingLoaded(e.currentTarget)} />
@@ -805,6 +808,7 @@ export default function Player() {
         {editorOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <Editor
+              key={song.id}
               song={song}
               onClose={() => setEditorOpen(false)}
               onSave={applyEdited}

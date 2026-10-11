@@ -139,7 +139,9 @@ export default function App() {
         <GlobalPlayerBar />
         <GlobalPlayerOverlays />
         <PanelDock />
-        <MobileTabBar />
+        {/* При пении в караоке — иммерсивный экран: нижний таб-бар прячем,
+            плеер караоке занимает всю высоту до самого низа. */}
+        {!(isOnKaraoke(location.pathname) && karaokeActive) && <MobileTabBar />}
         </PlayerProvider>
       </ToastProvider>
     </AuthProvider>
