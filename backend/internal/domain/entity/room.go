@@ -38,7 +38,6 @@ func NewRoom(id, name, ownerID string) *Room {
 		Name:              name,
 		OwnerID:           ownerID,
 		AllowAnonymousAdd: true,
-		MashupRadio:       true,
 		CreatedAt:         time.Now(),
 	}
 }

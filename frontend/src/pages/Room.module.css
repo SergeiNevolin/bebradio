@@ -133,17 +133,6 @@
   overflow: hidden;
 }
 
-.authBanner {
-  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-hover) 100%);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 24px;
-  text-align: center;
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
 @media (max-width: 1024px) {
   .roomContent {
     grid-template-columns: 1fr;

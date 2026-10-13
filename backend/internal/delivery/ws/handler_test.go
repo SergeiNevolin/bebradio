@@ -13,19 +13,22 @@ import (
 	"github.com/bebradio/backend-go/internal/domain/repository"
 	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
 	"github.com/bebradio/backend-go/internal/usecase"
+	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 )
 
 var handlerLog = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 type handlerDeps struct {
-	manager  *ConnectionManager
-	room     *usecase.RoomUsecase
-	roomRepo *repository.MockRoomRepo
-	radio    *usecase.RadioUsecase
-	media    *usecase.MediaUsecase
-	handler  *Handler
-	rdb      *redis.Client
+	manager   *ConnectionManager
+	room      *usecase.RoomUsecase
+	roomRepo  *repository.MockRoomRepo
+	userRepo  *repository.MockUserRepo
+	trackRepo *repository.MockTrackRepo
+	radio     *usecase.RadioUsecase
+	media     *usecase.MediaUsecase
+	handler   *Handler
+	rdb       *redis.Client
 }
 
 func setupHandler(t *testing.T) *handlerDeps {
@@ -49,20 +52,23 @@ func setupHandler(t *testing.T) *handlerDeps {
 	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, handlerLog, rdb)
 	playbackUC := usecase.NewPlaybackUsecase(rdb)
 	chatUC := usecase.NewChatUsecase(roomRepo, handlerLog, rdb)
-	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, handlerLog, rdb)
+	trackRepo := repository.NewMockTrackRepo()
+	radioUC := usecase.NewRadioUsecase(mediaClient, trackRepo, cfg, handlerLog, rdb)
 	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, handlerLog, rdb)
 
 	manager := NewConnectionManager(handlerLog)
 	handler := NewHandler(manager, roomUC, playbackUC, chatUC, radioUC, mediaUC, cfg, rdb, handlerLog)
 
 	return &handlerDeps{
-		manager:  manager,
-		room:     roomUC,
-		roomRepo: roomRepo,
-		radio:    radioUC,
-		media:    mediaUC,
-		handler:  handler,
-		rdb:      rdb,
+		manager:   manager,
+		room:      roomUC,
+		roomRepo:  roomRepo,
+		userRepo:  userRepo,
+		trackRepo: trackRepo,
+		radio:     radioUC,
+		media:     mediaUC,
+		handler:   handler,
+		rdb:       rdb,
 	}
 }
 
@@ -98,7 +104,7 @@ func TestBackgroundRefillAddsTracks(t *testing.T) {
 		}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.trackRepo, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
@@ -151,7 +157,7 @@ func TestBackgroundRefillDoesNotPreSetRadioFilling(t *testing.T) {
 		}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.trackRepo, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
@@ -191,7 +197,7 @@ func TestBackgroundRefillHandlesRefillError(t *testing.T) {
 		return nil, &testRadioError{"media service unavailable"}
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.trackRepo, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
@@ -225,7 +231,7 @@ func TestBackgroundRefillEmptyCandidates(t *testing.T) {
 		return []string{}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.trackRepo, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
@@ -276,7 +282,7 @@ func TestBackgroundRefillRespectsMaxDuration(t *testing.T) {
 		}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.trackRepo, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
@@ -324,7 +330,7 @@ func TestBackgroundRefillSetsIsPlaying(t *testing.T) {
 		}, nil
 	}
 
-	d.radio = usecase.NewRadioUsecase(mediaClient, d.handler.config, handlerLog, d.rdb)
+	d.radio = usecase.NewRadioUsecase(mediaClient, d.trackRepo, d.handler.config, handlerLog, d.rdb)
 	d.handler.radio = d.radio
 
 	rm := entity.NewRoom("R1", "Test Room", "owner1")
@@ -369,5 +375,104 @@ func TestSkipThresholdMet(t *testing.T) {
 			t.Errorf("%s: skipThresholdMet(%d, %d) = %v, want %v",
 				c.name, c.skips, c.listeners, got, c.want)
 		}
+	}
+}
+
+func TestResolvePresenceID(t *testing.T) {
+	cases := []struct {
+		name             string
+		bound, msg, addr string
+		want             string
+	}{
+		{"jwt-bound id wins over spoofed hello", "user1", "admin", "1.2.3.4:5", "user1"},
+		{"guest id passes through", "", "guest42", "1.2.3.4:5", "guest42"},
+		{"anonymous falls back to conn addr", "", "", "1.2.3.4:5", "anon:1.2.3.4:5"},
+	}
+	for _, c := range cases {
+		if got := resolvePresenceID(c.bound, c.msg, c.addr); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// boundConn fakes a websocket connection for handler unit tests: production
+// code only uses it as a ConnectionManager map key here, never touching the
+// network.
+func boundConn(d *handlerDeps, roomID, userID string) *websocket.Conn {
+	conn := &websocket.Conn{}
+	d.manager.Connect(roomID, conn)
+	if userID != "" {
+		d.manager.BindUser(roomID, conn, userID)
+	}
+	return conn
+}
+
+func streamRoomForGate(t *testing.T, d *handlerDeps, roomID string) *entity.Room {
+	t.Helper()
+	rm := entity.NewRoom(roomID, "Stream", "owner1")
+	rm.IsStream = true
+	rm.MashupRadio = true
+	d.roomRepo.Save(rm)
+	d.userRepo.Users["admin1"] = &entity.User{ID: "admin1", Username: "admin", Role: "admin"}
+	d.userRepo.Users["owner1"] = &entity.User{ID: "owner1", Username: "owner"}
+	d.userRepo.Users["intruder"] = &entity.User{ID: "intruder", Username: "mallory"}
+	storeRoomRedis(t, d, rm,
+		[]*entity.Track{{ID: "t1", Title: "A"}, {ID: "t2", Title: "B"}},
+		&redisc.PlaybackState{CurrentIndex: 0, IsPlaying: true})
+	return rm
+}
+
+func TestStreamNextGatedToControllers(t *testing.T) {
+	d := setupHandler(t)
+	ctx := context.Background()
+	rm := streamRoomForGate(t, d, "S1")
+
+	// Intruder (regular user): no advance.
+	d.handler.handleNext(ctx, rm, boundConn(d, "S1", "intruder"), "S1")
+	if tracks, _ := redisc.GetQueue(ctx, d.rdb, "S1"); len(tracks) != 2 {
+		t.Fatalf("intruder next must not advance, queue=%d", len(tracks))
+	}
+
+	// Owner: advances.
+	d.handler.handleNext(ctx, rm, boundConn(d, "S1", "owner1"), "S1")
+	if tracks, _ := redisc.GetQueue(ctx, d.rdb, "S1"); len(tracks) != 1 {
+		t.Fatalf("owner next must advance, queue=%d", len(tracks))
+	}
+
+	// Admin: advances (fresh queue first).
+	storeRoomRedis(t, d, rm,
+		[]*entity.Track{{ID: "t1", Title: "A"}, {ID: "t2", Title: "B"}},
+		&redisc.PlaybackState{CurrentIndex: 0, IsPlaying: true})
+	d.handler.handleNext(ctx, rm, boundConn(d, "S1", "admin1"), "S1")
+	if tracks, _ := redisc.GetQueue(ctx, d.rdb, "S1"); len(tracks) != 1 {
+		t.Fatalf("admin next must advance, queue=%d", len(tracks))
+	}
+
+	// Plain rooms stay open to everyone.
+	plain := entity.NewRoom("P1", "Plain", "owner1")
+	d.roomRepo.Save(plain)
+	storeRoomRedis(t, d, plain,
+		[]*entity.Track{{ID: "t1", Title: "A"}, {ID: "t2", Title: "B"}},
+		&redisc.PlaybackState{CurrentIndex: 0, IsPlaying: true})
+	d.handler.handleNext(ctx, plain, boundConn(d, "P1", "intruder"), "P1")
+	if tracks, _ := redisc.GetQueue(ctx, d.rdb, "P1"); len(tracks) != 1 {
+		t.Fatalf("plain room next must stay open, queue=%d", len(tracks))
+	}
+}
+
+func TestStreamSeekGatedToControllers(t *testing.T) {
+	d := setupHandler(t)
+	ctx := context.Background()
+	rm := streamRoomForGate(t, d, "S2")
+
+	seek := map[string]any{"action": "sync", "position": float64(999)}
+	d.handler.handleSeek(ctx, rm, boundConn(d, "S2", "intruder"), seek, "S2")
+	if ps, _ := redisc.GetPlayback(ctx, d.rdb, "S2"); ps.Position == 999 {
+		t.Fatal("intruder sync must not move stream position")
+	}
+
+	d.handler.handleSeek(ctx, rm, boundConn(d, "S2", "owner1"), seek, "S2")
+	if ps, _ := redisc.GetPlayback(ctx, d.rdb, "S2"); ps.Position != 999 {
+		t.Fatalf("owner sync must move stream position, got %v", ps.Position)
 	}
 }

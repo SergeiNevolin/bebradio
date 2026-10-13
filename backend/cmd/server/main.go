@@ -87,8 +87,7 @@ func main() {
 	trackUC := usecase.NewTrackUsecase(trackRepo, mediaClient, cfg, log)
 	playbackUC := usecase.NewPlaybackUsecase(rdb)
 	chatUC := usecase.NewChatUsecase(roomRepo, log, rdb)
-	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, log, rdb)
-	radioUC.SetTrackRepo(trackRepo)
+	radioUC := usecase.NewRadioUsecase(mediaClient, trackRepo, cfg, log, rdb)
 
 	// Re-poll any track left "processing" by a previous run.
 	go trackUC.ResumeProcessing()
@@ -107,10 +106,18 @@ func main() {
 		access := r.URL.Query().Get("access")
 
 		var userID string
-		if auth := r.Header.Get("Authorization"); auth != "" {
-			token := strings.TrimPrefix(auth, "Bearer ")
-			uid, err := authService.DecodeToken(token)
-			if err == nil {
+		// Browsers cannot set headers on a WebSocket upgrade, so the SPA
+		// passes its short-lived access token as ?token= (same practice as
+		// the room ?access= token already in the query). Header stays as a
+		// fallback for non-browser clients.
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			if auth := r.Header.Get("Authorization"); auth != "" {
+				token = strings.TrimPrefix(auth, "Bearer ")
+			}
+		}
+		if token != "" {
+			if uid, err := authService.DecodeToken(token); err == nil {
 				userID = uid
 			}
 		}

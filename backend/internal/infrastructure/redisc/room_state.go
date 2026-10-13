@@ -28,6 +28,12 @@ func RoomKey(id, suffix string) string {
 	return "room:" + id + ":" + suffix
 }
 
+// Playback hash field names, shared so writers and readers cannot drift.
+const (
+	FieldRadioFilling = "radio_filling"
+	FieldRadioSeedURL = "radio_seed_url"
+)
+
 // ---------- Types ----------
 
 type PlaybackState struct {

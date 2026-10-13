@@ -108,7 +108,11 @@ func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
 		return
 	}
 
-	track := redisc.CurrentTrack(ctx, w.rdb, roomID)
+	tracks, _ := redisc.GetQueue(ctx, w.rdb, roomID)
+	var track *entity.Track
+	if ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
+		track = tracks[ps.CurrentIndex]
+	}
 	if track == nil {
 		// Queue drained while listeners are online: streams loop from the
 		// library, plain rooms wait for manual adds.
@@ -122,12 +126,30 @@ func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
 
 	advanced := false
 	if track.Duration > 0 {
-		pos := redisc.GetCurrentPosition(ctx, w.rdb, roomID)
+		// Wall-clock position from this snapshot (ps.IsPlaying here), no
+		// extra Redis round trip via GetCurrentPosition.
+		pos := ps.Position + time.Since(ps.LastSyncAt).Seconds()
 		if pos >= float64(track.Duration)+w.config.AutoAdvanceGrace {
 			advanced = w.playback.GoNext(ctx, roomID)
 		}
 	} else if !ps.CurrentStartedAt.IsZero() && time.Since(ps.CurrentStartedAt) > durationZeroSkipAfter {
 		advanced = w.playback.GoNext(ctx, roomID)
+	}
+
+	// Fast path: nothing advanced and the queue is healthy. Media URLs are
+	// still refreshed (Redis-only); the Postgres room load + refills run
+	// only when the queue is low or a transition happened. This keeps the
+	// per-tick cost at a few Redis calls instead of a DB hit per room.
+	if !advanced && len(tracks) > w.config.RadioRefillAt {
+		if w.media.EnsureRoomMedia(ctx, roomID) {
+			if rm, err := w.room.GetOrLoadRoom(ctx, roomID); err == nil {
+				if err := w.room.SaveTracks(ctx, rm); err != nil {
+					w.log.Error("auto-advance save tracks failed", "room_id", roomID, "error", err)
+				}
+				w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
+			}
+		}
+		return
 	}
 
 	// Load room metadata for EnsureRoomMedia and SaveTracks.
@@ -175,7 +197,7 @@ func (w *AutoAdvance) processStreamRoom(ctx context.Context, roomID string) {
 		// that AppendFreshTrack dedupes — so bust the flag and proceed.
 		if ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID); ps != nil && ps.RadioFilling {
 			w.log.Warn("stream stuck in filling state, resetting", "room_id", roomID)
-			redisc.SetPlaybackField(ctx, w.rdb, roomID, "radio_filling", "0")
+			redisc.SetPlaybackField(ctx, w.rdb, roomID, redisc.FieldRadioFilling, "0")
 		}
 		if picks, err := w.radio.RefillMashups(ctx, roomID, rm); err == nil && len(picks) > 0 {
 			for _, t := range picks {

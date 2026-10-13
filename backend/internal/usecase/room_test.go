@@ -325,8 +325,8 @@ func TestUpdateRoomSettingsMashupRadio(t *testing.T) {
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
 	rm := entity.NewRoom("X", "R", "O")
-	if !rm.MashupRadio {
-		t.Fatal("expected MashupRadio default true")
+	if rm.MashupRadio {
+		t.Fatal("expected MashupRadio default false for plain rooms")
 	}
 
 	off := false

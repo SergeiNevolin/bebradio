@@ -22,14 +22,8 @@ type RadioUsecase struct {
 	rdb         *redis.Client
 }
 
-func NewRadioUsecase(mediaClient repository.MediaClient, config *config.Config, log *slog.Logger, rdb *redis.Client) *RadioUsecase {
-	return &RadioUsecase{mediaClient: mediaClient, config: config, log: log, rdb: rdb}
-}
-
-// SetTrackRepo wires the library repo for mashup-stream refills. Kept as a
-// setter so existing constructor call sites keep working; call it in main.
-func (uc *RadioUsecase) SetTrackRepo(tracks repository.TrackRepository) {
-	uc.tracks = tracks
+func NewRadioUsecase(mediaClient repository.MediaClient, tracks repository.TrackRepository, config *config.Config, log *slog.Logger, rdb *redis.Client) *RadioUsecase {
+	return &RadioUsecase{mediaClient: mediaClient, tracks: tracks, config: config, log: log, rdb: rdb}
 }
 
 func (uc *RadioUsecase) NeedsRefill(ctx context.Context, roomID string, autoRadio bool) bool {
@@ -64,6 +58,25 @@ type resolveResult struct {
 	url  string
 	info map[string]any
 	err  error
+}
+
+// durationSecs reads a duration in seconds from untyped provider info.
+// Providers disagree on the numeric type (float64 from encoding/json,
+// int from hand-built maps); asserting a single type would silently read
+// 0 and bypass the MaxDuration gate below.
+func durationSecs(info map[string]any) int {
+	switch d := info["duration"].(type) {
+	case float64:
+		return int(d)
+	case float32:
+		return int(d)
+	case int:
+		return d
+	case int64:
+		return int(d)
+	default:
+		return 0
+	}
 }
 
 func (uc *RadioUsecase) Refill(ctx context.Context, roomID string) ([]*entity.Track, error) {
@@ -137,8 +150,7 @@ func (uc *RadioUsecase) Refill(ctx context.Context, roomID string) ([]*entity.Tr
 		if mediaID == "" || rowID == "" || seenMediaIDs[mediaID] {
 			continue
 		}
-		duration, _ := r.info["duration"].(float64)
-		if int(duration) > uc.config.MaxDuration {
+		if durationSecs(r.info) > uc.config.MaxDuration {
 			continue
 		}
 
@@ -164,7 +176,7 @@ func (uc *RadioUsecase) needsRefill(ctx context.Context, roomID string, ps *redi
 // the whole base. Only ready tracks are picked downstream. The room's
 // MashupRadio kill switch disables it: off = play only manually added tracks.
 func (uc *RadioUsecase) NeedsMashupRefill(ctx context.Context, roomID string, rm *entity.Room) bool {
-	if rm == nil || !rm.IsStream || !rm.MashupRadio || uc.tracks == nil {
+	if rm == nil || !rm.IsStream || !rm.MashupRadio {
 		return false
 	}
 	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
@@ -186,7 +198,7 @@ func (uc *RadioUsecase) NeedsMashupRefill(ctx context.Context, roomID string, rm
 // (AppendFreshTrack) so stale picks never resurrect a skipped track.
 // Respects the MashupRadio kill switch: off = no picks.
 func (uc *RadioUsecase) RefillMashups(ctx context.Context, roomID string, rm *entity.Room) ([]*entity.Track, error) {
-	if uc.tracks == nil || rm == nil || !rm.IsStream || !rm.MashupRadio {
+	if rm == nil || !rm.IsStream || !rm.MashupRadio {
 		return nil, nil
 	}
 	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)

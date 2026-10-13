@@ -98,7 +98,7 @@ func TestSkippedTrackNeverRecommendedAgain(t *testing.T) {
 			"source_url": url, "duration": float64(200),
 		}, nil
 	}
-	radio := NewRadioUsecase(mediaClient, testRadioConfig(), radioLog, rdb)
+	radio := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), testRadioConfig(), radioLog, rdb)
 
 	picked, err := radio.Refill(ctx, roomID)
 	if err != nil {
@@ -368,7 +368,7 @@ func TestStaleRefillPicksDroppedAtAppend(t *testing.T) {
 			"source_url": url, "duration": float64(200),
 		}, nil
 	}
-	radio := NewRadioUsecase(mediaClient, testRadioConfig(), radioLog, rdb)
+	radio := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), testRadioConfig(), radioLog, rdb)
 
 	// Refill picks rx (its snapshot predates the concurrent activity).
 	picked, err := radio.Refill(ctx, roomID)

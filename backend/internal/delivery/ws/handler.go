@@ -76,6 +76,13 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access, userID s
 	}
 
 	h.manager.Connect(roomID, conn)
+	// Bind the JWT-authenticated id up front: votes, skip votes and chat
+	// identity key off the bound id, and the client-supplied "user_id" in
+	// hello must never override it (otherwise anyone could vote/skip/chat
+	// as anyone else). Anonymous connections bind on hello instead.
+	if userID != "" {
+		h.manager.BindUser(roomID, conn, userID)
+	}
 	h.manager.SendJSON(roomID, conn, redisc.BuildToDict(ctx, h.rdb, rm))
 
 	defer func() {
@@ -109,7 +116,7 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access, userID s
 		case "jump":
 			h.handleJump(ctx, rm, conn, msg, roomID)
 		case "seek", "sync":
-			h.handleSeek(ctx, msg, roomID)
+			h.handleSeek(ctx, rm, conn, msg, roomID)
 		case "chat":
 			h.handleChat(ctx, rm, conn, msg, roomID)
 		case "vote":
@@ -141,14 +148,27 @@ func (h *Handler) handleHello(ctx context.Context, rm *entity.Room, conn *websoc
 		username = username[:30]
 	}
 
-	id := userID
-	if id == "" {
-		id = "anon:" + conn.RemoteAddr().String()
+	// A connection bound at upgrade time (JWT) keeps its id: the client
+	// must not be able to re-bind to someone else's id via hello.
+	id := resolvePresenceID(h.manager.GetUserID(roomID, conn), userID, conn.RemoteAddr().String())
+	if h.manager.GetUserID(roomID, conn) == "" {
+		h.manager.BindUser(roomID, conn, id)
 	}
 	info := &entity.PresenceInfo{ID: id, Name: username}
 	redisc.SetPresence(ctx, h.rdb, roomID, conn.RemoteAddr().String(), info)
+}
 
-	h.manager.BindUser(roomID, conn, id)
+// resolvePresenceID picks the stable identity for a connection: the
+// JWT-bound id wins, then the client-supplied one (guests), then an
+// anonymous id derived from the connection. Pure function, unit-tested.
+func resolvePresenceID(boundID, msgUserID, remoteAddr string) string {
+	if boundID != "" {
+		return boundID
+	}
+	if msgUserID != "" {
+		return msgUserID
+	}
+	return "anon:" + remoteAddr
 }
 
 func (h *Handler) handleReaction(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
@@ -203,7 +223,14 @@ func (h *Handler) handleJump(ctx context.Context, rm *entity.Room, conn *websock
 	}
 }
 
-func (h *Handler) handleSeek(ctx context.Context, msg map[string]any, roomID string) {
+func (h *Handler) handleSeek(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
+	// Streams are server-driven (wall-clock tick): client position pushes
+	// from non-controllers are ignored, otherwise anyone could yank the
+	// room position (e.g. sync{position:9999} force-skips the track for
+	// everyone). Empty syncs are no-ops either way.
+	if rm.IsStream && !h.room.IsStreamController(rm, h.manager.GetUserID(roomID, conn)) {
+		return
+	}
 	if pos, ok := msg["position"].(float64); ok {
 		h.playback.SeekTo(ctx, roomID, pos)
 	}

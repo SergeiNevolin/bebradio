@@ -40,7 +40,13 @@ export function useRoomWebSocket(
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const access = getRoomAccess(roomId!)
-    const query = access ? `?access=${encodeURIComponent(access)}` : ''
+    const params = new URLSearchParams()
+    if (access) params.set('access', access)
+    // Browsers can't set headers on WS upgrade: auth rides the query.
+    // Without it the server treats us as anonymous (no voting identity,
+    // no admin rights in streams).
+    if (token) params.set('token', token)
+    const query = params.toString() ? `?${params.toString()}` : ''
     const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}${query}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
@@ -96,7 +102,7 @@ export function useRoomWebSocket(
     ws.onerror = () => {
       ws.close()
     }
-  }, [roomId, navigate, identity])
+  }, [roomId, navigate, identity, token])
 
   const fetchRoom = useCallback(async (): Promise<RoomState | null> => {
     try {

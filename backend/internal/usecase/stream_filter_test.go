@@ -14,9 +14,8 @@ import (
 func setupStreamUC(t *testing.T, rdb *redis.Client) (*RadioUsecase, *repository.MockTrackRepo) {
 	t.Helper()
 	mediaClient := repository.NewMockMediaClient()
-	uc := NewRadioUsecase(mediaClient, testRadioConfig(), radioLog, rdb)
 	tracks := repository.NewMockTrackRepo()
-	uc.SetTrackRepo(tracks)
+	uc := NewRadioUsecase(mediaClient, tracks, testRadioConfig(), radioLog, rdb)
 	return uc, tracks
 }
 

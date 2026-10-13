@@ -197,34 +197,9 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	// Stream filter (24/7 mashup stream): author/title narrowing for the
 	// library refill. Owner or admin, streams only.
 	if req.StreamFilter != nil {
-		if !rm.IsStream {
-			s.writeError(w, 400, "Stream filter is only available for stream rooms")
-			return
-		}
-		admin, _ := s.isAdmin(userID)
-		if rm.OwnerID != userID && !admin {
-			s.writeError(w, 403, "Only the room owner can change settings")
-			return
-		}
-		cur, _ := redisc.GetStreamFilter(ctx, s.rdb, roomID)
-		if cur == nil {
-			cur = &redisc.StreamFilter{}
-		}
-		if req.StreamFilter.Q != nil {
-			cur.Query = strings.TrimSpace(*req.StreamFilter.Q)
-		}
-		if req.StreamFilter.Title != nil {
-			cur.Title = strings.TrimSpace(*req.StreamFilter.Title)
-		}
-		if req.StreamFilter.Artist != nil {
-			cur.Artist = strings.TrimSpace(*req.StreamFilter.Artist)
-		}
-		if req.StreamFilter.Owner != nil {
-			cur.Owner = strings.TrimSpace(*req.StreamFilter.Owner)
-		}
-		if err := redisc.SetStreamFilter(ctx, s.rdb, roomID, cur); err != nil {
-			s.log.Error("set stream filter failed", "error", err, "room_id", roomID)
-			s.writeError(w, 500, "Failed to update stream filter")
+		if _, code, msg := s.patchStreamFilter(ctx, rm, roomID, userID,
+			req.StreamFilter.Q, req.StreamFilter.Title, req.StreamFilter.Artist, req.StreamFilter.Owner); code != 0 {
+			s.writeError(w, code, msg)
 			return
 		}
 	}
@@ -343,20 +318,17 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 		Source  string `json:"source"`
 		URL     string `json:"url"`
 		TrackID string `json:"track_id"`
-		AddedBy string `json:"added_by"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.writeError(w, 400, "Invalid request body")
 		return
 	}
 
-	addedBy := req.AddedBy
-	if addedBy == "" {
-		addedBy = "Anonymous"
-	}
+	// added_by is server-assigned: the authenticated username, or
+	// "Anonymous". A client-supplied name would allow impersonation.
+	addedBy := "Anonymous"
 	if userID != "" {
-		user, err := s.auth.GetUserByID(userID)
-		if err == nil {
+		if user, err := s.auth.GetUserByID(userID); err == nil {
 			addedBy = user.Username
 		}
 	}
@@ -466,7 +438,7 @@ func (s *Server) enqueueQueueTrack(w http.ResponseWriter, rm *entity.Room, roomI
 	}
 	redisc.AppendTrack(ctx, s.rdb, roomID, track)
 	if track.SourceURL != "" {
-		redisc.SetPlaybackField(ctx, s.rdb, roomID, "radio_seed_url", track.SourceURL)
+		redisc.SetPlaybackField(ctx, s.rdb, roomID, redisc.FieldRadioSeedURL, track.SourceURL)
 	}
 
 	queueLen, _ := redisc.GetQueueLen(ctx, s.rdb, roomID)
@@ -701,15 +673,6 @@ func (s *Server) handleSetStreamFilter(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, 404, "Room not found")
 		return
 	}
-	if !rm.IsStream {
-		s.writeError(w, 400, "Stream filter is only available for stream rooms")
-		return
-	}
-	admin, _ := s.isAdmin(userID)
-	if rm.OwnerID != userID && !admin {
-		s.writeError(w, 403, "Only the room owner can change the stream filter")
-		return
-	}
 	var req struct {
 		Q      *string `json:"q"`
 		Title  *string `json:"title"`
@@ -720,30 +683,51 @@ func (s *Server) handleSetStreamFilter(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, 400, "Invalid request body")
 		return
 	}
-	cur, _ := redisc.GetStreamFilter(ctx, s.rdb, roomID)
-	if cur == nil {
-		cur = &redisc.StreamFilter{}
-	}
-	if req.Q != nil {
-		cur.Query = strings.TrimSpace(*req.Q)
-	}
-	if req.Title != nil {
-		cur.Title = strings.TrimSpace(*req.Title)
-	}
-	if req.Artist != nil {
-		cur.Artist = strings.TrimSpace(*req.Artist)
-	}
-	if req.Owner != nil {
-		cur.Owner = strings.TrimSpace(*req.Owner)
-	}
-	if err := redisc.SetStreamFilter(ctx, s.rdb, roomID, cur); err != nil {
-		s.writeError(w, 500, "Failed to update stream filter")
+	cur, code, msg := s.patchStreamFilter(ctx, rm, roomID, userID, req.Q, req.Title, req.Artist, req.Owner)
+	if code != 0 {
+		s.writeError(w, code, msg)
 		return
 	}
 	s.manager.Broadcast(roomID, redisc.BuildToDict(ctx, s.rdb, rm))
 	s.writeJSON(w, 200, map[string]any{
 		"q": cur.Query, "title": cur.Title, "artist": cur.Artist, "owner": cur.Owner,
 	})
+}
+
+// patchStreamFilter applies a partial stream-filter update behind the shared
+// stream permission checks (streams only, owner or admin). It returns the
+// stored filter, or a non-zero HTTP status + message for the caller to
+// render — both the PATCH-embedded and the dedicated PUT endpoint share it,
+// so the checks cannot drift apart.
+func (s *Server) patchStreamFilter(ctx context.Context, rm *entity.Room, roomID, userID string, q, title, artist, owner *string) (*redisc.StreamFilter, int, string) {
+	if !rm.IsStream {
+		return nil, 400, "Stream filter is only available for stream rooms"
+	}
+	admin, _ := s.isAdmin(userID)
+	if rm.OwnerID != userID && !admin {
+		return nil, 403, "Only the room owner can change the stream filter"
+	}
+	cur, _ := redisc.GetStreamFilter(ctx, s.rdb, roomID)
+	if cur == nil {
+		cur = &redisc.StreamFilter{}
+	}
+	if q != nil {
+		cur.Query = strings.TrimSpace(*q)
+	}
+	if title != nil {
+		cur.Title = strings.TrimSpace(*title)
+	}
+	if artist != nil {
+		cur.Artist = strings.TrimSpace(*artist)
+	}
+	if owner != nil {
+		cur.Owner = strings.TrimSpace(*owner)
+	}
+	if err := redisc.SetStreamFilter(ctx, s.rdb, roomID, cur); err != nil {
+		s.log.Error("set stream filter failed", "error", err, "room_id", roomID)
+		return nil, 500, "Failed to update stream filter"
+	}
+	return cur, 0, ""
 }
 
 // Stream refill: manually enqueue N random mashups honouring the room's

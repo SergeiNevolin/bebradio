@@ -79,6 +79,11 @@ func (uc *RoomUsecase) GetOrLoadRoom(ctx context.Context, roomID string) (*entit
 func (uc *RoomUsecase) CreateRoom(ctx context.Context, name, ownerID, password string, isStream bool) (*entity.Room, string, error) {
 	rm := entity.NewRoom(id.New(6), name, ownerID)
 	rm.IsStream = isStream
+	if isStream {
+		// Streams refill from the library out of the box; plain rooms never
+		// consult the flag, so it stays off for them.
+		rm.MashupRadio = true
+	}
 
 	if password != "" {
 		hash, err := uc.auth.HashPassword(password)

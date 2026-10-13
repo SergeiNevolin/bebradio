@@ -52,8 +52,7 @@ func setupWorker(t *testing.T) *workerDeps {
 	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, workerLog, rdb)
 	playbackUC := usecase.NewPlaybackUsecase(rdb)
 	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, workerLog, rdb)
-	radioUC := usecase.NewRadioUsecase(mediaClient, cfg, workerLog, rdb)
-	radioUC.SetTrackRepo(tracks)
+	radioUC := usecase.NewRadioUsecase(mediaClient, tracks, cfg, workerLog, rdb)
 	manager := ws.NewConnectionManager(workerLog)
 
 	w := NewAutoAdvance(roomUC, playbackUC, mediaUC, radioUC, manager, cfg, rdb, workerLog)
@@ -239,5 +238,63 @@ func TestTickIgnoresPlainRoom(t *testing.T) {
 
 	if n, _ := redisc.GetQueueLen(d.ctx, d.rdb, roomID); n != 0 {
 		t.Errorf("expected plain room to stay empty, got %d", n)
+	}
+}
+
+func liveRoom(t *testing.T, d *workerDeps, roomID string, tracks []*entity.Track, startedAt time.Time) {
+	t.Helper()
+	rm := entity.NewRoom(roomID, "Live", "owner1")
+	if err := d.roomRepo.Save(rm); err != nil {
+		t.Fatal(err)
+	}
+	redisc.SetQueue(d.ctx, d.rdb, roomID, tracks)
+	redisc.SetPlayback(d.ctx, d.rdb, roomID, &redisc.PlaybackState{
+		CurrentIndex: 0, IsPlaying: true, Position: 0,
+		LastSyncAt: startedAt, CurrentStartedAt: startedAt,
+	})
+	redisc.SetPresence(d.ctx, d.rdb, roomID, "addr1", &entity.PresenceInfo{ID: "u1", Name: "Listener"})
+}
+
+// A finished track advances while listeners are online (regression cover for
+// the fast-path reorder: the DB-hit shortcut must not skip transitions).
+func TestProcessRoomWithListenersAdvancesFinishedTrack(t *testing.T) {
+	d := setupWorker(t)
+	roomID := "LIVEADV"
+	past := time.Now().Add(-10 * time.Minute)
+	liveRoom(t, d, roomID,
+		[]*entity.Track{
+			{ID: "t1", Title: "Old", Duration: 100},
+			{ID: "t2", Title: "Next", Duration: 100},
+		}, past)
+
+	d.w.processRoom(d.ctx, roomID)
+
+	tracks, _ := redisc.GetQueue(d.ctx, d.rdb, roomID)
+	if len(tracks) != 1 || tracks[0].ID != "t2" {
+		t.Fatalf("expected advance to t2, queue=%v", tracks)
+	}
+}
+
+// Healthy queue, track mid-play: the tick refreshes media URLs at most and
+// leaves playback alone (and still works after the reorder).
+func TestProcessRoomHealthyQueueUntouched(t *testing.T) {
+	d := setupWorker(t)
+	roomID := "LIVEOK"
+	now := time.Now()
+	liveRoom(t, d, roomID,
+		[]*entity.Track{
+			{ID: "t1", Title: "Fresh", Duration: 600},
+			{ID: "t2", Title: "Next", Duration: 100},
+			{ID: "t3", Title: "Later", Duration: 100},
+		}, now)
+
+	d.w.processRoom(d.ctx, roomID)
+
+	tracks, _ := redisc.GetQueue(d.ctx, d.rdb, roomID)
+	if len(tracks) != 3 || tracks[0].ID != "t1" {
+		t.Fatalf("expected untouched queue, got %v", tracks)
+	}
+	if ps, _ := redisc.GetPlayback(d.ctx, d.rdb, roomID); ps == nil || !ps.IsPlaying || ps.CurrentIndex != 0 {
+		t.Fatalf("expected playback intact, got %+v", ps)
 	}
 }

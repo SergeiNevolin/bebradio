@@ -49,7 +49,7 @@ func TestNeedsRefillDisabled(t *testing.T) {
 
 	mediaClient := repository.NewMockMediaClient()
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, false, "", nil, nil)
 
@@ -66,7 +66,7 @@ func TestNeedsRefillWithSeed(t *testing.T) {
 
 	mediaClient := repository.NewMockMediaClient()
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=abc", nil, nil)
 
@@ -83,7 +83,7 @@ func TestNeedsRefillNoSeed(t *testing.T) {
 
 	mediaClient := repository.NewMockMediaClient()
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "", nil, nil)
 
@@ -100,7 +100,7 @@ func TestNeedsRefillQueueFull(t *testing.T) {
 
 	mediaClient := repository.NewMockMediaClient()
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	tracks := []*entity.Track{{ID: "t1"}, {ID: "t2"}}
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=abc", tracks, nil)
@@ -118,7 +118,7 @@ func TestNeedsRefillFilling(t *testing.T) {
 
 	mediaClient := repository.NewMockMediaClient()
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	ps := &redisc.PlaybackState{RadioFilling: true}
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=abc", nil, ps)
@@ -150,7 +150,7 @@ func TestRefillAppendsTracks(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=seed", nil, nil)
 
@@ -198,7 +198,7 @@ func TestRefillSkipsTooLong(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=seed", nil, nil)
 
@@ -222,7 +222,7 @@ func TestRefillNoopWhenDisabled(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, false, "", nil, nil)
 
@@ -259,7 +259,7 @@ func TestRefillResetsFillingOnComplete(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=seed", nil, nil)
 
@@ -283,7 +283,7 @@ func TestRefillResetsFillingOnError(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=seed", nil, nil)
 
@@ -316,7 +316,7 @@ func TestRefillDeduplicates(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=seed", []*entity.Track{
 		{ID: "existing", MediaID: "media_1"},
@@ -349,7 +349,7 @@ func TestRefillSetsAndClearsFilling(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=seed", nil, nil)
 
@@ -385,7 +385,7 @@ func TestRefillNoopWhenFillingAlreadyTrue(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	ps := &redisc.PlaybackState{RadioFilling: true}
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=seed", nil, ps)
@@ -423,7 +423,7 @@ func TestRefillCalledAfterNeedsRefill(t *testing.T) {
 	}
 
 	cfg := testRadioConfig()
-	uc := NewRadioUsecase(mediaClient, cfg, radioLog, rdb)
+	uc := NewRadioUsecase(mediaClient, repository.NewMockTrackRepo(), cfg, radioLog, rdb)
 
 	setupRadioRoom(t, rdb, roomID, true, "https://youtube.com/watch?v=seed", nil, nil)
 
