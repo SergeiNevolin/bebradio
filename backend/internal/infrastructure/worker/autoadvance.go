@@ -22,7 +22,14 @@ type AutoAdvance struct {
 	config    *config.Config
 	rdb       *redis.Client
 	log       *slog.Logger
+	// lastStarvedLog throttles the "stream has nothing to play" warning per
+	// room. Only the single tick goroutine touches it, so no mutex needed.
+	lastStarvedLog map[string]time.Time
 }
+
+// How often a starved stream (empty queue, library/filter yield nothing)
+// re-logs its warning. Without throttling it would spam every tick (2s).
+const starvedLogInterval = 5 * time.Minute
 
 // If a track has Duration==0 (live stream, unresolved), skip after this long.
 const durationZeroSkipAfter = 5 * time.Minute
@@ -46,6 +53,7 @@ func NewAutoAdvance(
 		config:  config,
 		rdb:     rdb,
 		log:     log,
+		lastStarvedLog: make(map[string]time.Time),
 	}
 }
 
@@ -159,6 +167,16 @@ func (w *AutoAdvance) processStreamRoom(ctx context.Context, roomID string) {
 		// Nothing queued: refill synchronously so the stream restarts even
 		// if RefillMashups is the only source of tracks. With MashupRadio
 		// off this is a no-op and the stream stays paused for manual adds.
+		//
+		// A crash between "mark filling" and "clear filling" leaves
+		// radio_filling stuck at 1, which would stall the stream forever
+		// (every refill path bails on it). An empty queue proves no refill
+		// is usefully in flight — a concurrent one only duplicates picks
+		// that AppendFreshTrack dedupes — so bust the flag and proceed.
+		if ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID); ps != nil && ps.RadioFilling {
+			w.log.Warn("stream stuck in filling state, resetting", "room_id", roomID)
+			redisc.SetPlaybackField(ctx, w.rdb, roomID, "radio_filling", "0")
+		}
 		if picks, err := w.radio.RefillMashups(ctx, roomID, rm); err == nil && len(picks) > 0 {
 			for _, t := range picks {
 				redisc.AppendFreshTrack(ctx, w.rdb, roomID, t)
@@ -166,8 +184,13 @@ func (w *AutoAdvance) processStreamRoom(ctx context.Context, roomID string) {
 			w.ensureStreamPlaying(ctx, roomID)
 			_ = w.room.SaveTracks(ctx, rm)
 			w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
-		} else if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
-			go w.backgroundMashupRefill(ctx, rm, roomID)
+		} else {
+			// Starved: library/filter yield nothing playable. Keep retrying
+			// (tracks may be uploaded later) but log throttled, not per tick.
+			w.logStarvedThrottled(roomID)
+			if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
+				go w.backgroundMashupRefill(ctx, rm, roomID)
+			}
 		}
 		return
 	}
@@ -206,6 +229,18 @@ func (w *AutoAdvance) processStreamRoom(ctx context.Context, roomID string) {
 		_ = w.room.SaveTracks(ctx, rm)
 		w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
 	}
+}
+
+// logStarvedThrottled warns that a stream queue is empty and the library or
+// its filter yield nothing playable. The condition re-triggers every tick,
+// so the warning is throttled per room.
+func (w *AutoAdvance) logStarvedThrottled(roomID string) {
+	if last, ok := w.lastStarvedLog[roomID]; ok && time.Since(last) < starvedLogInterval {
+		return
+	}
+	w.lastStarvedLog[roomID] = time.Now()
+	w.log.Warn("stream starved: empty queue and no ready mashups match (check library and stream filter)",
+		"room_id", roomID)
 }
 
 func (w *AutoAdvance) ensureStreamPlaying(ctx context.Context, roomID string) {

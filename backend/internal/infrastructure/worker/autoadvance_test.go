@@ -177,6 +177,50 @@ func TestLostStateHashRestarts(t *testing.T) {
 	}
 }
 
+// A crash between "mark filling" and "clear filling" used to stall the
+// stream forever. An empty queue proves no refill is usefully in flight,
+// so the flag is busted and the refill proceeds.
+func TestStuckFillingFlagBusted(t *testing.T) {
+	d := setupWorker(t)
+	roomID := "STUCK"
+	saveStreamRoom(t, d, roomID, true)
+	d.tracks.Create(readyTrack("m1", "Bootleg A", "DJ X"))
+
+	redisc.SetPlayback(d.ctx, d.rdb, roomID, &redisc.PlaybackState{RadioFilling: true})
+
+	d.w.processRoom(d.ctx, roomID)
+
+	waitFor(t, "refill past stuck flag", func() bool {
+		n, _ := redisc.GetQueueLen(d.ctx, d.rdb, roomID)
+		return n == 1
+	})
+	ps, _ := redisc.GetPlayback(d.ctx, d.rdb, roomID)
+	if ps == nil || !ps.IsPlaying {
+		t.Error("expected the stream to be playing after the forced refill")
+	}
+	if ps != nil && ps.RadioFilling {
+		t.Error("expected the stuck filling flag to be cleared")
+	}
+}
+
+// Nothing playable anywhere (empty library): the stream stays paused instead
+// of erroring, and keeps retrying on later ticks.
+func TestStarvedStreamStaysPaused(t *testing.T) {
+	d := setupWorker(t)
+	roomID := "STARVED"
+	saveStreamRoom(t, d, roomID, true)
+
+	if _, err := d.room.GetOrLoadRoom(d.ctx, roomID); err != nil {
+		t.Fatal(err)
+	}
+	d.w.tick(d.ctx)
+	time.Sleep(200 * time.Millisecond)
+
+	if n, _ := redisc.GetQueueLen(d.ctx, d.rdb, roomID); n != 0 {
+		t.Errorf("expected empty queue with no library tracks, got %d", n)
+	}
+}
+
 // Plain (non-stream) rooms with no listeners are untouched by the tick.
 func TestTickIgnoresPlainRoom(t *testing.T) {
 	d := setupWorker(t)
