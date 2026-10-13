@@ -404,6 +404,13 @@ func GetRadioSeen(ctx context.Context, rdb *redis.Client, roomID string) (map[st
 	return seen, nil
 }
 
+// ResetRadioSeen drops the whole seen set, starting a new rotation. Called
+// when the 24/7 stream has played everything matching its filter: without a
+// reset the set would grow unbounded for as long as the stream runs.
+func ResetRadioSeen(ctx context.Context, rdb *redis.Client, roomID string) error {
+	return rdb.Del(ctx, RoomKey(roomID, "radio_seen")).Err()
+}
+
 // ---------- Stream filter (24/7 mashup stream) ----------
 
 // StreamFilter narrows which library mashups the 24/7 stream refills from.

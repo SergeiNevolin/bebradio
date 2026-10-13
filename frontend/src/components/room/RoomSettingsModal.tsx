@@ -8,6 +8,7 @@ interface RoomSettingsModalProps {
     allow_anonymous_add?: boolean
     is_private?: boolean
     auto_radio?: boolean
+    mashup_radio?: boolean
     password?: string
     stream_filter?: { q?: string; title?: string; artist?: string; owner?: string }
   }) => void
@@ -97,10 +98,16 @@ export default function RoomSettingsModal({
               <div className="toggle-label" style={{ fontWeight: 600, marginBottom: 4 }}>
                 Добавление мешапов
               </div>
-              <div className="toggle-label" style={{ marginBottom: 8, opacity: 0.7, fontSize: 13 }}>
-                Автодобавление всегда включено: очередь пополняется сама, даже без слушателей. Ниже — добавить вручную и фильтр отбора.
-              </div>
-              <div className="toggle-label" style={{ fontWeight: 600, marginBottom: 4 }}>
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={room?.mashup_radio ?? true}
+                  onChange={(e) => onUpdate({ mashup_radio: e.target.checked })}
+                />
+                <span className="toggle-slider"></span>
+                <span className="toggle-label">Автодобавление случайных мешапов (очередь пополняется сама, даже без слушателей)</span>
+              </label>
+              <div className="toggle-label" style={{ fontWeight: 600, marginBottom: 4, marginTop: 8 }}>
                 Добавить рандомные мешапы
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

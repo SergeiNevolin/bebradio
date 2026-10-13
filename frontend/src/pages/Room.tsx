@@ -118,6 +118,7 @@ export default function Room() {
     allow_anonymous_add?: boolean
     is_private?: boolean
     auto_radio?: boolean
+    mashup_radio?: boolean
     password?: string
     stream_filter?: { q?: string; title?: string; artist?: string; owner?: string }
   }) => {

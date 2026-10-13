@@ -94,6 +94,33 @@ func TestMashupRefillEmptyFilterLoops(t *testing.T) {
 	}
 }
 
+func TestMashupRefillResetsSeenOnLoop(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ctx := context.Background()
+	roomID := "RESET"
+	uc, tracks := setupStreamUC(t, rdb)
+
+	tracks.Create(&entity.Track{ID: "m1", Source: entity.TrackSourceUpload, Title: "A", Status: entity.TrackStatusReady})
+	setupRadioRoom(t, rdb, roomID, false, "", nil, &redisc.PlaybackState{IsPlaying: true})
+	redisc.AddRadioSeen(ctx, rdb, roomID, "m1")
+	rm := streamRoom(entity.NewRoom(roomID, "R", "O"))
+
+	picks, err := uc.RefillMashups(ctx, roomID, rm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(picks) != 1 {
+		t.Fatalf("expected looped pick, got %v", picks)
+	}
+	// New rotation started: the old seen set must be gone, otherwise it
+	// would grow unbounded for as long as the 24/7 stream runs. The caller
+	// re-marks whatever it actually appends.
+	if seen, _ := redisc.GetRadioSeen(ctx, rdb, roomID); len(seen) != 0 {
+		t.Errorf("expected radio_seen reset on loop, got %v", seen)
+	}
+}
+
 func TestTrackFilterByOwner(t *testing.T) {
 	repo := repository.NewMockTrackRepo()
 	repo.Create(&entity.Track{ID: "a", OwnerID: "u1", OwnerName: "alice", Title: "Mix", Artist: "DJ", Status: "ready"})

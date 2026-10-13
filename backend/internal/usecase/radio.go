@@ -246,9 +246,14 @@ func (uc *RadioUsecase) RefillMashups(ctx context.Context, roomID string, rm *en
 	if err != nil {
 		return nil, err
 	}
-	// If the filter is so narrow that everything is excluded, retry once
-	// without exclusions (loop the base) rather than stalling the stream.
+	// Base exhausted (everything matching the filter already played): start a
+	// new rotation rather than stalling the stream. Resetting first keeps
+	// radio_seen bounded no matter how long the 24/7 stream runs; the caller
+	// re-marks whatever it actually appends.
 	if len(libs) == 0 && len(exclude) > 0 {
+		if err := redisc.ResetRadioSeen(ctx, uc.rdb, roomID); err != nil {
+			uc.log.Warn("radio_seen reset failed", "room_id", roomID, "error", err)
+		}
 		libs, err = uc.tracks.ListRandomReady(filter, batch, nil)
 		if err != nil {
 			return nil, err
