@@ -231,6 +231,10 @@ export default function Player() {
   const origRef = useRef<HTMLAudioElement>(null)
   /** какая дорожка сейчас слышна: оригинал или минус */
   const useOrig = useRef(false)
+  /** последний ресинк дрифта (performance.now): не дёргаем seek каждый тик */
+  const lastSyncRef = useRef(0)
+  /** blob-URL, догревшийся посреди пения слышимой дорожки: применим на паузе/seek/рестарте */
+  const pendingBlob = useRef<{ minus?: string; orig?: string }>({})
   const rafRef = useRef(0)
   const streamRef = useRef<MediaStream | null>(null)
   const ctxRef = useRef<AudioContext | null>(null)
@@ -276,33 +280,55 @@ export default function Player() {
     wantOriginal(backing, skips, !!song?.original, t)
   ), [backing, song, skips])
 
-  /** переключить слышимую дорожку; оригинал ресинкаем к мастер-часам минуса */
+  /** переключить слышимую дорожку; оригинал ресинкаем к мастер-часам минуса.
+   *  Стабильность важнее идеального совпадения: лишний seek = щелчок/дырка,
+   *  поэтому мотаем цель только если реально разъехались (>120мс) и она не
+   *  в середине seek/буферизации. Размьюченная, но вставшая на паузу дорожка —
+   *  это тишина: такую явно дожимаем play(). */
   const flipAudible = useCallback((want: boolean) => {
     const a = audioRef.current
     const o = origRef.current
     if (!a || !o || !song?.original) return
     if (want === useOrig.current) return
     try {
-      if (Number.isFinite(a.currentTime)) o.currentTime = a.currentTime
+      if (Number.isFinite(a.currentTime) && Number.isFinite(o.currentTime) && !o.seeking) {
+        const diff = Math.abs(o.currentTime - a.currentTime)
+        if (diff > 0.12 && o.readyState >= 1) o.currentTime = a.currentTime
+      }
     } catch {
       /* ignore */
+    }
+    if (phaseRef.current === 'playing') {
+      const target = want ? o : a
+      if (target.paused) {
+        void target.play().catch(() => undefined)
+      }
     }
     o.muted = !want
     a.muted = want
     useOrig.current = want
   }, [song])
 
-  // границы пропусков + дрейф оригинала: тик времени всё чинит
+  // границы пропусков + дрейф оригинала: тик времени всё чинит.
+  // Два независимых <audio> всегда чуть дрейфуют — дёргать seek на каждые
+  // 150мс значит получить то самое «прерывисто» в плюсе. Поэтому дозор редкий
+  // (не чаще раза в 1.5с), с высоким порогом (300мс) и только когда оригинал
+  // реально играет и готов (не seeking, есть данные).
   useEffect(() => {
     if (phaseRef.current !== 'playing' && phaseRef.current !== 'paused') return
     flipAudible(wantOrigAt(time))
     const a = audioRef.current
     const o = origRef.current
-    if (a && o && useOrig.current && !o.paused && Math.abs(o.currentTime - a.currentTime) > 0.15) {
-      try {
-        o.currentTime = a.currentTime
-      } catch {
-        /* ignore */
+    if (a && o && useOrig.current && !o.paused && !o.seeking && o.readyState >= 3) {
+      const drift = Math.abs(o.currentTime - a.currentTime)
+      const now = performance.now()
+      if (drift > 0.3 && now - lastSyncRef.current > 1500) {
+        lastSyncRef.current = now
+        try {
+          o.currentTime = a.currentTime
+        } catch {
+          /* ignore */
+        }
       }
     }
   }, [time, backing, song, skips, flipAudible, wantOrigAt])
@@ -519,6 +545,21 @@ export default function Player() {
     if (phase === 'playing') {
       a.pause()
       origRef.current?.pause()
+      // пока стоим — беззвучно подбираем догревшиеся blob (streаm → память),
+      // чтобы следующий старт уже шёл из памяти без сети
+      const p = pendingBlob.current
+      if (p.minus && a.getAttribute('src') !== p.minus) {
+        const t = Number.isFinite(a.currentTime) ? a.currentTime : 0
+        a.src = p.minus
+        try { a.currentTime = t } catch { /* ignore */ }
+      }
+      const o0 = origRef.current
+      if (o0 && p.orig && o0.getAttribute('src') !== p.orig) {
+        const t = Number.isFinite(o0.currentTime) ? o0.currentTime : 0
+        o0.src = p.orig
+        try { o0.currentTime = t } catch { /* ignore */ }
+      }
+      pendingBlob.current = {}
       setPhase('paused')
       smoothRef.current = []
       cancelAnimationFrame(rafRef.current)
@@ -527,7 +568,10 @@ export default function Player() {
       const o = origRef.current
       if (o) {
         try {
-          if (Number.isFinite(a.currentTime)) o.currentTime = a.currentTime
+          if (Number.isFinite(a.currentTime) && Number.isFinite(o.currentTime)
+            && !o.seeking && Math.abs(o.currentTime - a.currentTime) > 0.12 && o.readyState >= 1) {
+            o.currentTime = a.currentTime
+          }
         } catch {
           /* ignore */
         }
@@ -579,10 +623,15 @@ export default function Player() {
     framesRef.current = []
     dotsRef.current = []
     smoothRef.current = []
+    // к рестарту blob наверняка готов — подбираем отложенное, старт из памяти
+    const p = pendingBlob.current
+    if (p.minus && a.getAttribute('src') !== p.minus) a.src = p.minus
+    const o = origRef.current
+    if (o && p.orig && o.getAttribute('src') !== p.orig) o.src = p.orig
+    pendingBlob.current = {}
     a.currentTime = 0
     useOrig.current = false
     a.muted = false
-    const o = origRef.current
     if (o) {
       try {
         o.currentTime = 0
@@ -641,8 +690,14 @@ export default function Player() {
   const seek = useCallback((v: number) => {
     const a = audioRef.current
     if (!a) return
-    a.currentTime = v
+    // перемотка — удобный бесшовный момент добрать blob: рвём стрим один раз,
+    // дальше всё из памяти
+    const p = pendingBlob.current
+    if (p.minus && a.getAttribute('src') !== p.minus) a.src = p.minus
     const o = origRef.current
+    if (o && p.orig && o.getAttribute('src') !== p.orig) o.src = p.orig
+    if (p.minus || p.orig) pendingBlob.current = {}
+    a.currentTime = v
     if (o) {
       try {
         o.currentTime = v
@@ -681,14 +736,26 @@ export default function Player() {
   }, [])
 
   // Предзагрузка аудио в blob: греем с открытия песни, подменяем src как только
-  // догрелось (blob локальный — подмена бесшовна, позицию сохраняем).
-  // Дальше перемотки идут из памяти, без сети вообще.
+  // догрелось. Нюанс стабильности: подмена src посреди пения СЛЫШИМОЙ дорожки
+  // рвёт звук (перезагрузка декодера + AbortError стартующего play) — именно это
+  // и давало «прерывисто» при переходе на плюс, когда blob оригинала приходил
+  // уже по ходу песни. Поэтому слышимую играющую дорожку не трогаем: URL
+  // откладываем в pendingBlob и подбираем на паузе/seek/рестарте. Фоновую
+  // (приглушённую) можно менять свободно — её не слышно.
   useEffect(() => {
     if (!song) return
     const id = song.id
+    pendingBlob.current = {}
+    lastSyncRef.current = 0
     let cancelled = false
-    const swapToBlob = (el: HTMLAudioElement | null, url: string): void => {
+    const swapToBlob = (el: HTMLAudioElement | null, url: string, role: 'minus' | 'orig'): void => {
       if (cancelled || !el || el.getAttribute('src') === url) return
+      const audible = role === 'minus' ? !useOrig.current : useOrig.current
+      const playing = phaseRef.current === 'playing' || phaseRef.current === 'countdown'
+      if (audible && playing) {
+        pendingBlob.current[role === 'minus' ? 'minus' : 'orig'] = url
+        return
+      }
       const t = Number.isFinite(el.currentTime) ? el.currentTime : 0
       const ph = phaseRef.current
       el.src = url
@@ -704,11 +771,11 @@ export default function Player() {
       }
     }
     void warmSongAudio(id, 'minus', song.audio).then((url) => {
-      if (url) swapToBlob(audioRef.current, url)
+      if (url) swapToBlob(audioRef.current, url, 'minus')
     })
     if (song.original) {
       void warmSongAudio(id, 'orig', song.original).then((url) => {
-        if (url) swapToBlob(origRef.current, url)
+        if (url) swapToBlob(origRef.current, url, 'orig')
       })
     }
     return () => {
@@ -734,7 +801,10 @@ export default function Player() {
         onLoadedMetadata={(e) => onBackingLoaded(e.currentTarget)} />
       {/* вторая дорожка: оригинал с вокалом для пропусков «не поём» */}
       {song.original && (
-        <audio ref={origRef} src={song.original} preload="auto" muted />
+        <audio ref={origRef} src={song.original} preload="auto" muted
+          onWaiting={() => { if (useOrig.current) setWaiting(true) }}
+          onPlaying={() => setWaiting(false)}
+          onCanPlay={() => setWaiting(false)} />
       )}
 
       {/* верхняя панель */}
