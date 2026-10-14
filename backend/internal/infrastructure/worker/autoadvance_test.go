@@ -150,9 +150,20 @@ func TestStreamAdvancesFinishedTrack(t *testing.T) {
 
 	d.w.processRoom(d.ctx, roomID)
 
-	if tracks, _ := redisc.GetQueue(d.ctx, d.rdb, roomID); len(tracks) != 0 {
-		t.Fatalf("expected the finished track to be popped, queue=%d", len(tracks))
-	}
+	// The pop and the background refill race (miniredis + mocks are
+	// in-process, so the refill routinely lands first): asserting an exact
+	// empty queue here is flaky. Instead wait until q1 is gone — an empty
+	// queue satisfies this instantly, [m1 m2] after the refill; if the pop
+	// never happened q1 stays and this times out.
+	waitFor(t, "finished track popped", func() bool {
+		tracks, _ := redisc.GetQueue(d.ctx, d.rdb, roomID)
+		for _, tr := range tracks {
+			if tr.ID == "q1" {
+				return false
+			}
+		}
+		return true
+	})
 	// The refill runs in the background: the stream must come back by itself.
 	waitFor(t, "post-advance refill", func() bool {
 		n, _ := redisc.GetQueueLen(d.ctx, d.rdb, roomID)
