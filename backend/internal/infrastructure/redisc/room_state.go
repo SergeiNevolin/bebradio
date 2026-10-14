@@ -417,6 +417,31 @@ func ResetRadioSeen(ctx context.Context, rdb *redis.Client, roomID string) error
 	return rdb.Del(ctx, RoomKey(roomID, "radio_seen")).Err()
 }
 
+// ---------- Idle tracking (dead-room reaper) ----------
+
+// The tick marks rooms that look abandoned (no listeners, empty queue,
+// paused) with the time they were first observed idle. A room carrying a
+// marker older than the TTL is evicted. Any sign of life deletes the marker.
+func GetIdleSince(ctx context.Context, rdb *redis.Client, roomID string) (time.Time, bool) {
+	v, err := rdb.Get(ctx, RoomKey(roomID, "idle_since")).Result()
+	if err != nil {
+		return time.Time{}, false
+	}
+	ts, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return time.Unix(ts, 0), true
+}
+
+func SetIdleSince(ctx context.Context, rdb *redis.Client, roomID string, ts time.Time) error {
+	return rdb.Set(ctx, RoomKey(roomID, "idle_since"), strconv.FormatInt(ts.Unix(), 10), 0).Err()
+}
+
+func ClearIdleSince(ctx context.Context, rdb *redis.Client, roomID string) error {
+	return rdb.Del(ctx, RoomKey(roomID, "idle_since")).Err()
+}
+
 // ---------- Stream filter (24/7 mashup stream) ----------
 
 // StreamFilter narrows which library mashups the 24/7 stream refills from.

@@ -115,8 +115,13 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access, userID s
 			h.handlePrev(ctx, rm, conn, roomID)
 		case "jump":
 			h.handleJump(ctx, rm, conn, msg, roomID)
-		case "seek", "sync":
+		case "seek":
 			h.handleSeek(ctx, rm, conn, msg, roomID)
+		case "sync":
+			// Intentionally ignored: the server wall-clock is authoritative
+			// for playback position, so client reports must never move it.
+			// Blindly adopting them let any laggy client drag the whole
+			// room backward (the classic "rewinds on bad network").
 		case "chat":
 			h.handleChat(ctx, rm, conn, msg, roomID)
 		case "vote":
@@ -195,7 +200,7 @@ func (h *Handler) handleNext(ctx context.Context, rm *entity.Room, conn *websock
 	// Streams are admin-driven: listeners must not skip tracks manually.
 	// Auto-advance (client onEnded at track end + server tick) still works:
 	// the tick bypasses this gate.
-	if rm.IsStream && !h.room.IsStreamController(rm, h.manager.GetUserID(roomID, conn)) {
+	if rm.IsStream && !h.room.IsController(rm, h.manager.GetUserID(roomID, conn)) {
 		return
 	}
 	changed := h.playback.GoNext(ctx, roomID)
@@ -208,14 +213,14 @@ func (h *Handler) handleNext(ctx context.Context, rm *entity.Room, conn *websock
 }
 
 func (h *Handler) handlePrev(ctx context.Context, rm *entity.Room, conn *websocket.Conn, roomID string) {
-	if rm.IsStream && !h.room.IsStreamController(rm, h.manager.GetUserID(roomID, conn)) {
+	if rm.IsStream && !h.room.IsController(rm, h.manager.GetUserID(roomID, conn)) {
 		return
 	}
 	h.playback.GoPrev(ctx, roomID)
 }
 
 func (h *Handler) handleJump(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
-	if rm.IsStream && !h.room.IsStreamController(rm, h.manager.GetUserID(roomID, conn)) {
+	if rm.IsStream && !h.room.IsController(rm, h.manager.GetUserID(roomID, conn)) {
 		return
 	}
 	if index, ok := msg["index"].(float64); ok {
@@ -224,11 +229,10 @@ func (h *Handler) handleJump(ctx context.Context, rm *entity.Room, conn *websock
 }
 
 func (h *Handler) handleSeek(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
-	// Streams are server-driven (wall-clock tick): client position pushes
-	// from non-controllers are ignored, otherwise anyone could yank the
-	// room position (e.g. sync{position:9999} force-skips the track for
-	// everyone). Empty syncs are no-ops either way.
-	if rm.IsStream && !h.room.IsStreamController(rm, h.manager.GetUserID(roomID, conn)) {
+	// Explicit repositioning moves playback for everyone at once, so it is
+	// controller-only in every room kind (unlike passive sync reports,
+	// which are ignored entirely).
+	if !h.room.IsController(rm, h.manager.GetUserID(roomID, conn)) {
 		return
 	}
 	if pos, ok := msg["position"].(float64); ok {

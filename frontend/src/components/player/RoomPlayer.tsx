@@ -47,10 +47,9 @@ function RoomPlayer({
   canSkip = false,
 }: RoomPlayerProps) {
   const onEnded = useCallback(() => onPlayback('next'), [onPlayback])
-  const onSync = useCallback(
-    (p: number) => onPlayback('sync', { position: p }),
-    [onPlayback],
-  )
+  // Kept while the hook still accepts it; the server ignores client reports
+  // (authoritative wall-clock), so this is intentionally never invoked.
+  const onSync = useCallback((_p: number) => {}, [])
 
   const { volume, muted, setVolume, toggleMute } = useVolume()
 
@@ -61,6 +60,7 @@ function RoomPlayer({
     needsGesture,
     crossfading,
     unlock,
+    seek: seekTo,
   } = useGaplessPlayer({
     trackId: track?.id,
     src: track?.url,
@@ -75,7 +75,9 @@ function RoomPlayer({
     onSync,
   })
 
-  // Keyboard shortcuts: space resyncs / starts, up/down adjust volume.
+  // Keyboard shortcuts: space snaps local playback to the room clock
+  // (purely local — it never moves the room, unlike the old sync push),
+  // up/down adjust volume.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
@@ -83,9 +85,7 @@ function RoomPlayer({
 
       if (e.code === 'Space') {
         e.preventDefault()
-        // Never skip room-wide from a local keypress: resync when playing,
-        // and a positionless sync (server no-op) when paused.
-        onPlayback('sync', isPlaying ? { position: localPos } : {})
+        if (isPlaying) seekTo(position)
       } else if (e.code === 'ArrowUp') {
         e.preventDefault()
         setVolume(volume + 0.1)
@@ -96,7 +96,7 @@ function RoomPlayer({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [track, isPlaying, localPos, volume, onPlayback, setVolume])
+  }, [track, isPlaying, position, volume, seekTo, setVolume])
 
   const hasVoted = !!track && skipVoters.includes(currentUserId)
   const skipCount = skipVoters.length

@@ -476,3 +476,26 @@ func TestStreamSeekGatedToControllers(t *testing.T) {
 		t.Fatalf("owner sync must move stream position, got %v", ps.Position)
 	}
 }
+
+func TestPlainRoomSeekGatedToControllers(t *testing.T) {
+	d := setupHandler(t)
+	ctx := context.Background()
+	plain := entity.NewRoom("P2", "Plain", "owner1")
+	d.roomRepo.Save(plain)
+	d.userRepo.Users["owner1"] = &entity.User{ID: "owner1", Username: "owner"}
+	d.userRepo.Users["intruder"] = &entity.User{ID: "intruder", Username: "mallory"}
+	storeRoomRedis(t, d, plain,
+		[]*entity.Track{{ID: "t1", Title: "A"}},
+		&redisc.PlaybackState{CurrentIndex: 0, IsPlaying: true})
+
+	seek := map[string]any{"action": "seek", "position": float64(42)}
+	d.handler.handleSeek(ctx, plain, boundConn(d, "P2", "intruder"), seek, "P2")
+	if ps, _ := redisc.GetPlayback(ctx, d.rdb, "P2"); ps.Position == 42 {
+		t.Fatal("intruder seek must not move room position")
+	}
+
+	d.handler.handleSeek(ctx, plain, boundConn(d, "P2", "owner1"), seek, "P2")
+	if ps, _ := redisc.GetPlayback(ctx, d.rdb, "P2"); ps.Position != 42 {
+		t.Fatalf("owner seek must move room position, got %v", ps.Position)
+	}
+}

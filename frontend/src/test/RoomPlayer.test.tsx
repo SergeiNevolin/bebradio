@@ -292,10 +292,6 @@ describe('Player vote scale', () => {
   })
 })
 
-function countSyncCalls(fn: ReturnType<typeof vi.fn>) {
-  return fn.mock.calls.filter((c: any[]) => c[0] === 'sync').length
-}
-
 function mockAudioPlaying() {
   const originalCreateElement = document.createElement.bind(document)
   document.createElement = ((tag: string) => {
@@ -310,7 +306,7 @@ function mockAudioPlaying() {
   }) as typeof document.createElement
 }
 
-describe('Player sync', () => {
+describe('Player sync (server-authoritative clock)', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockAudioPlaying()
@@ -321,29 +317,7 @@ describe('Player sync', () => {
     vi.restoreAllMocks()
   })
 
-  it('sends periodic sync when playing', () => {
-    const onPlayback = vi.fn()
-    render(<RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
-
-    act(() => {
-      vi.advanceTimersByTime(5000)
-    })
-
-    expect(countSyncCalls(onPlayback)).toBeGreaterThanOrEqual(1)
-  })
-
-  it('does not send sync when paused', () => {
-    const onPlayback = vi.fn()
-    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
-
-    act(() => {
-      vi.advanceTimersByTime(5000)
-    })
-
-    expect(countSyncCalls(onPlayback)).toBe(0)
-  })
-
-  it('sends sync every 5 seconds', () => {
+  it('never sends position reports while playing', () => {
     const onPlayback = vi.fn()
     render(<RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
 
@@ -351,29 +325,82 @@ describe('Player sync', () => {
       vi.advanceTimersByTime(15000)
     })
 
-    expect(countSyncCalls(onPlayback)).toBeGreaterThanOrEqual(2)
+    expect(onPlayback).not.toHaveBeenCalled()
   })
 
-  it('stops sync when paused', () => {
+  it('sends nothing when paused', () => {
     const onPlayback = vi.fn()
-    const { rerender } = render(
-      <RoomPlayer track={mockTrack} isPlaying={true} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />
+    render(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
+
+    act(() => {
+      vi.advanceTimersByTime(15000)
+    })
+
+    expect(onPlayback).not.toHaveBeenCalled()
+  })
+
+  it('spacebar snaps local playback to the room clock without touching the network', () => {
+    const onPlayback = vi.fn()
+    const { container } = render(
+      <RoomPlayer track={mockTrack} isPlaying={true} position={50} onPlayback={onPlayback} {...defaultPlayerProps} />
     )
 
+    fireEvent.keyDown(document.body, { code: 'Space' })
+
+    const deck = container.querySelectorAll('audio')[0] as HTMLAudioElement
+    expect(deck.currentTime).toBe(50)
+    expect(onPlayback).not.toHaveBeenCalled()
+  })
+})
+
+function mockAudioBuffered() {
+  const originalCreateElement = document.createElement.bind(document)
+  document.createElement = ((tag: string) => {
+    const el = originalCreateElement(tag)
+    if (tag === 'audio') {
+      Object.defineProperty(el, 'paused', { value: false, writable: true, configurable: true })
+      Object.defineProperty(el, 'currentTime', { value: 0, writable: true, configurable: true })
+      Object.defineProperty(el, 'readyState', { value: 4, writable: true, configurable: true })
+      Object.defineProperty(el, 'play', { value: vi.fn().mockResolvedValue(undefined), writable: true, configurable: true })
+      Object.defineProperty(el, 'pause', { value: vi.fn(), writable: true, configurable: true })
+    }
+    return el
+  }) as typeof document.createElement
+}
+
+describe('Player drift convergence', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mockAudioBuffered()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('slews instead of snapping on small drift', () => {
+    const { container } = render(
+      <RoomPlayer track={mockTrack} isPlaying={true} position={3} onPlayback={vi.fn()} {...defaultPlayerProps} />
+    )
+    const deck = container.querySelectorAll('audio')[0] as HTMLAudioElement
+
     act(() => {
-      vi.advanceTimersByTime(5000)
+      vi.advanceTimersByTime(300)
     })
 
-    const countAfterPlay = countSyncCalls(onPlayback)
-    expect(countAfterPlay).toBeGreaterThanOrEqual(1)
+    // 3s behind: converge at inaudible fast rate, media time untouched.
+    expect(deck.playbackRate).toBeCloseTo(1.04)
+    expect(deck.currentTime).toBe(0)
+  })
 
-    rerender(<RoomPlayer track={mockTrack} isPlaying={false} position={0} onPlayback={onPlayback} {...defaultPlayerProps} />)
-
-    act(() => {
-      vi.advanceTimersByTime(10000)
-    })
-
-    expect(countSyncCalls(onPlayback)).toBe(countAfterPlay)
+  it('snaps on large gaps (reconnect)', () => {
+    const { container } = render(
+      <RoomPlayer track={mockTrack} isPlaying={true} position={100} onPlayback={vi.fn()} {...defaultPlayerProps} />
+    )
+    const deck = container.querySelectorAll('audio')[0] as HTMLAudioElement
+    expect(deck.currentTime).toBe(100)
+    expect(deck.playbackRate).toBe(1)
   })
 })
 

@@ -27,6 +27,10 @@ type Config struct {
 	RadioRefillAt int
 	RadioBatch    int
 
+	// Idle rooms (no listeners, empty queue, paused) older than this are
+	// evicted from Redis; queues persist in Postgres and rehydrate on visit.
+	RoomIdleHours int
+
 	RateLimitSearch int
 	RateLimitQueue  int
 	RateLimitWindow int
@@ -61,6 +65,8 @@ func Load() *Config {
 
 		RadioRefillAt: getEnvInt("RADIO_REFILL_AT", 1),
 		RadioBatch:    getEnvInt("RADIO_BATCH", 3),
+
+		RoomIdleHours: getEnvInt("ROOM_IDLE_TTL_HOURS", 24),
 
 		RateLimitSearch: getEnvInt("RATE_LIMIT_SEARCH", 15),
 		RateLimitQueue:  getEnvInt("RATE_LIMIT_QUEUE", 10),

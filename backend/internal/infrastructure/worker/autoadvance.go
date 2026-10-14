@@ -95,13 +95,16 @@ func (w *AutoAdvance) tick(ctx context.Context) {
 func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
 	count, _ := redisc.GetPresenceCount(ctx, w.rdb, roomID)
 
-	// Fast path: rooms with listeners use the classic flow below.
-	// Rooms without listeners are skipped unless they are 24/7 streams,
-	// which must keep playing (and refilling from mashups) with 0 online.
+	// Rooms without listeners are either 24/7 streams (kept alive below)
+	// or candidates for Redis eviction (see reapIfIdle).
 	if count == 0 {
+		if w.reapIfIdle(ctx, roomID) {
+			return
+		}
 		w.processStreamRoom(ctx, roomID)
 		return
 	}
+	redisc.ClearIdleSince(ctx, w.rdb, roomID)
 
 	ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
 	if ps == nil || !ps.IsPlaying {
@@ -173,6 +176,65 @@ func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
 		}
 		w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
 	}
+}
+
+// idleTTL bounds how long an abandoned room lingers in Redis. Zero config
+// (tests, unset env) falls back to the production default instead of
+// reaping everything immediately.
+func (w *AutoAdvance) idleTTL() time.Duration {
+	if w.config.RoomIdleHours > 0 {
+		return time.Duration(w.config.RoomIdleHours) * time.Hour
+	}
+	return 24 * time.Hour
+}
+
+// reapIfIdle evicts a long-abandoned room from Redis: no listeners, empty
+// queue, not playing, and first observed idle longer than idleTTL ago.
+// Queues persist in Postgres through write-through saves, so the room
+// rehydrates transparently on the next visit; votes and presence are
+// ephemeral by design. Stream rooms are exempt — their Redis-only filter
+// and seen state must survive listener droughts. Returns true when the room
+// was reaped and the tick must skip it.
+func (w *AutoAdvance) reapIfIdle(ctx context.Context, roomID string) bool {
+	if qlen, _ := redisc.GetQueueLen(ctx, w.rdb, roomID); qlen > 0 {
+		redisc.ClearIdleSince(ctx, w.rdb, roomID)
+		return false
+	}
+	if ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID); ps != nil && ps.IsPlaying {
+		redisc.ClearIdleSince(ctx, w.rdb, roomID)
+		return false
+	}
+
+	since, ok := redisc.GetIdleSince(ctx, w.rdb, roomID)
+	if !ok {
+		// First sighting of an idle room: start the clock, evict later.
+		redisc.SetIdleSince(ctx, w.rdb, roomID, time.Now())
+		return false
+	}
+	if time.Since(since) < w.idleTTL() {
+		return false
+	}
+
+	rm, err := w.room.GetOrLoadRoom(ctx, roomID)
+	if err != nil {
+		// Tribe without a village: the row is gone (or the DB is
+		// unreachable — in which case deleting Redis state would destroy
+		// data Postgres may still rehydrate). Never reap on DB errors.
+		return false
+	}
+	if rm.IsStream {
+		// Exempt, but refresh the marker so we don't pay a DB load on
+		// every tick for the rest of time.
+		redisc.SetIdleSince(ctx, w.rdb, roomID, time.Now())
+		return false
+	}
+
+	if err := redisc.DeleteRoom(ctx, w.rdb, roomID); err != nil {
+		w.log.Error("reap idle room failed", "room_id", roomID, "error", err)
+		return false
+	}
+	w.log.Info("reaped idle room from redis", "room_id", roomID)
+	return true
 }
 
 // processStreamRoom keeps IsStream rooms alive with zero listeners: advances

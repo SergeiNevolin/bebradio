@@ -298,3 +298,94 @@ func TestProcessRoomHealthyQueueUntouched(t *testing.T) {
 		t.Fatalf("expected playback intact, got %+v", ps)
 	}
 }
+
+func idleRoom(t *testing.T, d *workerDeps, roomID string, isStream bool) {
+	t.Helper()
+	rm := entity.NewRoom(roomID, "Idle", "owner1")
+	rm.IsStream = isStream
+	rm.MashupRadio = false
+	if err := d.roomRepo.Save(rm); err != nil {
+		t.Fatal(err)
+	}
+	// Paused, empty queue: nothing of value in Redis.
+	redisc.SetPlayback(d.ctx, d.rdb, roomID, &redisc.PlaybackState{})
+}
+
+// A room idle past the TTL loses its Redis keys (its queue persists in
+// Postgres and rehydrates on the next visit).
+func TestReapIdleRoom(t *testing.T) {
+	d := setupWorker(t)
+	roomID := "REAP"
+	idleRoom(t, d, roomID, false)
+
+	if reaped := d.w.reapIfIdle(d.ctx, roomID); reaped {
+		t.Fatal("first sighting must only start the idle clock")
+	}
+	old := time.Now().Add(-25 * time.Hour)
+	if err := redisc.SetIdleSince(d.ctx, d.rdb, roomID, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if reaped := d.w.reapIfIdle(d.ctx, roomID); !reaped {
+		t.Fatal("expected long-idle room to be reaped")
+	}
+	if ps, _ := redisc.GetPlayback(d.ctx, d.rdb, roomID); ps != nil {
+		t.Errorf("expected playback hash gone, got %+v", ps)
+	}
+	if _, ok := redisc.GetIdleSince(d.ctx, d.rdb, roomID); ok {
+		t.Error("expected the idle marker gone with the room")
+	}
+}
+
+// Fresh idle rooms are only clocked, never reaped.
+func TestNoReapFreshIdleRoom(t *testing.T) {
+	d := setupWorker(t)
+	roomID := "FRESH"
+	idleRoom(t, d, roomID, false)
+
+	if reaped := d.w.reapIfIdle(d.ctx, roomID); reaped {
+		t.Fatal("fresh idle room must not be reaped")
+	}
+	if _, ok := redisc.GetIdleSince(d.ctx, d.rdb, roomID); !ok {
+		t.Error("expected the idle clock to be started")
+	}
+}
+
+// Queued tracks and active playback veto eviction, however old the marker.
+func TestNoReapActiveRoom(t *testing.T) {
+	d := setupWorker(t)
+	roomID := "BUSY"
+	idleRoom(t, d, roomID, false)
+	redisc.SetQueue(d.ctx, d.rdb, roomID, []*entity.Track{readyTrack("q1", "Queued", "DJ Z")})
+	old := time.Now().Add(-72 * time.Hour)
+	if err := redisc.SetIdleSince(d.ctx, d.rdb, roomID, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if reaped := d.w.reapIfIdle(d.ctx, roomID); reaped {
+		t.Fatal("room with queued tracks must not be reaped")
+	}
+	if n, _ := redisc.GetQueueLen(d.ctx, d.rdb, roomID); n != 1 {
+		t.Errorf("expected queue intact, len=%d", n)
+	}
+}
+
+// Streams are exempt: their Redis-only filter/seen state must survive
+// listener droughts. The marker refreshes so we don't pay a DB load on
+// every tick.
+func TestNoReapStreamRoom(t *testing.T) {
+	d := setupWorker(t)
+	roomID := "STREAMIDLE"
+	idleRoom(t, d, roomID, true)
+	old := time.Now().Add(-72 * time.Hour)
+	if err := redisc.SetIdleSince(d.ctx, d.rdb, roomID, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if reaped := d.w.reapIfIdle(d.ctx, roomID); reaped {
+		t.Fatal("stream room must be exempt from reaping")
+	}
+	if since, ok := redisc.GetIdleSince(d.ctx, d.rdb, roomID); !ok || time.Since(since) > time.Hour {
+		t.Error("expected the idle marker refreshed for the exempt stream")
+	}
+}

@@ -189,10 +189,12 @@ func (uc *RoomUsecase) HasRoomAccess(rm *entity.Room, userID, access string) boo
 	return uc.auth.VerifyRoomToken(access, rm.ID)
 }
 
-// IsStreamController reports whether userID may drive playback in a stream
-// room (owner or admin). Streams have no voting, so manual next/prev/jump/
-// seek must be gated; the server-side autoadvance tick is unaffected.
-func (uc *RoomUsecase) IsStreamController(rm *entity.Room, userID string) bool {
+// IsController reports whether userID may drive playback in a room: owner
+// or admin. In streams this gates next/prev/jump (there is no voting, so
+// manual control must not leak to listeners); explicit seeks are gated by
+// it in every room kind, since a seek moves playback for everyone at once.
+// The server-side autoadvance tick bypasses it.
+func (uc *RoomUsecase) IsController(rm *entity.Room, userID string) bool {
 	if userID == "" {
 		return false
 	}

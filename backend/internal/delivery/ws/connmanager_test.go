@@ -271,3 +271,73 @@ func TestSendJSON(t *testing.T) {
 		t.Errorf("unexpected message: %s", string(msg))
 	}
 }
+
+func readOne(t *testing.T, conn *websocket.Conn, timeout time.Duration) (map[string]any, error) {
+	t.Helper()
+	conn.SetReadDeadline(time.Now().Add(timeout))
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(msg, &out); err != nil {
+		t.Fatalf("bad json: %v", err)
+	}
+	return out, nil
+}
+
+func TestBroadcastCoalescesSnapshots(t *testing.T) {
+	cm := NewConnectionManager(testLog)
+	clientConn, serverConn, cleanup := testWS(t)
+	defer cleanup()
+	cm.Connect("room1", serverConn)
+
+	snap := func(n int) map[string]any { return map[string]any{"id": "room1", "queue": n} }
+	cm.Broadcast("room1", snap(1))
+	for i := 2; i <= 5; i++ {
+		cm.Broadcast("room1", snap(i))
+	}
+
+	// First snapshot goes out immediately.
+	first, err := readOne(t, clientConn, 2*time.Second)
+	if err != nil {
+		t.Fatalf("first snapshot missing: %v", err)
+	}
+	if first["queue"] != float64(1) {
+		t.Fatalf("expected immediate first snapshot, got %v", first)
+	}
+
+	// The burst collapses into a single latest-wins flush.
+	second, err := readOne(t, clientConn, 3*time.Second)
+	if err != nil {
+		t.Fatalf("coalesced snapshot missing: %v", err)
+	}
+	if second["queue"] != float64(5) {
+		t.Fatalf("expected latest snapshot (queue=5), got %v", second)
+	}
+
+	// And nothing else is in flight.
+	if _, err := readOne(t, clientConn, 300*time.Millisecond); err == nil {
+		t.Fatal("expected silence after the coalesced flush")
+	}
+}
+
+func TestBroadcastTargetedBypassThrottle(t *testing.T) {
+	cm := NewConnectionManager(testLog)
+	clientConn, serverConn, cleanup := testWS(t)
+	defer cleanup()
+	cm.Connect("room1", serverConn)
+
+	for i := 0; i < 3; i++ {
+		cm.Broadcast("room1", map[string]any{"type": "chat", "n": i})
+	}
+	for i := 0; i < 3; i++ {
+		got, err := readOne(t, clientConn, 2*time.Second)
+		if err != nil {
+			t.Fatalf("targeted message %d missing: %v", i, err)
+		}
+		if got["n"] != float64(i) {
+			t.Fatalf("expected chat %d in order, got %v", i, got)
+		}
+	}
+}

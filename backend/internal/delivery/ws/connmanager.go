@@ -21,12 +21,29 @@ type connEntry struct {
 type ConnectionManager struct {
 	mu          sync.RWMutex
 	connections map[string]map[*websocket.Conn]*connEntry
-	log         *slog.Logger
+	// throttle collapses full-state snapshot storms per room (chatty rooms
+	// otherwise serialize and push the whole queue on every vote, message
+	// and reaction). See Broadcast.
+	throttle map[string]*broadcastSlot
+	log      *slog.Logger
+}
+
+// broadcastMinInterval caps full-room snapshot traffic: at most one
+// snapshot per room per interval goes out immediately, anything arriving
+// sooner collapses into a single latest-wins flush.
+const broadcastMinInterval = 250 * time.Millisecond
+
+type broadcastSlot struct {
+	lastSent   time.Time
+	pending    any
+	hasPending bool
+	timer      *time.Timer
 }
 
 func NewConnectionManager(log *slog.Logger) *ConnectionManager {
 	return &ConnectionManager{
 		connections: make(map[string]map[*websocket.Conn]*connEntry),
+		throttle:    make(map[string]*broadcastSlot),
 		log:         log,
 	}
 }
@@ -68,9 +85,89 @@ func (cm *ConnectionManager) Disconnect(roomID string, conn *websocket.Conn) {
 			delete(cm.connections, roomID)
 		}
 	}
+	// No listeners left: drop any coalesced snapshot and its timer so a
+	// dead room holds no goroutines or payloads.
+	if len(cm.connections[roomID]) == 0 {
+		if slot, ok := cm.throttle[roomID]; ok {
+			if slot.timer != nil {
+				slot.timer.Stop()
+			}
+			delete(cm.throttle, roomID)
+		}
+	}
 }
 
 func (cm *ConnectionManager) Broadcast(roomID string, data any) {
+	// Targeted messages (chat, reactions) carry a "type" key and are small:
+	// they always go out immediately. Full room snapshots have no "type"
+	// key and collapse latest-wins under the throttle.
+	if !isSnapshot(data) {
+		cm.send(roomID, data)
+		return
+	}
+
+	now := time.Now()
+	cm.mu.Lock()
+	slot, ok := cm.throttle[roomID]
+	if !ok {
+		slot = &broadcastSlot{}
+		cm.throttle[roomID] = slot
+	}
+	if !slot.armed() && now.Sub(slot.lastSent) >= broadcastMinInterval {
+		slot.lastSent = now
+		cm.mu.Unlock()
+		cm.send(roomID, data)
+		return
+	}
+	slot.pending = data
+	slot.hasPending = true
+	if slot.timer == nil {
+		delay := broadcastMinInterval - now.Sub(slot.lastSent)
+		if delay < 0 {
+			delay = 0
+		}
+		slot.timer = time.AfterFunc(delay, func() { cm.flushRoom(roomID) })
+	}
+	cm.mu.Unlock()
+}
+
+// isSnapshot reports whether data is a full room-state dump (as opposed to
+// a small targeted event like {"type": "chat"/"reaction", ...}).
+func isSnapshot(data any) bool {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return true
+	}
+	_, targeted := m["type"]
+	return !targeted
+}
+
+func (slot *broadcastSlot) armed() bool {
+	return slot.timer != nil
+}
+
+// flushRoom delivers the latest coalesced snapshot, if any.
+func (cm *ConnectionManager) flushRoom(roomID string) {
+	cm.mu.Lock()
+	slot, ok := cm.throttle[roomID]
+	if !ok || !slot.hasPending {
+		if ok {
+			slot.timer = nil
+		}
+		cm.mu.Unlock()
+		return
+	}
+	data := slot.pending
+	slot.pending = nil
+	slot.hasPending = false
+	slot.timer = nil
+	slot.lastSent = time.Now()
+	cm.mu.Unlock()
+
+	cm.send(roomID, data)
+}
+
+func (cm *ConnectionManager) send(roomID string, data any) {
 	// Snapshot under a read lock; slow writes must not block other rooms.
 	cm.mu.RLock()
 	entries := make([]*connEntry, 0, len(cm.connections[roomID]))

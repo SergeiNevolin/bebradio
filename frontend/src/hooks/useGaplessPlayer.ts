@@ -21,7 +21,11 @@ interface GaplessOptions {
   crossfadeSeconds: number
   /** Advance the queue (natural end, or the moment a crossfade begins). */
   onEnded: () => void
-  /** Report position to the server every few seconds while playing. */
+  /**
+   * Legacy position reporter, kept for interface stability. The server runs
+   * an authoritative wall-clock and ignores client reports, so the hook no
+   * longer calls it — drift is converged locally via playbackRate slew.
+   */
   onSync: (position: number) => void
 }
 
@@ -37,10 +41,14 @@ interface GaplessPlayer {
   seek: (seconds: number) => void
 }
 
-const SYNC_INTERVAL_MS = 5000
 const TICK_INTERVAL_MS = 250
 const FADE_STEP_MS = 50
 const DRIFT_TOLERANCE_S = 1.5
+/** Beyond this gap slewing is pointless — snap (reconnect, seek, handoff). */
+const SLEW_MAX_S = 6
+/** Converge faster/slower than the room clock; small enough to stay inaudible. */
+const SLEW_FAST_RATE = 1.04
+const SLEW_SLOW_RATE = 0.96
 /** Don't crossfade tracks that are barely longer than the overlap itself. */
 const MIN_TRACK_FACTOR = 1.5
 
@@ -91,6 +99,13 @@ export function useGaplessPlayer({
   // Live values for the timer callbacks, kept off the effect dependency lists.
   const paramsRef = useRef({ isPlaying, crossfadeSeconds, nextTrackId, nextSrc, effVol, onEnded, onSync })
   paramsRef.current = { isPlaying, crossfadeSeconds, nextTrackId, nextSrc, effVol, onEnded, onSync }
+
+  // Last authoritative server sample + local receipt time. Between broadcasts
+  // the server clock is extrapolated from it, so a broadcast drought never
+  // looks like drift.
+  const serverRef = useRef({ pos: 0, at: 0 })
+  // Stall detector: last observed media time + ticks without progress.
+  const stallRef = useRef({ time: -1, ticks: 0 })
 
   const cancelFade = useCallback(() => {
     if (fadeTimerRef.current) {
@@ -188,6 +203,9 @@ export function useGaplessPlayer({
     const active = deckRefs[activeIdx].current
     if (!active || !src || loadedRef.current[activeIdx] !== trackId) return
 
+    // A fresh play/pause cycle always restarts at natural speed; the ticker
+    // re-slews from there if drift persists.
+    active.playbackRate = 1
     if (isPlaying) {
       active.play().then(() => setNeedsGesture(false)).catch(() => setNeedsGesture(true))
     } else {
@@ -223,12 +241,24 @@ export function useGaplessPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsGesture, isPlaying])
 
-  // --- Correct drift against the server (skipped mid-crossfade) ---
+  // --- Track the authoritative clock; snap only on genuine jumps ---
+  //
+  // Every broadcast re-baselines the estimate. Small gaps are slewed shut by
+  // the ticker (no audible jumps on jittery networks); only a large gap —
+  // reconnect, admin seek, crossfade hand-off settling — snaps immediately.
   useEffect(() => {
+    if (!isFinite(serverPosition)) return
+    serverRef.current = { pos: serverPosition, at: Date.now() }
     const active = deckRefs[activeIdx].current
     if (!active || !src || fadeTimerRef.current) return
-    if (Math.abs(active.currentTime - serverPosition) > DRIFT_TOLERANCE_S) {
-      active.currentTime = serverPosition
+    const diff = serverPosition - active.currentTime
+    if (Math.abs(diff) > SLEW_MAX_S) {
+      active.playbackRate = 1
+      try {
+        active.currentTime = serverPosition
+      } catch {
+        /* metadata not ready yet; the ticker retries */
+      }
       setPosition(serverPosition)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -286,27 +316,46 @@ export function useGaplessPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefetchIdle])
 
-  // --- Position ticker + crossfade check + periodic server sync ---
+  // --- Position ticker: slew toward the room clock, watch stalls ---
   useEffect(() => {
     const tick = setInterval(() => {
       const active = deckRefs[activeIdxRef.current].current
       if (!active) return
       if (!active.paused) setPosition(active.currentTime)
       maybeStartCrossfade(active)
+
+      const p = paramsRef.current
+      if (!p.isPlaying || active.paused || fadeTimerRef.current) return
+      if (active.readyState < 2) return // no data yet; nothing to converge
+
+      // Stalled (buffering on bad networks): media time frozen while the
+      // room clock runs on. Correcting now would snap forward into
+      // unbuffered audio and rebuffer-loop — hold still until data flows.
+      const st = stallRef.current
+      if (active.currentTime === st.time) {
+        st.ticks += 1
+        if (active.playbackRate !== 1) active.playbackRate = 1
+        return
+      }
+      st.time = active.currentTime
+      st.ticks = 0
+
+      const est = serverRef.current.pos + (Date.now() - serverRef.current.at) / 1000
+      const diff = est - active.currentTime
+      const adiff = Math.abs(diff)
+      if (adiff <= DRIFT_TOLERANCE_S) {
+        if (active.playbackRate !== 1) active.playbackRate = 1
+      } else if (adiff <= SLEW_MAX_S) {
+        // Small gap either way (jitter, reconnect wobble): converge at an
+        // inaudible rate instead of jumping — this is what kills the
+        // "rewinds on bad network" symptom.
+        active.playbackRate = diff > 0 ? SLEW_FAST_RATE : SLEW_SLOW_RATE
+      }
+      // Larger gaps snap in the baseline effect above.
     }, TICK_INTERVAL_MS)
     return () => clearInterval(tick)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maybeStartCrossfade])
-
-  useEffect(() => {
-    if (!isPlaying) return
-    const id = setInterval(() => {
-      const active = deckRefs[activeIdxRef.current].current
-      if (active && !active.paused) onSync(active.currentTime)
-    }, SYNC_INTERVAL_MS)
-    return () => clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, onSync])
 
   // --- End-of-track on either deck ---
   useEffect(() => {
@@ -347,8 +396,13 @@ export function useGaplessPlayer({
     cancelFade()
     const active = deckRefs[activeIdxRef.current].current
     if (!active) return
+    active.playbackRate = 1
     active.currentTime = seconds
     setPosition(seconds)
+    // Re-baseline the room clock here so the ticker doesn't immediately
+    // slew back toward the stale estimate.
+    serverRef.current = { pos: seconds, at: Date.now() }
+    stallRef.current = { time: seconds, ticks: 0 }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cancelFade])
 
