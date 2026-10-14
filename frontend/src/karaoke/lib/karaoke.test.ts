@@ -181,14 +181,20 @@ describe('karaokeFrame: миллисекунды', () => {  // слова ров
 })
 
 describe('lineTextSize', () => {
-  it('короткие крупно, длинные ужимаются целиком', () => {
-    expect(lineTextSize(0)).toContain('text-4xl')
-    expect(lineTextSize(4)).toContain('text-4xl')
-    expect(lineTextSize(12)).toContain('text-4xl')
-    expect(lineTextSize(13)).toContain('text-2xl')
-    expect(lineTextSize(20)).toContain('text-2xl')
-    expect(lineTextSize(21)).toContain('text-xl')
-    expect(lineTextSize(37)).toContain('text-xl')
+  it('короткие крупно, длинные ужимаются целиком; мобильная база меньше десктопа', () => {
+    for (const n of [0, 4, 12]) {
+      expect(lineTextSize(n)).toContain('text-2xl')
+      expect(lineTextSize(n)).toContain('sm:text-5xl')
+    }
+    for (const n of [13, 20]) {
+      expect(lineTextSize(n)).toContain('text-xl')
+      expect(lineTextSize(n)).toContain('sm:text-3xl')
+    }
+    for (const n of [21, 37]) {
+      // 'text-lg': точное слово, не хвост 'sm:text-2xl'
+      expect(lineTextSize(n).split(' ')).toContain('text-lg')
+      expect(lineTextSize(n)).toContain('sm:text-2xl')
+    }
   })
 })
 

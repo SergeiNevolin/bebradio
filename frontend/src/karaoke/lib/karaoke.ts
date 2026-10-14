@@ -41,11 +41,12 @@ export function karaokeFrame(segments: Segment[], t: number): KaraokeFrame {
   return { winStart, lines, sung, ballOn }
 }
 
-/** кегль текущей строки: длинные ужимаем, чтобы влезли целиком, а не резались контейнером */
+/** кегль текущей строки: длинные ужимаем, чтобы влезли целиком, а не резались контейнером.
+ *  Мобильная база меньше десктопа (sm:), чтобы 3 строки влезали в экран телефона. */
 export function lineTextSize(nWords: number): string {
-  if (nWords > 20) return 'text-xl font-semibold leading-snug sm:text-2xl'
-  if (nWords > 12) return 'text-2xl font-semibold leading-snug sm:text-3xl'
-  return 'text-4xl font-semibold leading-snug sm:text-5xl'
+  if (nWords > 20) return 'text-lg font-semibold leading-snug sm:text-2xl'
+  if (nWords > 12) return 'text-xl font-semibold leading-snug sm:text-3xl'
+  return 'text-2xl font-semibold leading-snug sm:text-5xl'
 }
 
 /** доля перелёта шарика 0..1: от текущего слова к следующему */

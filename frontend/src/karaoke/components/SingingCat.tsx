@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { memo, useEffect } from 'react'
 import type { VoiceMode } from '../lib/voiceActivity'
 
 export const CAT_LOUD_SRC = '/cat-loud-sing.png'
@@ -25,8 +25,9 @@ const MODES: CatMode[] = ['silent', 'soft', 'loud']
  * Все три картинки всегда в DOM — активна ровно одна (остальные display:none),
  * смена жёсткая без кроссфейда: при наложении полупрозрачных кадров
  * просвечивает фон. Декоративный: pointer-events none, aria-hidden.
+ * memo: плеер ре-рендерится каждый кадр, кот — только при смене mode.
  */
-export default function SingingCat({ mode }: SingingCatProps) {
+function SingingCat({ mode }: SingingCatProps) {
   // Греем кадры заранее, чтобы переключение было мгновенным
   useEffect(() => {
     for (const src of [CAT_LOUD_SRC, CAT_SOFT_SRC, CAT_SILENT_SRC]) {
@@ -54,3 +55,5 @@ export default function SingingCat({ mode }: SingingCatProps) {
     </div>
   )
 }
+
+export default memo(SingingCat)

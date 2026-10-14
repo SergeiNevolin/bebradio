@@ -545,6 +545,12 @@ input:focus {
     padding-bottom: 0;
   }
 
+  /* При пении верхний навбар скрыт — весь экран отдаём тексту песни.
+     Прячем только nav первого уровня (шапка сайта), а не вложенные nav. */
+  .app-root.singing > nav {
+    display: none;
+  }
+
   .app {
     padding: 0 14px;
   }

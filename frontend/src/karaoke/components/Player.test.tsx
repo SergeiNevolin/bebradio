@@ -109,8 +109,9 @@ describe('Player: минус/плюс', () => {
 })
 
 describe('Player: миллисекунды через ползунок', () => {
+  // TODO: перемотка запрещена — тесты ползунка пропущены до возврата фичи
   // 'три четыре' на [5,7]: слова [5,6],[6,7]
-  it('граница слова в мс красит ровно по ней', () => {
+  it.skip('граница слова в мс красит ровно по ней', () => {
     render(<Player />)
     const slider = screen.getByLabelText('Позиция в песне')
     fireEvent.change(slider, { target: { value: '5.999' } })
@@ -121,7 +122,7 @@ describe('Player: миллисекунды через ползунок', () => {
     expect(screen.getByText('четыре').className).toContain('text-primary')
   })
 
-  it('перемотка ставит окно на строку позиции', () => {
+  it.skip('перемотка ставит окно на строку позиции', () => {
     render(<Player />)
     const slider = screen.getByLabelText('Позиция в песне')
     fireEvent.change(slider, { target: { value: '9.5' } })

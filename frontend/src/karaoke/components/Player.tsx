@@ -37,7 +37,7 @@ const TopBar = memo(function TopBar({ title, timeSec, duration, withMic, micLive
   return (
     <div className="flex items-center gap-2.5 py-3">
       <button onClick={onBack} title="Вернуться в каталог" aria-label="Вернуться в каталог"
-        className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-surface-hover px-3.5 text-[13px] font-medium text-text transition hover:bg-border hover:text-text max-sm:hidden">
+        className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-surface-hover px-3.5 text-[13px] font-medium text-text transition hover:bg-border hover:text-text">
         <ArrowLeft className="h-4 w-4" />
         <span className="hidden sm:inline">Каталог</span>
       </button>
@@ -180,7 +180,7 @@ const NextLines = memo(function NextLines({ lines }: { lines: NextLine[] }) {
               {l.part}
             </div>
           )}
-          <p className="text-2xl leading-relaxed text-muted sm:text-3xl">
+          <p className="text-lg leading-relaxed text-muted sm:text-3xl">
             {l.text}
           </p>
         </div>
@@ -223,13 +223,15 @@ export default function Player() {
   const setEditorOpen = useKaraoke((s) => s.setEditorOpen)
   // счётчик сбросов: заставляет открытый редактор перечитать song.segments
   const [editorReset, setEditorReset] = useState(0)
-  // позиция пальца на ползунке во время драга — чтобы не дёргался за звуком
-  const [scrub, setScrub] = useState<number | null>(null)
+  // TODO: перемотка запрещена — позиция пальца на ползунке (см. закомментированный input ниже)
+  // const [scrub, setScrub] = useState<number | null>(null)
   // Кот-индикатор: VAD-режим обновляется прямо в rAF-кадре loop() —
   // без таймеров и useEffect. Показываем только при живом микрофоне,
   // иначе (пауза/старт/финал, замороженный level) — всегда молчит.
   const [catMode, setCatMode] = useState<VoiceMode>('silent')
   const vadRef = useRef(createVad())
+  /** резолв режима кота — не чаще ~10Гц (огибающая медленная, чаще не нужно) */
+  const vadResolveRef = useRef(0)
   const withMicRef = useRef(withMic)
   withMicRef.current = withMic
   const micLive = withMic && phase === 'playing'
@@ -432,10 +434,13 @@ export default function Player() {
             if (dotsRef.current.length > 3000) dotsRef.current.shift()
           }
         }
-        // режим кота — каждый кадр, setState только при смене (дешево)
-        const vadBefore = vad.mode
-        resolveVadMode(vad, now, withMicRef.current && phaseRef.current === 'playing')
-        if (vad.mode !== vadBefore) setCatMode(vad.mode)
+        // режим кота — не чаще ~10Гц, setState только при смене
+        if (now - vadResolveRef.current >= 100) {
+          vadResolveRef.current = now
+          const vadBefore = vad.mode
+          resolveVadMode(vad, now, withMicRef.current && phaseRef.current === 'playing')
+          if (vad.mode !== vadBefore) setCatMode(vad.mode)
+        }
       }
     } catch {
       // один плохой кадр (микрофон/питч) не убивает часы караоке
@@ -841,7 +846,7 @@ export default function Player() {
       />
 
       {/* текст как в настоящем караоке: текущая строка крупно + 2 следующие */}
-      <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-4 overflow-hidden rounded-2xl border border-border bg-surface-hover px-6 py-6 text-center sm:gap-6 sm:px-10">
+      <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-2 overflow-hidden rounded-2xl border border-border bg-surface-hover px-4 py-4 text-center sm:gap-6 sm:px-10 sm:py-6">
         {segs.length === 0 ? (
           <p className="text-center text-sm text-muted">Текст не распознан — пойте под минус</p>
         ) : (
@@ -875,7 +880,7 @@ export default function Player() {
         </div>
       )}
 
-      {/* прогресс: во время драга ползунок слушается пальца, а не звука */}
+      {/* TODO: перемотка временно запрещена — ползунок закомментирован, код seek() жив.
       <input type="range" min={0} max={Math.max(1, duration)} step={0.1}
         value={scrub ?? Math.min(time, duration || 0)}
         onChange={(e) => {
@@ -887,7 +892,7 @@ export default function Player() {
         onPointerCancel={() => setScrub(null)}
         onKeyUp={() => setScrub(null)}
         onBlur={() => setScrub(null)}
-        className="mt-3 w-full accent-primary" aria-label="Позиция в песне" />
+        className="mt-3 w-full accent-primary" aria-label="Позиция в песне" /> */}
       {waiting && (phase === 'playing' || phase === 'paused') && (
         <p className="mt-1 text-center text-xs text-muted tabular-nums">Буферизация…</p>
       )}
