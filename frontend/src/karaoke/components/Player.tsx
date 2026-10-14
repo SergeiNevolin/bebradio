@@ -10,6 +10,8 @@ import type { ScoreResult, Segment, SkipRange } from '../lib/types'
 import { useKaraoke } from '../store'
 import PitchStrip, { type UserDot } from './PitchStrip'
 import Editor from './Editor'
+import SingingCat from './SingingCat'
+import { createVad, noteVadVoice, resolveVadMode, updateVadEnv, type VoiceMode } from '../lib/voiceActivity'
 
 type Phase = 'ready' | 'countdown' | 'playing' | 'paused' | 'finished'
 
@@ -223,6 +225,14 @@ export default function Player() {
   const [editorReset, setEditorReset] = useState(0)
   // позиция пальца на ползунке во время драга — чтобы не дёргался за звуком
   const [scrub, setScrub] = useState<number | null>(null)
+  // Кот-индикатор: VAD-режим обновляется прямо в rAF-кадре loop() —
+  // без таймеров и useEffect. Показываем только при живом микрофоне,
+  // иначе (пауза/старт/финал, замороженный level) — всегда молчит.
+  const [catMode, setCatMode] = useState<VoiceMode>('silent')
+  const vadRef = useRef(createVad())
+  const withMicRef = useRef(withMic)
+  withMicRef.current = withMic
+  const micLive = withMic && phase === 'playing'
   // ждём байты с сети (seek в непрогретое место): показываем «Буферизация…»
   const [waiting, setWaiting] = useState(false)
 
@@ -396,12 +406,16 @@ export default function Player() {
       const rms = Math.sqrt(sum / buf.length)
       setLevel((prev) => {
         const v = Math.min(1, rms * 6)
-        return Math.abs(v - prev) < 0.05 ? prev : v
+        return Math.abs(v - prev) < 0.03 ? prev : v
       })
+        // VAD кота: пол шума + огибающая каждый кадр, питч — гейт «это голос»
+        const vad = vadRef.current
+        updateVadEnv(vad, rms)
         const now = performance.now()
         if (now - lastPitchRef.current > 120) {
           lastPitchRef.current = now
           const hit = detectorRef.current.detect(buf, ctx.sampleRate)
+          if (hit) noteVadVoice(vad, now)
           const fr = sampleFrame(
             smoothRef.current,
             t,
@@ -418,6 +432,10 @@ export default function Player() {
             if (dotsRef.current.length > 3000) dotsRef.current.shift()
           }
         }
+        // режим кота — каждый кадр, setState только при смене (дешево)
+        const vadBefore = vad.mode
+        resolveVadMode(vad, now, withMicRef.current && phaseRef.current === 'playing')
+        if (vad.mode !== vadBefore) setCatMode(vad.mode)
       }
     } catch {
       // один плохой кадр (микрофон/питч) не убивает часы караоке
@@ -471,6 +489,8 @@ export default function Player() {
       framesRef.current = []
       dotsRef.current = []
       smoothRef.current = []
+      vadRef.current = createVad()
+      setCatMode('silent')
       setTime(0)
       audioRef.current.currentTime = 0
       // старт всегда с минуса; тик-эффект сам даст оригинал, если надо (плюс/пропуск)
@@ -623,6 +643,8 @@ export default function Player() {
     framesRef.current = []
     dotsRef.current = []
     smoothRef.current = []
+    vadRef.current = createVad()
+    setCatMode('silent')
     // к рестарту blob наверняка готов — подбираем отложенное, старт из памяти
     const p = pendingBlob.current
     if (p.minus && a.getAttribute('src') !== p.minus) a.src = p.minus
@@ -819,7 +841,7 @@ export default function Player() {
       />
 
       {/* текст как в настоящем караоке: текущая строка крупно + 2 следующие */}
-      <div className="flex min-h-0 flex-1 flex-col justify-center gap-4 overflow-hidden rounded-2xl border border-border bg-surface-hover px-6 py-6 text-center sm:gap-6 sm:px-10">
+      <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-4 overflow-hidden rounded-2xl border border-border bg-surface-hover px-6 py-6 text-center sm:gap-6 sm:px-10">
         {segs.length === 0 ? (
           <p className="text-center text-sm text-muted">Текст не распознан — пойте под минус</p>
         ) : (
@@ -841,6 +863,8 @@ export default function Player() {
             <NextLines lines={nextLines} />
           </>
         )}
+        {/* кот-индикатор микрофона: правый нижний угол блока текста */}
+        <SingingCat mode={micLive ? catMode : 'silent'} />
       </div>
 
       {/* полоса тона: показываем гладкий контур, очки — по строгому */}
