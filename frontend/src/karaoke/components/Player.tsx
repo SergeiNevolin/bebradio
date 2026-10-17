@@ -11,7 +11,7 @@ import { useKaraoke } from '../store'
 import PitchStrip, { type UserDot } from './PitchStrip'
 import Editor from './Editor'
 import SingingCat from './SingingCat'
-import { createVad, noteVadVoice, resolveVadMode, updateVadEnv, type VoiceMode } from '../lib/voiceActivity'
+import { createVoiceState, MIC_LEVEL_SCALE, noteVoiceLevel, resolveVoiceMode, type VoiceMode } from '../lib/voiceActivity'
 
 type Phase = 'ready' | 'countdown' | 'playing' | 'paused' | 'finished'
 
@@ -229,8 +229,9 @@ export default function Player() {
   // без таймеров и useEffect. Показываем только при живом микрофоне,
   // иначе (пауза/старт/финал, замороженный level) — всегда молчит.
   const [catMode, setCatMode] = useState<VoiceMode>('silent')
-  const vadRef = useRef(createVad())
-  /** резолв режима кота — не чаще ~10Гц (огибающая медленная, чаще не нужно) */
+  /** так, напараду с индикатором уровня: тот же уровень, пороги и пережитие паузы */
+  const voiceRef = useRef(createVoiceState())
+  /** резолв режима кота — не чаще ~10Гц (уровень гладкий, чаще не нужно) */
   const vadResolveRef = useRef(0)
   const withMicRef = useRef(withMic)
   withMicRef.current = withMic
@@ -405,19 +406,19 @@ export default function Player() {
         an.getFloatTimeDomainData(buf as Float32Array<ArrayBuffer>)
         let sum = 0
         for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
-      const rms = Math.sqrt(sum / buf.length)
-      setLevel((prev) => {
-        const v = Math.min(1, rms * 6)
-        return Math.abs(v - prev) < 0.03 ? prev : v
-      })
-        // VAD кота: пол шума + огибающая каждый кадр, питч — гейт «это голос»
-        const vad = vadRef.current
-        updateVadEnv(vad, rms)
+        const rms = Math.sqrt(sum / buf.length)
+        setLevel((prev) => {
+          const v = Math.min(1, rms * MIC_LEVEL_SCALE)
+          return Math.abs(v - prev) < 0.03 ? prev : v
+        })
+        // кот ходит напрямую от уровня микрофона: ровно тот же сигнал,
+        // что подаётся и на индикатор уровня в шапке; живым он бывает только
+        // при играющем треке и включённом микрофоне
         const now = performance.now()
+        noteVoiceLevel(voiceRef.current, rms * MIC_LEVEL_SCALE, now)
         if (now - lastPitchRef.current > 120) {
           lastPitchRef.current = now
           const hit = detectorRef.current.detect(buf, ctx.sampleRate)
-          if (hit) noteVadVoice(vad, now)
           const fr = sampleFrame(
             smoothRef.current,
             t,
@@ -437,9 +438,9 @@ export default function Player() {
         // режим кота — не чаще ~10Гц, setState только при смене
         if (now - vadResolveRef.current >= 100) {
           vadResolveRef.current = now
-          const vadBefore = vad.mode
-          resolveVadMode(vad, now, withMicRef.current && phaseRef.current === 'playing')
-          if (vad.mode !== vadBefore) setCatMode(vad.mode)
+          const before = voiceRef.current.mode
+          resolveVoiceMode(voiceRef.current, now, withMicRef.current && phaseRef.current === 'playing')
+          if (voiceRef.current.mode !== before) setCatMode(voiceRef.current.mode)
         }
       }
     } catch {
@@ -494,7 +495,7 @@ export default function Player() {
       framesRef.current = []
       dotsRef.current = []
       smoothRef.current = []
-      vadRef.current = createVad()
+      voiceRef.current = createVoiceState()
       setCatMode('silent')
       setTime(0)
       audioRef.current.currentTime = 0
@@ -648,7 +649,7 @@ export default function Player() {
     framesRef.current = []
     dotsRef.current = []
     smoothRef.current = []
-    vadRef.current = createVad()
+    voiceRef.current = createVoiceState()
     setCatMode('silent')
     // к рестарту blob наверняка готов — подбираем отложенное, старт из памяти
     const p = pendingBlob.current

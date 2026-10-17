@@ -1,93 +1,65 @@
 /**
- * Voice-activity detector для кота-индикатора пения.
+ * Кот-индикатор пения: простая обработка громкости микрофона.
  *
- * Проблема абсолютных порогов по RMS: усиление микрофона, расстояние до него
- * и шум комнаты у всех разные — один и тот же порог для кого-то недостижим,
- * а у кого-то срабатывает на тишине. Поэтому работаем не с абсолютным
- * уровнем, а с превышением над адаптивным полом шума (SNR, дБ):
- * пол сам подстраивается под микрофон и комнату.
+ * Работает ровно как индикация уровня в шапке плеера (Player: setLevel
+ * с масштабом MIC_LEVEL_SCALE): один и тот же кадр микрофона превращается
+ * в уровень 0..1, кот лишь решает, какой картинкой его показывать.
+ * Никакого адаптивного пола шума, питч-гейтов и нейросетей.
  *
- * Три идеи внутри:
- * 1. Пол шума — медленный минимум RMS: тишину догоняет за ~5 кадров,
- *    вверх ползёт еле-еле (tau ~8с), чтобы голос не утаскивал его за собой.
- * 2. Огибающая превышения: атака мгновенная (кот просыпается сразу),
- *    спад ~300мс — переживает глухие согласные и паузы между словами.
- * 3. Гейт по питчу: LivePitch уже считается в плеере раз в 120мс; хит
- *    с памятью 350мс подтверждает «это голос, а не стук/кашель».
+ * Три правила:
+ * 1. Сглаженный уровень ниже тишины (или тишина, или выключенный/пауза) — кот молчит.
+ * 2. Сглаженный уровень выше порога громко — кот поёт в полный голос.
+ * 3. Между ними или в тень после последнего звука (до HOLD) — кот поёт тихо:
+ *    так переживаются паузы между словами и глухие согласные.
  */
 
 export type VoiceMode = 'silent' | 'soft' | 'loud'
 
-/** Пороги превышения огибающей над полом, дБ (с гистерезисом). */
-export const VAD_SOFT_ON_DB = 8
-export const VAD_SOFT_OFF_DB = 5
-export const VAD_LOUD_ON_DB = 16
-export const VAD_LOUD_OFF_DB = 12
+/**
+ * Масштаб индикатора уровня: level = min(1, rms * MIC_LEVEL_SCALE).
+ * Общий для полоски уровня в шапке и для кота, чтобы они показывали одно и то же.
+ */
+export const MIC_LEVEL_SCALE = 6
 
-/** Сколько помним последний питч-хит, мс. */
-export const VAD_VOICE_MEMORY_MS = 350
+/** Ниже этого уровня (в единицах 0..1) звук считается тишиной. */
+export const CAT_QUIET_LEVEL = 0.15
+/** Выше этого уровня кот поёт «громко». */
+export const CAT_LOUD_LEVEL = 0.55
 
-/** Спад огибающей за кадр (~60fps): tau ≈ 0.28с. */
-const RELEASE_K = 0.06
-/** Пол догоняет тишину быстро (~5 кадров), вверх — медленно (room drift). */
-const FLOOR_DOWN_K = 0.3
-const FLOOR_UP_K = 0.002
+/** Сколько мс сглаженный уровень может держаться ниже тишинного — между словами. */
+export const CAT_SILENCE_HOLD_MS = 250
 
-export interface VadState {
-  /** Пол шума в единицах RMS; null — ещё ни одного кадра. */
-  floor: number | null
-  /** Огибающая превышения над полом, дБ (0..40). */
-  envDb: number
-  /** performance.now() последнего питч-хита. */
-  lastVoiceMs: number
-  /** Текущий режим (гистерезис опирается на него). */
+/** Спад сглаживания уровня за кадр (~60fps): tau ≈ 0.17с. Атака — мгновенная. */
+const RELEASE_K = 0.1
+
+export interface VoiceState {
+  /** Сглаженный уровень микрофона 0..1 (шкала индикации). */
+  env: number
+  /** performance.now() последнего кадра, где сглаженный уровень ≥ тишины. */
+  lastActiveMs: number
   mode: VoiceMode
 }
 
-export function createVad(): VadState {
-  return { floor: null, envDb: 0, lastVoiceMs: -Infinity, mode: 'silent' }
+export function createVoiceState(): VoiceState {
+  return { env: 0, lastActiveMs: -Infinity, mode: 'silent' }
 }
 
-/** Скормить свежий RMS кадра: обновляет пол шума и огибающую. */
-export function updateVadEnv(s: VadState, rms: number): void {
-  const r = Math.max(0, rms)
-  if (s.floor === null) {
-    s.floor = r
-  } else if (r < s.floor) {
-    s.floor += (r - s.floor) * FLOOR_DOWN_K
-  } else {
-    s.floor += (r - s.floor) * FLOOR_UP_K
-  }
-  const db = Math.min(40, Math.max(0, 20 * Math.log10(r / (s.floor + 1e-6))))
-  s.envDb = db > s.envDb ? db : s.envDb + (db - s.envDb) * RELEASE_K
-}
-
-/** Отметить хит детектора питча (это голос, а не шум). */
-export function noteVadVoice(s: VadState, nowMs: number): void {
-  s.lastVoiceMs = nowMs
+/** воспринять кадр уровня 0..1 (та же шкала, что и индикатор уровня). */
+export function noteVoiceLevel(s: VoiceState, level: number, nowMs: number): void {
+  const v = Math.max(0, Math.min(1, level))
+  s.env = v > s.env ? v : s.env + (v - s.env) * RELEASE_K
+  if (s.env >= CAT_QUIET_LEVEL) s.lastActiveMs = nowMs
 }
 
 /**
- * Текущий режим: без живого микрофона или без свежего питча — всегда
- * 'silent' (энергия без голоса = шум). Иначе — по огибающей с гистерезисом.
- * Результат запоминается в s.mode и возвращается.
+ * Режим кота: без живого микрофона — всегда silent. Иначе три состояния
+ * по сглаженному уровню с удержанием между словами.
  */
-export function resolveVadMode(s: VadState, nowMs: number, live: boolean): VoiceMode {
-  if (!live || nowMs - s.lastVoiceMs > VAD_VOICE_MEMORY_MS) {
+export function resolveVoiceMode(s: VoiceState, nowMs: number, live: boolean): VoiceMode {
+  if (!live || nowMs - s.lastActiveMs > CAT_SILENCE_HOLD_MS) {
     s.mode = 'silent'
     return s.mode
   }
-  const db = s.envDb
-  switch (s.mode) {
-    case 'silent':
-      s.mode = db >= VAD_LOUD_ON_DB ? 'loud' : db >= VAD_SOFT_ON_DB ? 'soft' : 'silent'
-      break
-    case 'soft':
-      s.mode = db >= VAD_LOUD_ON_DB ? 'loud' : db < VAD_SOFT_OFF_DB ? 'silent' : 'soft'
-      break
-    case 'loud':
-      s.mode = db < VAD_SOFT_OFF_DB ? 'silent' : db < VAD_LOUD_OFF_DB ? 'soft' : 'loud'
-      break
-  }
+  s.mode = s.env >= CAT_LOUD_LEVEL ? 'loud' : 'soft'
   return s.mode
 }
