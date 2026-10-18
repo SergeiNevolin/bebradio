@@ -120,8 +120,8 @@ describe('Home', () => {
     expect(card.textContent).toContain('42')
     expect(card.querySelector('svg')).not.toBeNull()
     const open = screen.getAllByText('Показать все')
-      .find((el) => el.closest('a')?.getAttribute('href') === '/mashup')
-    expect(open?.closest('a')).toHaveAttribute('href', '/mashup')
+      .find((el) => el.closest('a')?.getAttribute('href') === '/mashups')
+    expect(open?.closest('a')).toHaveAttribute('href', '/mashups')
   })
 
   it('does not show how-it-works section', async () => {

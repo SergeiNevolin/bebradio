@@ -58,7 +58,7 @@ test.describe('Navigation', () => {
   })
 
   test('mashups page is accessible', async ({ page }) => {
-    await page.goto('/mashup')
+    await page.goto('/mashups')
     await expect(page.locator('.app')).toBeVisible()
   })
 })

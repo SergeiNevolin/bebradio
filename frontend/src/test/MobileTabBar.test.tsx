@@ -16,12 +16,12 @@ describe('MobileTabBar', () => {
     renderTabs()
     expect(screen.getByText('Главная').closest('a')).toHaveAttribute('href', '/')
     expect(screen.getByText('Комнаты').closest('a')).toHaveAttribute('href', '/rooms')
-    expect(screen.getByText('Мэшапы').closest('a')).toHaveAttribute('href', '/mashup')
+    expect(screen.getByText('Мэшапы').closest('a')).toHaveAttribute('href', '/mashups')
     expect(screen.getByText('Караоке').closest('a')).toHaveAttribute('href', '/karaoke')
   })
 
   it('marks the current section active', () => {
-    const { container } = renderTabs('/mashup')
+    const { container } = renderTabs('/mashups')
     const active = container.querySelectorAll('a[aria-current="page"]')
     expect(active).toHaveLength(1)
     expect(active[0]).toHaveTextContent('Мэшапы')

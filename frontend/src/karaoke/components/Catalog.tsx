@@ -568,6 +568,24 @@ export default function Catalog() {
       )}
         </>
       )}
+
+      <section className="mt-12 border-t border-border pt-6" aria-label="О караоке">
+        <h2 className="text-lg font-extrabold tracking-tight text-text">
+          Загрузите свою песню и пойте онлайн
+        </h2>
+        <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted">
+          Караоке на bebradio — это онлайн-караоке, куда можно загрузить свою песню: вокал
+          отделяется автоматически на видеокарте, а текст распознаётся сам. Загрузите аудио или
+          клип (mp3, wav, flac, m4a, ogg, mp4, mov, mkv, webm), при желании приложите текст — и
+          получите минус, готовый к пению прямо в браузере.
+        </p>
+        <ul className="mt-3 max-w-2xl space-y-1 text-[13px] leading-relaxed text-muted">
+          <li><b className="text-text">1.</b> Загрузите свою песню — файл с аудио или клипом.</li>
+          <li><b className="text-text">2.</b> Дождитесь обработки: вокал отделится, слова распознаются.</li>
+          <li><b className="text-text">3.</b> Нажмите «Петь», попадите в ноты и получите оценку.</li>
+        </ul>
+      </section>
+
       {uploadOpen && (
         <Upload onClose={() => setUploadOpen(false)} onDone={(id) => void refreshAndOpen(id)} ownerName={user?.username} />
       )}

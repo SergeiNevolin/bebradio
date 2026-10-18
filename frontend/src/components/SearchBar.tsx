@@ -55,7 +55,7 @@ export default function SearchBar() {
   const handleSelectTrack = () => {
     setQuery('')
     setOpen(false)
-    navigate('/mashup')
+    navigate('/mashups')
   }
 
   const hasResults = rooms.length > 0 || tracks.length > 0

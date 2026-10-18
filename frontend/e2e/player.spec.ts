@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 /**
  * Global mashup player: one <audio> mounted in App, playback must survive
- * navigation between sections (/mashup, /, /karaoke), hide (not unmount) in
+ * navigation between sections (/mashups, /, /karaoke), hide (not unmount) in
  * rooms and while karaoke is singing, and restore after reload.
  *
  * Real backend + music-service, no YouTube: tracks are in-memory tone WAVs
@@ -50,7 +50,7 @@ async function register(page: Page, prefix: string) {
 }
 
 async function uploadTone(page: Page, title: string, freq = 440) {
-  await page.goto('/mashup')
+  await page.goto('/mashups')
   await page.getByRole('button', { name: 'Upload', exact: true }).click()
 
   const modal = page.locator('div.modal')
@@ -150,7 +150,7 @@ test.describe('Global player across sections', () => {
     await expect(page.locator('audio').first()).toHaveAttribute('src', src)
 
     // Back to mashup through the sidebar: still the same track.
-    await goSection(page, '/mashup')
+    await goSection(page, '/mashups')
     await expect(page.locator('audio').first()).toHaveAttribute('src', src)
     expect(await audioPlaying(page)).toBe(true)
   })
@@ -294,7 +294,7 @@ test.describe('Player transport', () => {
     expect(snapshot).toBeTruthy()
     expect(JSON.parse(snapshot as string)).toMatchObject({ shuffle: true })
 
-    // Reload: the walkable list arrives from /mashup, the player restores
+    // Reload: the walkable list arrives from /mashups, the player restores
     // the same track (offset + toggles), even though autoplay is blocked.
     await page.reload()
     await waitUntilPlayable(page, title)

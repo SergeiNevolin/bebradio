@@ -58,7 +58,7 @@ async function register(page: Page, prefix: string): Promise<string> {
 }
 
 async function uploadTone(page: Page, title: string, seconds = 8) {
-  await page.goto(`${BASE}/mashup`)
+  await page.goto(`${BASE}/mashups`)
   await page.getByRole('button', { name: 'Upload', exact: true }).click()
 
   const modal = page.locator('div.modal')

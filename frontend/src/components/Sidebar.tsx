@@ -54,7 +54,7 @@ function SettingsIcon() {
 const SECTIONS = [
   { to: '/', label: 'Главная', icon: <HomeIcon />, end: true },
   { to: '/rooms', label: 'Комнаты', icon: <RoomsIcon />, end: false },
-  { to: '/mashup', label: 'Мэшапы', icon: <MashupIcon />, end: false },
+  { to: '/mashups', label: 'Мэшапы', icon: <MashupIcon />, end: false },
   { to: '/karaoke', label: 'Караоке', icon: <KaraokeIcon />, end: false },
 ]
 

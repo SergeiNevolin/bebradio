@@ -25,7 +25,7 @@ describe('Sidebar', () => {
     renderSidebar()
     expect(screen.getByRole('link', { name: 'Главная' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: 'Комнаты' })).toHaveAttribute('href', '/rooms')
-    expect(screen.getByRole('link', { name: 'Мэшапы' })).toHaveAttribute('href', '/mashup')
+    expect(screen.getByRole('link', { name: 'Мэшапы' })).toHaveAttribute('href', '/mashups')
     expect(screen.getByRole('link', { name: 'Караоке' })).toHaveAttribute('href', '/karaoke')
     expect(screen.queryByRole('link', { name: 'Профиль' })).toBeNull()
   })
@@ -38,7 +38,7 @@ describe('Sidebar', () => {
   })
 
   it('marks the current section active', () => {
-    const { container } = renderSidebar('/mashup')
+    const { container } = renderSidebar('/mashups')
     const active = screen.getByRole('link', { name: 'Мэшапы' })
     expect(active.className).toMatch(/itemActive/)
     expect(container.querySelectorAll('[class*="itemActive"]')).toHaveLength(1)

@@ -2,6 +2,7 @@ import KaraokeApp from '../karaoke/App'
 import ErrorBoundary from '../karaoke/components/ErrorBoundary'
 import { useKaraoke } from '../karaoke/store'
 import { usePlayer } from '../context/PlayerContext'
+import { useSeo } from '../lib/useSeo'
 import '../karaoke/index.css'
 import styles from './KaraokePage.module.css'
 
@@ -17,6 +18,12 @@ import styles from './KaraokePage.module.css'
  * ссылаются на те же переменные (см. karaoke/index.css).
  */
 export default function KaraokePage() {
+  useSeo({
+    title: 'Загрузи свою песню в караоке онлайн — bebradio',
+    description:
+      'Загрузите свою песню в караоке: вокал отделится автоматически на видеокарте, текст распознается сам, а петь можно прямо в браузере. Бесплатное онлайн-караоке с оценкой попадания в ноты.',
+    canonical: 'https://bebradio.ru/karaoke',
+  })
   const karaokeActive = useKaraoke((s) => s.soundActive)
   const { player } = usePlayer()
   const reservePlayer = !!player.current && !karaokeActive

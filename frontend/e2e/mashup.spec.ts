@@ -45,7 +45,7 @@ async function register(page: Page, prefix: string) {
 
 /** Uploads a tone WAV through the UI and returns its unique title. */
 async function uploadTone(page: Page, title: string) {
-  await page.goto('/mashup')
+  await page.goto('/mashups')
   await page.getByRole('button', { name: 'Upload', exact: true }).click()
 
   const modal = page.locator('div.modal')

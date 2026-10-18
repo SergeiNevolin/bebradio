@@ -3,7 +3,7 @@ import type { Track } from '../types'
 import { useVolume } from './useVolume'
 
 /**
- * A single-<audio> player for the standalone /mashup page. No dual decks and no
+ * A single-<audio> player for the standalone /mashups page. No dual decks and no
  * server timeline sync — useGaplessPlayer is built around a shared room clock and
  * would be overkill here. Volume comes from the shared useVolume() hook so it
  * stays in step with the room player and survives reloads.
@@ -336,8 +336,8 @@ export function useMashupPlayer() {
     }
   }, [persist])
 
-  // Stop playback when the page unmounts (leaving /mashup), saving first so a
-  // later return to /mashup still resumes.
+  // Stop playback when the page unmounts (leaving /mashups), saving first so a
+  // later return to /mashups still resumes.
   useEffect(() => {
     return () => {
       persist()

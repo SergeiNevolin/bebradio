@@ -160,8 +160,8 @@ test.describe('Karaoke without mocks', () => {
     ).toBeVisible()
     // Sidebar still switches sections (first match: the mobile tab bar
     // duplicates section links lower in the DOM).
-    await page.locator('nav a[href="/mashup"]').first().click()
-    await expect(page).toHaveURL('/mashup')
+    await page.locator('nav a[href="/mashups"]').first().click()
+    await expect(page).toHaveURL('/mashups')
     await page.locator('nav a[href="/karaoke"]').first().click()
     await expect(page).toHaveURL('/karaoke')
     await expect(page.getByPlaceholder('Найти песню…')).toBeVisible()
@@ -350,7 +350,7 @@ test.describe('Karaoke singing vs global player', () => {
 
     await mockKaraokeService(page, [SONGS[0]])
 
-    await page.goto('/mashup')
+    await page.goto('/mashups')
     await page.getByRole('button', { name: 'Upload', exact: true }).click()
     const modal = page.locator('div.modal')
     await modal.locator('#mashup-file').setInputFiles({

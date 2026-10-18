@@ -21,7 +21,7 @@ const TABS = [
     ),
   },
   {
-    to: '/mashup',
+    to: '/mashups',
     label: 'Мэшапы',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

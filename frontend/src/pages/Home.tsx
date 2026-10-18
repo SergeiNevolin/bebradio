@@ -172,7 +172,7 @@ export default function Home() {
 
       <Shelf
         title="Мешапы"
-        linkTo="/mashup"
+        linkTo="/mashups"
         loading={tracksLoading}
         skeletonCount={5}
         empty={

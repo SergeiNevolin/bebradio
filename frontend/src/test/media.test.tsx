@@ -10,15 +10,15 @@ describe('Shelf', () => {
   it('renders title, count and show-all link', () => {
     render(
       <MemoryRouter>
-        <Shelf title="Мешапы" count="42 песни" linkTo="/mashup">
+        <Shelf title="Мешапы" count="42 песни" linkTo="/mashups">
           <span>card</span>
         </Shelf>
       </MemoryRouter>,
     )
     expect(screen.getByRole('heading', { name: 'Мешапы' })).toBeInTheDocument()
     expect(screen.getByText('42 песни')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Показать все' })).toHaveAttribute('href', '/mashup')
-    expect(screen.getByRole('link', { name: 'Мешапы — Показать все' })).toHaveAttribute('href', '/mashup')
+    expect(screen.getByRole('link', { name: 'Показать все' })).toHaveAttribute('href', '/mashups')
+    expect(screen.getByRole('link', { name: 'Мешапы — Показать все' })).toHaveAttribute('href', '/mashups')
     expect(screen.getByText('card')).toBeInTheDocument()
   })
 

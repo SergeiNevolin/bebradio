@@ -79,7 +79,7 @@ export function GlobalPlayerBar() {
 /**
  * Global overlays: queue drawer, expanded Now Playing and owner profiles.
  * Mounted once in App — Expand and Queue work identically on all pages,
- * with no navigation to /mashup.
+ * with no navigation to /mashups.
  */
 export function GlobalPlayerOverlays() {
   const {

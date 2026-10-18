@@ -56,7 +56,7 @@ async function register(page: Page, prefix: string): Promise<string> {
 }
 
 async function uploadTone(page: Page, title: string, seconds = 30, freq = 440) {
-  await page.goto('/mashup')
+  await page.goto('/mashups')
   await page.getByRole('button', { name: 'Upload', exact: true }).click()
 
   const modal = page.locator('div.modal')
@@ -182,7 +182,7 @@ test.describe('Full journey without errors', () => {
 
     // Mashup catalog + full reload: the player restores the same track
     // from its snapshot even though the document (and chunks) reload.
-    await goSection(page, '/mashup')
+    await goSection(page, '/mashups')
     await expect(page.getByRole('heading', { name: /все мешапы/i })).toBeVisible()
     await expectSameAudio()
     await page.reload()
@@ -237,7 +237,7 @@ test.describe('Deep links resolve', () => {
   test('every section loads standalone without errors', async ({ page }) => {
     const watch = watchStability(page)
 
-    await page.goto('/mashup')
+    await page.goto('/mashups')
     await expect(page.getByRole('heading', { name: /все мешапы/i })).toBeVisible({ timeout: 15000 })
     await expectNoCrash(page)
 

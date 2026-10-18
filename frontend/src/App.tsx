@@ -125,7 +125,7 @@ export default function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/" element={<Home />} />
                 <Route path="/rooms" element={<Rooms />} />
-                <Route path="/mashup" element={<Mashups />} />
+                <Route path="/mashups" element={<Mashups />} />
                 <Route path="/room/:roomId" element={<Room />} />
                 <Route path="/user/:userId" element={<Profile />} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
