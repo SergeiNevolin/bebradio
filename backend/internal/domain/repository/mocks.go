@@ -142,8 +142,6 @@ func (m *MockRoomRepo) ListPublic() ([]map[string]any, error) {
 				"id":           r.ID,
 				"name":         r.Name,
 				"auto_radio":   r.AutoRadio,
-				"is_stream":    r.IsStream,
-				"mashup_radio": r.MashupRadio,
 				"has_password": r.PasswordHash != nil,
 			})
 		}
@@ -151,25 +149,21 @@ func (m *MockRoomRepo) ListPublic() ([]map[string]any, error) {
 	return result, nil
 }
 
-func (m *MockRoomRepo) SaveTracks(room *entity.Room) error {
+func (m *MockRoomRepo) LoadTracks(ref entity.SessionRef) ([]*entity.Track, error) {
+	return m.Tracks[ref.ID], nil
+}
+
+func (m *MockRoomRepo) SaveMessage(ref entity.SessionRef, msg *entity.ChatMessage) error {
+	m.Messages[ref.ID] = append(m.Messages[ref.ID], msg)
 	return nil
 }
 
-func (m *MockRoomRepo) LoadTracks(roomID string) ([]*entity.Track, error) {
-	return m.Tracks[roomID], nil
+func (m *MockRoomRepo) LoadMessages(ref entity.SessionRef) ([]*entity.ChatMessage, error) {
+	return m.Messages[ref.ID], nil
 }
 
-func (m *MockRoomRepo) SaveMessage(roomID string, msg *entity.ChatMessage) error {
-	m.Messages[roomID] = append(m.Messages[roomID], msg)
-	return nil
-}
-
-func (m *MockRoomRepo) LoadMessages(roomID string) ([]*entity.ChatMessage, error) {
-	return m.Messages[roomID], nil
-}
-
-func (m *MockRoomRepo) SaveTracksFromSlice(roomID string, tracks []*entity.Track) error {
-	m.Tracks[roomID] = tracks
+func (m *MockRoomRepo) SaveTracks(ref entity.SessionRef, tracks []*entity.Track) error {
+	m.Tracks[ref.ID] = tracks
 	return nil
 }
 
@@ -179,6 +173,71 @@ func (m *MockRoomRepo) RecordVisit(userID, roomID string) error {
 
 func (m *MockRoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, error) {
 	return []map[string]any{}, nil
+}
+
+type MockStreamRepo struct {
+	Streams  map[string]*entity.Stream
+	Messages map[string][]*entity.ChatMessage
+	Tracks   map[string][]*entity.Track
+}
+
+func NewMockStreamRepo() *MockStreamRepo {
+	return &MockStreamRepo{
+		Streams:  make(map[string]*entity.Stream),
+		Messages: make(map[string][]*entity.ChatMessage),
+		Tracks:   make(map[string][]*entity.Track),
+	}
+}
+
+func (m *MockStreamRepo) Save(stream *entity.Stream) error {
+	m.Streams[stream.ID] = stream
+	return nil
+}
+
+func (m *MockStreamRepo) FindByID(id string) (*entity.Stream, error) {
+	if s, ok := m.Streams[id]; ok {
+		return s, nil
+	}
+	return nil, ErrNotFound
+}
+
+func (m *MockStreamRepo) Delete(id string) error {
+	delete(m.Streams, id)
+	delete(m.Messages, id)
+	delete(m.Tracks, id)
+	return nil
+}
+
+func (m *MockStreamRepo) ListPublic() ([]map[string]any, error) {
+	var result []map[string]any
+	for _, s := range m.Streams {
+		result = append(result, map[string]any{
+			"id":         s.ID,
+			"name":       s.Name,
+			"owner_id":   s.OwnerID,
+			"created_at": s.CreatedAt,
+			"features":   s.Features,
+		})
+	}
+	return result, nil
+}
+
+func (m *MockStreamRepo) LoadTracks(ref entity.SessionRef) ([]*entity.Track, error) {
+	return m.Tracks[ref.ID], nil
+}
+
+func (m *MockStreamRepo) SaveTracks(ref entity.SessionRef, tracks []*entity.Track) error {
+	m.Tracks[ref.ID] = tracks
+	return nil
+}
+
+func (m *MockStreamRepo) SaveMessage(ref entity.SessionRef, msg *entity.ChatMessage) error {
+	m.Messages[ref.ID] = append(m.Messages[ref.ID], msg)
+	return nil
+}
+
+func (m *MockStreamRepo) LoadMessages(ref entity.SessionRef) ([]*entity.ChatMessage, error) {
+	return m.Messages[ref.ID], nil
 }
 
 type MockMediaClient struct {
@@ -524,23 +583,23 @@ func (m *MockTrackRepo) UpdateMetadata(id, title, artist string) error {
 }
 
 type MockAuthBridge struct {
-	HashPasswordFn        func(password string) (string, error)
-	VerifyPasswordFn      func(password, hash string) bool
-	CreateTokenFn         func(userID string) (string, error)
-	DecodeTokenFn         func(token string) (string, error)
-	CreateRefreshTokenFn  func(userID string) (string, error)
-	DecodeRefreshTokenFn  func(token string) (string, string, error)
-	CreateRoomTokenFn     func(roomID string) (string, error)
-	VerifyRoomTokenFn     func(token string, roomID string) bool
-	refreshSeq            atomic.Int64
+	HashPasswordFn       func(password string) (string, error)
+	VerifyPasswordFn     func(password, hash string) bool
+	CreateTokenFn        func(userID string) (string, error)
+	DecodeTokenFn        func(token string) (string, error)
+	CreateRefreshTokenFn func(userID string) (string, error)
+	DecodeRefreshTokenFn func(token string) (string, string, error)
+	CreateRoomTokenFn    func(roomID string) (string, error)
+	VerifyRoomTokenFn    func(token string, roomID string) bool
+	refreshSeq           atomic.Int64
 }
 
 func NewMockAuthBridge() *MockAuthBridge {
 	m := &MockAuthBridge{
-		HashPasswordFn: func(p string) (string, error) { return "hashed_" + p, nil },
-		VerifyPasswordFn: func(p, h string) bool { return h == "hashed_"+p },
-		CreateTokenFn: func(uid string) (string, error) { return "token_" + uid, nil },
-		DecodeTokenFn: func(t string) (string, error) { return t, nil },
+		HashPasswordFn:    func(p string) (string, error) { return "hashed_" + p, nil },
+		VerifyPasswordFn:  func(p, h string) bool { return h == "hashed_"+p },
+		CreateTokenFn:     func(uid string) (string, error) { return "token_" + uid, nil },
+		DecodeTokenFn:     func(t string) (string, error) { return t, nil },
 		CreateRoomTokenFn: func(rid string) (string, error) { return "room_token_" + rid, nil },
 		VerifyRoomTokenFn: func(t, rid string) bool { return t == "room_token_"+rid },
 	}
@@ -617,4 +676,3 @@ func (m *MockAuthBridge) VerifyRoomToken(token string, roomID string) bool {
 	}
 	return false
 }
-

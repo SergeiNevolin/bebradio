@@ -49,9 +49,7 @@ export default function Room() {
   const isOwner = user && room && user.id === room.owner_id
   const isAdmin = !!user && user.role === 'admin'
   const canManage = isOwner || isAdmin
-  const isStream = !!room?.is_stream
-  // Streams are admin-curated: only admins feed the queue, no voting.
-  const canAddTrack = isStream ? isAdmin : (user || room?.allow_anonymous_add)
+  const canAddTrack = !!(user || room?.allow_anonymous_add)
 
   const handleUnlock = async () => {
     if (!passwordInput) return
@@ -118,18 +116,10 @@ export default function Room() {
     allow_anonymous_add?: boolean
     is_private?: boolean
     auto_radio?: boolean
-    mashup_radio?: boolean
     password?: string
-    stream_filter?: { q?: string; title?: string; artist?: string; owner?: string }
   }) => {
     if (settings.password === undefined) {
-      setRoom((prev) => prev ? {
-        ...prev,
-        ...settings,
-        stream_filter: settings.stream_filter
-          ? { q: '', title: '', artist: '', owner: '', ...prev.stream_filter, ...settings.stream_filter }
-          : prev.stream_filter,
-      } : prev)
+      setRoom((prev) => prev ? { ...prev, ...settings } : prev)
     }
     try {
       const data = await api.updateRoom(roomId!, settings) as unknown as RoomState
@@ -227,8 +217,7 @@ export default function Room() {
               onSkipVote={handleSkipVote}
               skipVoters={room?.skip_voters ?? []}
               currentUserId={user?.id || ''}
-              canVote={!isStream}
-              canSkip={!!isStream && !!isAdmin}
+              canVote
             />
           </div>
           <Queue

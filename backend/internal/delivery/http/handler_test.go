@@ -24,16 +24,18 @@ var testLog = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level
 type testDeps struct {
 	userRepo   *repository.MockUserRepo
 	roomRepo   *repository.MockRoomRepo
-	trackRepo *repository.MockTrackRepo
+	streamRepo *repository.MockStreamRepo
+	trackRepo  *repository.MockTrackRepo
 	media      *repository.MockMediaClient
-	auth      *usecase.AuthUsecase
-	authUC    *usecase.AuthUsecase
-	roomUC    *usecase.RoomUsecase
-	userUC    *usecase.UserUsecase
-	searchUC  *usecase.SearchUsecase
-	mediaUC   *usecase.MediaUsecase
-	playback  *usecase.PlaybackUsecase
-	server    *Server
+	auth       *usecase.AuthUsecase
+	authUC     *usecase.AuthUsecase
+	roomUC     *usecase.RoomUsecase
+	streamUC   *usecase.StreamUsecase
+	userUC     *usecase.UserUsecase
+	searchUC   *usecase.SearchUsecase
+	mediaUC    *usecase.MediaUsecase
+	playback   *usecase.PlaybackUsecase
+	server     *Server
 }
 
 func setupTestServer(t *testing.T) *testDeps {
@@ -44,6 +46,7 @@ func setupTestServer(t *testing.T) *testDeps {
 
 	userRepo := repository.NewMockUserRepo()
 	roomRepo := repository.NewMockRoomRepo()
+	streamRepo := repository.NewMockStreamRepo()
 	mediaClient := repository.NewMockMediaClient()
 	mediaClient.SearchFn = func(q string, l int) ([]map[string]any, error) {
 		return []map[string]any{{"title": "Test Video", "media_id": "m1"}}, nil
@@ -82,6 +85,7 @@ func setupTestServer(t *testing.T) *testDeps {
 	}
 	auth := usecase.NewAuthUsecase(userRepo, authBridge, testLog)
 	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, authBridge, testLog, rdb)
+	streamUC := usecase.NewStreamUsecase(streamRepo, roomRepo, userRepo, testLog, rdb)
 	userUC := usecase.NewUserUsecase(userRepo, testLog)
 	searchUC := usecase.NewSearchUsecase(mediaClient, cfg, testLog)
 	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, testLog, rdb)
@@ -89,21 +93,23 @@ func setupTestServer(t *testing.T) *testDeps {
 	trackUC := usecase.NewTrackUsecase(trackRepo, mediaClient, cfg, testLog)
 	playback := usecase.NewPlaybackUsecase(rdb)
 
-	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, trackUC, ws.NewConnectionManager(testLog), rdb)
+	srv := NewServer(cfg, testLog, auth, roomUC, userUC, searchUC, mediaUC, playback, trackUC, ws.NewConnectionManager(testLog), rdb, streamUC)
 
 	return &testDeps{
-		userRepo:  userRepo,
-		roomRepo:  roomRepo,
-		trackRepo: trackRepo,
-		media:     mediaClient,
-		auth:      auth,
-		authUC:    auth,
-		roomUC:    roomUC,
-		userUC:    userUC,
-		searchUC:  searchUC,
-		mediaUC:   mediaUC,
-		playback:  playback,
-		server:    srv,
+		userRepo:   userRepo,
+		roomRepo:   roomRepo,
+		streamRepo: streamRepo,
+		trackRepo:  trackRepo,
+		media:      mediaClient,
+		auth:       auth,
+		authUC:     auth,
+		roomUC:     roomUC,
+		streamUC:   streamUC,
+		userUC:     userUC,
+		searchUC:   searchUC,
+		mediaUC:    mediaUC,
+		playback:   playback,
+		server:     srv,
 	}
 }
 
@@ -908,12 +914,12 @@ func TestRefreshRotatesSession(t *testing.T) {
 		t.Error("refresh must be rotated (new value)")
 	}
 
-	// ротированный работает
+	// СЂРѕС‚РёСЂРѕРІР°РЅРЅС‹Р№ СЂР°Р±РѕС‚Р°РµС‚
 	if w2 := postRefresh(t, d, c2); w2.Code != 200 {
 		t.Errorf("refresh #2 (rotated): expected 200, got %d: %s", w2.Code, w2.Body.String())
 	}
-	// старый живёт grace-период: параллельная вкладка с тем же access
-	// идёт в /refresh одновременно и не должна получить 401 → разлогин
+	// СЃС‚Р°СЂС‹Р№ Р¶РёРІС‘С‚ grace-РїРµСЂРёРѕРґ: РїР°СЂР°Р»Р»РµР»СЊРЅР°СЏ РІРєР»Р°РґРєР° СЃ С‚РµРј Р¶Рµ access
+	// РёРґС‘С‚ РІ /refresh РѕРґРЅРѕРІСЂРµРјРµРЅРЅРѕ Рё РЅРµ РґРѕР»Р¶РЅР° РїРѕР»СѓС‡РёС‚СЊ 401 в†’ СЂР°Р·Р»РѕРіРёРЅ
 	if w3 := postRefresh(t, d, c1); w3.Code != 200 {
 		t.Errorf("refresh #3 (old, grace): expected 200, got %d: %s", w3.Code, w3.Body.String())
 	}
@@ -923,7 +929,7 @@ func TestRefreshConcurrentTabs(t *testing.T) {
 	d := setupTestServer(t)
 	c1 := loginRefreshCookie(t, d)
 
-	// две вкладки с протухшим access обновляются одновременно одним jti
+	// РґРІРµ РІРєР»Р°РґРєРё СЃ РїСЂРѕС‚СѓС…С€РёРј access РѕР±РЅРѕРІР»СЏСЋС‚СЃСЏ РѕРґРЅРѕРІСЂРµРјРµРЅРЅРѕ РѕРґРЅРёРј jti
 	w1 := postRefresh(t, d, c1)
 	w2 := postRefresh(t, d, c1)
 	if w1.Code != 200 {
@@ -932,7 +938,7 @@ func TestRefreshConcurrentTabs(t *testing.T) {
 	if w2.Code != 200 {
 		t.Fatalf("tab2 refresh: expected 200, got %d: %s", w2.Code, w2.Body.String())
 	}
-	// обе новые цепочки живы — чья бы кука ни победила в браузере
+	// РѕР±Рµ РЅРѕРІС‹Рµ С†РµРїРѕС‡РєРё Р¶РёРІС‹ вЂ” С‡СЊСЏ Р±С‹ РєСѓРєР° РЅРё РїРѕР±РµРґРёР»Р° РІ Р±СЂР°СѓР·РµСЂРµ
 	for i, w := range []*httptest.ResponseRecorder{w1, w2} {
 		var c string
 		for _, ck := range w.Result().Cookies() {
@@ -960,7 +966,7 @@ func TestRefreshRejectsAccessTokenAsCookie(t *testing.T) {
 	d := setupTestServer(t)
 	token := registerUser(t, d, "test@test.com", "testuser", "pass123")
 
-	w := postRefresh(t, d, token) // access-токен вместо refresh
+	w := postRefresh(t, d, token) // access-С‚РѕРєРµРЅ РІРјРµСЃС‚Рѕ refresh
 	if w.Code != 401 {
 		t.Errorf("access token as cookie must be 401, got %d", w.Code)
 	}
@@ -984,7 +990,7 @@ func TestLogoutRevokesRefresh(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("logout: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	// кука очищена
+	// РєСѓРєР° РѕС‡РёС‰РµРЅР°
 	cleared := false
 	for _, c := range w.Result().Cookies() {
 		if c.Name == "bebradio_refresh" && (c.Value == "" || c.MaxAge < 0) {
@@ -994,11 +1000,11 @@ func TestLogoutRevokesRefresh(t *testing.T) {
 	if !cleared {
 		t.Error("logout must clear refresh cookie")
 	}
-	// отозван — прежний refresh мёртв
+	// РѕС‚РѕР·РІР°РЅ вЂ” РїСЂРµР¶РЅРёР№ refresh РјС‘СЂС‚РІ
 	if w2 := postRefresh(t, d, c1); w2.Code != 401 {
 		t.Errorf("refresh after logout must be 401, got %d", w2.Code)
 	}
-	// идемпотентен без куки
+	// РёРґРµРјРїРѕС‚РµРЅС‚РµРЅ Р±РµР· РєСѓРєРё
 	req2 := httptest.NewRequest("POST", "/api/auth/logout", nil)
 	w3 := httptest.NewRecorder()
 	d.server.Router.ServeHTTP(w3, req2)

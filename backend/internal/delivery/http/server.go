@@ -9,27 +9,28 @@ import (
 
 	"github.com/bebradio/backend-go/internal/config"
 	"github.com/bebradio/backend-go/internal/delivery/ws"
-	"github.com/bebradio/backend-go/internal/usecase"
 	authsvc "github.com/bebradio/backend-go/internal/infrastructure/auth"
+	"github.com/bebradio/backend-go/internal/usecase"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
-	Router        *chi.Mux
-	config        *config.Config
-	log           *slog.Logger
-	auth          *usecase.AuthUsecase
-	room          *usecase.RoomUsecase
-	user          *usecase.UserUsecase
-	search        *usecase.SearchUsecase
-	media         *usecase.MediaUsecase
-	playback      *usecase.PlaybackUsecase
-	tracks        *usecase.TrackUsecase
-	manager       *ws.ConnectionManager
-	rdb           *redis.Client
-	refresh       *authsvc.RefreshStore
+	Router   *chi.Mux
+	config   *config.Config
+	log      *slog.Logger
+	auth     *usecase.AuthUsecase
+	room     *usecase.RoomUsecase
+	stream   *usecase.StreamUsecase
+	user     *usecase.UserUsecase
+	search   *usecase.SearchUsecase
+	media    *usecase.MediaUsecase
+	playback *usecase.PlaybackUsecase
+	tracks   *usecase.TrackUsecase
+	manager  *ws.ConnectionManager
+	rdb      *redis.Client
+	refresh  *authsvc.RefreshStore
 	// addMu serializes the check-and-append critical section of handleAddToQueue
 	// (duplicate check + RPush must be atomic, otherwise a double-click adds
 	// the same track twice and the "extra" copy later plays as if resurrected).
@@ -49,6 +50,7 @@ func NewServer(
 	tracks *usecase.TrackUsecase,
 	manager *ws.ConnectionManager,
 	rdb *redis.Client,
+	streams ...*usecase.StreamUsecase,
 ) *Server {
 	s := &Server{
 		Router:   chi.NewRouter(),
@@ -65,6 +67,9 @@ func NewServer(
 		rdb:      rdb,
 		refresh:  authsvc.NewRefreshStore(rdb, config.JWTRefreshDays),
 	}
+	if len(streams) > 0 {
+		s.stream = streams[0]
+	}
 	s.setupRoutes()
 	return s
 }
@@ -79,8 +84,8 @@ func (s *Server) setupRoutes() {
 			r.Post("/register", s.handleRegister)
 			r.Post("/login", s.handleLogin)
 			r.Get("/me", s.handleMe)
-			r.Post("/refresh", s.handleRefresh) // кука refresh → новый access (ротация)
-			r.Post("/logout", s.handleLogout)   // отзыв refresh + очистка куки
+			r.Post("/refresh", s.handleRefresh) // РєСѓРєР° refresh в†’ РЅРѕРІС‹Р№ access (СЂРѕС‚Р°С†РёСЏ)
+			r.Post("/logout", s.handleLogout)   // РѕС‚Р·С‹РІ refresh + РѕС‡РёСЃС‚РєР° РєСѓРєРё
 		})
 
 		r.Route("/rooms", func(r chi.Router) {
@@ -95,9 +100,17 @@ func (s *Server) setupRoutes() {
 			r.Post("/{roomID}/queue/{trackID}/import", s.handleImportQueueTrack)
 			r.Post("/{roomID}/visit", s.handleRecordVisit)
 			r.Get("/{roomID}/lyrics", s.handleGetLyrics)
-			r.Get("/{roomID}/stream-filter", s.handleGetStreamFilter)
-			r.Put("/{roomID}/stream-filter", s.handleSetStreamFilter)
-			r.Post("/{roomID}/stream-refill", s.handleStreamRefill)
+		})
+
+		r.Route("/streams", func(r chi.Router) {
+			r.Get("/", s.handleListStreams)
+			r.Post("/", s.handleCreateStream)
+			r.Get("/{streamID}", s.handleGetStream)
+			r.Delete("/{streamID}", s.handleDeleteStream)
+			r.Post("/{streamID}/queue", s.handleAddToStreamQueue)
+			r.Get("/{streamID}/lyrics", s.handleGetStreamLyrics)
+			r.Put("/{streamID}/features/mashup-radio", s.handleSetMashupRadio)
+			r.Post("/{streamID}/features/mashup-radio/refill", s.handleStreamRefill)
 		})
 
 		r.Post("/search", s.handleSearch)

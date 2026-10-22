@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { useRoomEntry } from '../hooks/useRoomEntry'
@@ -46,7 +46,7 @@ export default function Rooms() {
     <div className={styles.rooms}>
       <Hero
         title="Слушать музыку вместе с друзьями"
-        sub="Создайте музыкальную комнату и слушайте треки вместе онлайн в синхронном режиме."
+        sub="Создавайте комнаты, приглашайте друзей и управляйте общим плейлистом в реальном времени."
         actions={
           <>
             <button className="btn" onClick={entry.openCreateModal}>
@@ -88,9 +88,6 @@ export default function Rooms() {
           <p className={styles.roomsEmptySub}>Create the first one!</p>
         </div>
       ) : (
-        // Основной список комнат (исключает Recently Played): активные в
-        // «All rooms», пустые — в «Waiting for listeners». data-testid нужен
-        // e2e, чтобы находить карточку вне зависимости от подполки.
         <div data-testid="rooms-list">
           {activeRooms.length > 0 && (
             <Shelf title="All rooms">

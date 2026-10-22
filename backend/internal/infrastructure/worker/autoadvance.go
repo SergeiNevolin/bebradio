@@ -14,24 +14,20 @@ import (
 )
 
 type AutoAdvance struct {
-	room      *usecase.RoomUsecase
-	playback  *usecase.PlaybackUsecase
-	media     *usecase.MediaUsecase
-	radio     *usecase.RadioUsecase
-	manager   *ws.ConnectionManager
-	config    *config.Config
-	rdb       *redis.Client
-	log       *slog.Logger
-	// lastStarvedLog throttles the "stream has nothing to play" warning per
-	// room. Only the single tick goroutine touches it, so no mutex needed.
-	lastStarvedLog map[string]time.Time
+	room           *usecase.RoomUsecase
+	stream         *usecase.StreamUsecase
+	playback       *usecase.PlaybackUsecase
+	media          *usecase.MediaUsecase
+	radio          *usecase.RadioUsecase
+	refillers      []usecase.StreamRefiller
+	manager        *ws.ConnectionManager
+	config         *config.Config
+	rdb            *redis.Client
+	log            *slog.Logger
+	lastStarvedLog map[entity.SessionRef]time.Time
 }
 
-// How often a starved stream (empty queue, library/filter yield nothing)
-// re-logs its warning. Without throttling it would spam every tick (2s).
 const starvedLogInterval = 5 * time.Minute
-
-// If a track has Duration==0 (live stream, unresolved), skip after this long.
 const durationZeroSkipAfter = 5 * time.Minute
 
 func NewAutoAdvance(
@@ -43,27 +39,37 @@ func NewAutoAdvance(
 	config *config.Config,
 	rdb *redis.Client,
 	log *slog.Logger,
+	extras ...any,
 ) *AutoAdvance {
-	return &AutoAdvance{
-		room:    room,
-		playback: playback,
-		media:   media,
-		radio:   radio,
-		manager: manager,
-		config:  config,
-		rdb:     rdb,
-		log:     log,
-		lastStarvedLog: make(map[string]time.Time),
+	w := &AutoAdvance{
+		room:           room,
+		playback:       playback,
+		media:          media,
+		radio:          radio,
+		manager:        manager,
+		config:         config,
+		rdb:            rdb,
+		log:            log,
+		lastStarvedLog: make(map[entity.SessionRef]time.Time),
 	}
+	for _, extra := range extras {
+		switch v := extra.(type) {
+		case *usecase.StreamUsecase:
+			w.stream = v
+		case usecase.StreamRefiller:
+			w.refillers = append(w.refillers, v)
+		case []usecase.StreamRefiller:
+			w.refillers = append(w.refillers, v...)
+		}
+	}
+	return w
 }
 
 func (w *AutoAdvance) Run(ctx context.Context) {
 	interval := time.Duration(w.config.AutoAdvanceInterval * float64(time.Second))
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-
 	w.log.Info("auto-advance worker started")
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -76,111 +82,85 @@ func (w *AutoAdvance) Run(ctx context.Context) {
 }
 
 func (w *AutoAdvance) tick(ctx context.Context) {
-	// Discover rooms from every Redis slice we own: a fresh/cold stream may
-	// have a queue or a stream_filter but no state hash yet (nothing ever
-	// played). Scanning only *:state would leave such rooms undiscovered
-	// forever, so the 24/7 refill would never kick in without a manual add.
-	seen := make(map[string]bool)
-	for _, pattern := range []string{"room:*:state", "room:*:queue", "room:*:stream_filter"} {
+	seen := make(map[entity.SessionRef]bool)
+	for _, pattern := range []string{"session:*:*:state", "session:*:*:queue", "session:*:*:feature:mashup-radio"} {
 		iter := w.rdb.Scan(ctx, 0, pattern, 100).Iterator()
 		for iter.Next(ctx) {
-			if roomID := extractRoomID(iter.Val()); roomID != "" && !seen[roomID] {
-				seen[roomID] = true
-				w.processRoom(ctx, roomID)
+			ref, _, ok := redisc.SessionRefFromKey(iter.Val())
+			if !ok || seen[ref] {
+				continue
+			}
+			seen[ref] = true
+			if ref.IsStream() {
+				w.processStream(ctx, ref)
+			} else {
+				w.processRoom(ctx, ref)
 			}
 		}
 	}
 }
 
-func (w *AutoAdvance) processRoom(ctx context.Context, roomID string) {
-	count, _ := redisc.GetPresenceCount(ctx, w.rdb, roomID)
-
-	// Rooms without listeners are either 24/7 streams (kept alive below)
-	// or candidates for Redis eviction (see reapIfIdle).
+func (w *AutoAdvance) processRoom(ctx context.Context, ref entity.SessionRef) {
+	count, _ := redisc.GetPresenceCount(ctx, w.rdb, ref)
 	if count == 0 {
-		if w.reapIfIdle(ctx, roomID) {
+		if w.reapIfIdle(ctx, ref) {
 			return
 		}
-		w.processStreamRoom(ctx, roomID)
 		return
 	}
-	redisc.ClearIdleSince(ctx, w.rdb, roomID)
+	redisc.ClearIdleSince(ctx, w.rdb, ref.ID)
 
-	ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
+	ps, _ := redisc.GetPlayback(ctx, w.rdb, ref)
 	if ps == nil || !ps.IsPlaying {
 		return
 	}
-
-	tracks, _ := redisc.GetQueue(ctx, w.rdb, roomID)
+	tracks, _ := redisc.GetQueue(ctx, w.rdb, ref)
 	var track *entity.Track
 	if ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
 		track = tracks[ps.CurrentIndex]
 	}
 	if track == nil {
-		// Queue drained while listeners are online: streams loop from the
-		// library, plain rooms wait for manual adds.
-		if rm, err := w.room.GetOrLoadRoom(ctx, roomID); err == nil {
-			if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
-				go w.backgroundMashupRefill(ctx, rm, roomID)
-			}
-		}
 		return
 	}
 
 	advanced := false
 	if track.Duration > 0 {
-		// Wall-clock position from this snapshot (ps.IsPlaying here), no
-		// extra Redis round trip via GetCurrentPosition.
 		pos := ps.Position + time.Since(ps.LastSyncAt).Seconds()
 		if pos >= float64(track.Duration)+w.config.AutoAdvanceGrace {
-			advanced = w.playback.GoNext(ctx, roomID)
+			advanced = w.playback.GoNext(ctx, ref)
 		}
 	} else if !ps.CurrentStartedAt.IsZero() && time.Since(ps.CurrentStartedAt) > durationZeroSkipAfter {
-		advanced = w.playback.GoNext(ctx, roomID)
+		advanced = w.playback.GoNext(ctx, ref)
 	}
 
-	// Fast path: nothing advanced and the queue is healthy. Media URLs are
-	// still refreshed (Redis-only); the Postgres room load + refills run
-	// only when the queue is low or a transition happened. This keeps the
-	// per-tick cost at a few Redis calls instead of a DB hit per room.
 	if !advanced && len(tracks) > w.config.RadioRefillAt {
-		if w.media.EnsureRoomMedia(ctx, roomID) {
-			if rm, err := w.room.GetOrLoadRoom(ctx, roomID); err == nil {
+		if w.media.EnsureRoomMedia(ctx, ref) {
+			if rm, err := w.room.GetOrLoadRoom(ctx, ref.ID); err == nil {
 				if err := w.room.SaveTracks(ctx, rm); err != nil {
-					w.log.Error("auto-advance save tracks failed", "room_id", roomID, "error", err)
+					w.log.Error("auto-advance save tracks failed", "session", ref.String(), "error", err)
 				}
-				w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
+				w.manager.Broadcast(ref, redisc.BuildToDict(ctx, w.rdb, rm))
 			}
 		}
 		return
 	}
 
-	// Load room metadata for EnsureRoomMedia and SaveTracks.
-	rm, err := w.room.GetOrLoadRoom(ctx, roomID)
+	rm, err := w.room.GetOrLoadRoom(ctx, ref.ID)
 	if err != nil {
 		return
 	}
-
-	refreshed := w.media.EnsureRoomMedia(ctx, roomID)
-
-	if w.radio.NeedsRefill(ctx, roomID, rm.AutoRadio) {
-		go w.backgroundRefill(ctx, rm, roomID)
+	refreshed := w.media.EnsureRoomMedia(ctx, ref)
+	if w.radio.NeedsRefill(ctx, ref.ID, rm.AutoRadio) {
+		go w.backgroundRefill(ctx, rm, ref.ID)
 	}
-	if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
-		go w.backgroundMashupRefill(ctx, rm, roomID)
-	}
-
 	if advanced || refreshed {
 		if err := w.room.SaveTracks(ctx, rm); err != nil {
-			w.log.Error("auto-advance save tracks failed", "room_id", roomID, "error", err)
+			w.log.Error("auto-advance save tracks failed", "session", ref.String(), "error", err)
 		}
-		w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
+		w.manager.Broadcast(ref, redisc.BuildToDict(ctx, w.rdb, rm))
 	}
 }
 
-// idleTTL bounds how long an abandoned room lingers in Redis. Zero config
-// (tests, unset env) falls back to the production default instead of
-// reaping everything immediately.
 func (w *AutoAdvance) idleTTL() time.Duration {
 	if w.config.RoomIdleHours > 0 {
 		return time.Duration(w.config.RoomIdleHours) * time.Hour
@@ -188,151 +168,126 @@ func (w *AutoAdvance) idleTTL() time.Duration {
 	return 24 * time.Hour
 }
 
-// reapIfIdle evicts a long-abandoned room from Redis: no listeners, empty
-// queue, not playing, and first observed idle longer than idleTTL ago.
-// Queues persist in Postgres through write-through saves, so the room
-// rehydrates transparently on the next visit; votes and presence are
-// ephemeral by design. Stream rooms are exempt — their Redis-only filter
-// and seen state must survive listener droughts. Returns true when the room
-// was reaped and the tick must skip it.
-func (w *AutoAdvance) reapIfIdle(ctx context.Context, roomID string) bool {
-	if qlen, _ := redisc.GetQueueLen(ctx, w.rdb, roomID); qlen > 0 {
-		redisc.ClearIdleSince(ctx, w.rdb, roomID)
+func (w *AutoAdvance) reapIfIdle(ctx context.Context, ref entity.SessionRef) bool {
+	if qlen, _ := redisc.GetQueueLen(ctx, w.rdb, ref); qlen > 0 {
+		redisc.ClearIdleSince(ctx, w.rdb, ref.ID)
 		return false
 	}
-	if ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID); ps != nil && ps.IsPlaying {
-		redisc.ClearIdleSince(ctx, w.rdb, roomID)
+	if ps, _ := redisc.GetPlayback(ctx, w.rdb, ref); ps != nil && ps.IsPlaying {
+		redisc.ClearIdleSince(ctx, w.rdb, ref.ID)
 		return false
 	}
-
-	since, ok := redisc.GetIdleSince(ctx, w.rdb, roomID)
+	since, ok := redisc.GetIdleSince(ctx, w.rdb, ref.ID)
 	if !ok {
-		// First sighting of an idle room: start the clock, evict later.
-		redisc.SetIdleSince(ctx, w.rdb, roomID, time.Now())
+		redisc.SetIdleSince(ctx, w.rdb, ref.ID, time.Now())
 		return false
 	}
 	if time.Since(since) < w.idleTTL() {
 		return false
 	}
-
-	rm, err := w.room.GetOrLoadRoom(ctx, roomID)
-	if err != nil {
-		// Tribe without a village: the row is gone (or the DB is
-		// unreachable — in which case deleting Redis state would destroy
-		// data Postgres may still rehydrate). Never reap on DB errors.
+	if _, err := w.room.GetOrLoadRoom(ctx, ref.ID); err != nil {
 		return false
 	}
-	if rm.IsStream {
-		// Exempt, but refresh the marker so we don't pay a DB load on
-		// every tick for the rest of time.
-		redisc.SetIdleSince(ctx, w.rdb, roomID, time.Now())
+	if err := redisc.DeleteSession(ctx, w.rdb, ref); err != nil {
+		w.log.Error("reap idle room failed", "session", ref.String(), "error", err)
 		return false
 	}
-
-	if err := redisc.DeleteRoom(ctx, w.rdb, roomID); err != nil {
-		w.log.Error("reap idle room failed", "room_id", roomID, "error", err)
-		return false
-	}
-	w.log.Info("reaped idle room from redis", "room_id", roomID)
+	w.log.Info("reaped idle room from redis", "session", ref.String())
 	return true
 }
 
-// processStreamRoom keeps IsStream rooms alive with zero listeners: advances
-// finished tracks by wall clock and refills the queue from the mashup library
-// (honouring the room's stream filter). Plain rooms stay paused here.
-func (w *AutoAdvance) processStreamRoom(ctx context.Context, roomID string) {
-	rm, err := w.room.GetOrLoadRoom(ctx, roomID)
-	if err != nil || !rm.IsStream {
+func (w *AutoAdvance) processStream(ctx context.Context, ref entity.SessionRef) {
+	if w.stream == nil {
 		return
 	}
+	st, err := w.stream.GetOrLoadStream(ctx, ref.ID)
+	if err != nil {
+		return
+	}
+	ref = st.Ref()
 
-	track := redisc.CurrentTrack(ctx, w.rdb, roomID)
+	track := redisc.CurrentTrack(ctx, w.rdb, ref)
 	if track == nil {
-		// Nothing queued: refill synchronously so the stream restarts even
-		// if RefillMashups is the only source of tracks. With MashupRadio
-		// off this is a no-op and the stream stays paused for manual adds.
-		//
-		// A crash between "mark filling" and "clear filling" leaves
-		// radio_filling stuck at 1, which would stall the stream forever
-		// (every refill path bails on it). An empty queue proves no refill
-		// is usefully in flight — a concurrent one only duplicates picks
-		// that AppendFreshTrack dedupes — so bust the flag and proceed.
-		if ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID); ps != nil && ps.RadioFilling {
-			w.log.Warn("stream stuck in filling state, resetting", "room_id", roomID)
-			redisc.SetPlaybackField(ctx, w.rdb, roomID, redisc.FieldRadioFilling, "0")
+		if ps, _ := redisc.GetPlayback(ctx, w.rdb, ref); ps != nil && ps.RadioFilling {
+			w.log.Warn("stream stuck in filling state, resetting", "session", ref.String())
+			redisc.SetPlaybackField(ctx, w.rdb, ref, redisc.FieldRadioFilling, "0")
 		}
-		if picks, err := w.radio.RefillMashups(ctx, roomID, rm); err == nil && len(picks) > 0 {
+		added := false
+		attempted := false
+		for _, refiller := range w.refillers {
+			if !refiller.Needs(ctx, ref) {
+				continue
+			}
+			attempted = true
+			picks, err := refiller.Refill(ctx, ref)
+			if err != nil {
+				w.log.Error("stream refill failed", "session", ref.String(), "refiller", refiller.Key(), "error", err)
+				continue
+			}
 			for _, t := range picks {
-				redisc.AppendFreshTrack(ctx, w.rdb, roomID, t)
+				if ok, _ := redisc.AppendFreshTrack(ctx, w.rdb, ref, t); ok {
+					added = true
+				}
 			}
-			w.ensureStreamPlaying(ctx, roomID)
-			_ = w.room.SaveTracks(ctx, rm)
-			w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
-		} else {
-			// Starved: library/filter yield nothing playable. Keep retrying
-			// (tracks may be uploaded later) but log throttled, not per tick.
-			w.logStarvedThrottled(roomID)
-			if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
-				go w.backgroundMashupRefill(ctx, rm, roomID)
+		}
+		if added {
+			w.ensureStreamPlaying(ctx, ref)
+			if err := w.stream.SaveTracks(ctx, st); err != nil {
+				w.log.Error("save stream tracks failed", "session", ref.String(), "error", err)
 			}
+			w.manager.Broadcast(ref, w.stream.BuildToDict(ctx, st))
+		} else if attempted {
+			w.logStarvedThrottled(ref)
 		}
 		return
 	}
 
-	ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
+	ps, _ := redisc.GetPlayback(ctx, w.rdb, ref)
 	if ps == nil {
-		// Playback hash lost (e.g. Redis flush) but queue survived:
-		// restart playback instead of stalling the stream.
-		w.ensureStreamPlaying(ctx, roomID)
-		if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
-			go w.backgroundMashupRefill(ctx, rm, roomID)
-		}
+		w.ensureStreamPlaying(ctx, ref)
 		return
 	}
-	// Nobody sends sync/position updates, so drive by wall clock from
-	// CurrentStartedAt/LastSyncAt via GetCurrentPosition.
 	advanced := false
 	if track.Duration > 0 {
-		if pos := redisc.GetCurrentPosition(ctx, w.rdb, roomID); pos >= float64(track.Duration)+w.config.AutoAdvanceGrace {
-			advanced = w.playback.GoNext(ctx, roomID)
+		if pos := redisc.GetCurrentPosition(ctx, w.rdb, ref); pos >= float64(track.Duration)+w.config.AutoAdvanceGrace {
+			advanced = w.playback.GoNext(ctx, ref)
 		}
 	} else if !ps.CurrentStartedAt.IsZero() && time.Since(ps.CurrentStartedAt) > durationZeroSkipAfter {
-		advanced = w.playback.GoNext(ctx, roomID)
+		advanced = w.playback.GoNext(ctx, ref)
 	}
-	// A stream that was paused with tracks queued resumes on its own.
 	if !ps.IsPlaying {
-		w.ensureStreamPlaying(ctx, roomID)
+		w.ensureStreamPlaying(ctx, ref)
 		advanced = true
 	}
 
-	if w.radio.NeedsMashupRefill(ctx, roomID, rm) {
-		go w.backgroundMashupRefill(ctx, rm, roomID)
+	for _, refiller := range w.refillers {
+		if refiller.Needs(ctx, ref) {
+			go w.backgroundStreamRefill(ctx, st, refiller)
+		}
 	}
 
 	if advanced {
-		_ = w.room.SaveTracks(ctx, rm)
-		w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
+		if err := w.stream.SaveTracks(ctx, st); err != nil {
+			w.log.Error("save stream tracks failed", "session", ref.String(), "error", err)
+		}
+		w.manager.Broadcast(ref, w.stream.BuildToDict(ctx, st))
 	}
 }
 
-// logStarvedThrottled warns that a stream queue is empty and the library or
-// its filter yield nothing playable. The condition re-triggers every tick,
-// so the warning is throttled per room.
-func (w *AutoAdvance) logStarvedThrottled(roomID string) {
-	if last, ok := w.lastStarvedLog[roomID]; ok && time.Since(last) < starvedLogInterval {
+func (w *AutoAdvance) logStarvedThrottled(ref entity.SessionRef) {
+	if last, ok := w.lastStarvedLog[ref]; ok && time.Since(last) < starvedLogInterval {
 		return
 	}
-	w.lastStarvedLog[roomID] = time.Now()
-	w.log.Warn("stream starved: empty queue and no ready mashups match (check library and stream filter)",
-		"room_id", roomID)
+	w.lastStarvedLog[ref] = time.Now()
+	w.log.Warn("stream starved: empty queue and no ready tracks match (check library and stream filter)", "session", ref.String())
 }
 
-func (w *AutoAdvance) ensureStreamPlaying(ctx context.Context, roomID string) {
-	ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
+func (w *AutoAdvance) ensureStreamPlaying(ctx context.Context, ref entity.SessionRef) {
+	ps, _ := redisc.GetPlayback(ctx, w.rdb, ref)
 	if ps == nil {
 		ps = &redisc.PlaybackState{}
 	}
-	tracks, _ := redisc.GetQueue(ctx, w.rdb, roomID)
+	tracks, _ := redisc.GetQueue(ctx, w.rdb, ref)
 	if len(tracks) == 0 {
 		return
 	}
@@ -344,53 +299,44 @@ func (w *AutoAdvance) ensureStreamPlaying(ctx context.Context, roomID string) {
 	now := time.Now()
 	ps.LastSyncAt = now
 	ps.CurrentStartedAt = now
-	redisc.SetPlayback(ctx, w.rdb, roomID, ps)
+	redisc.SetPlayback(ctx, w.rdb, ref, ps)
 }
 
-func (w *AutoAdvance) backgroundMashupRefill(ctx context.Context, rm *entity.Room, roomID string) {
-	w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
-
-	picks, err := w.radio.RefillMashups(ctx, roomID, rm)
+func (w *AutoAdvance) backgroundStreamRefill(ctx context.Context, st *entity.Stream, refiller usecase.StreamRefiller) {
+	ref := st.Ref()
+	picks, err := refiller.Refill(ctx, ref)
 	if err != nil {
-		w.log.Error("mashup refill failed", "room_id", roomID, "error", err)
+		w.log.Error("stream refill failed", "session", ref.String(), "refiller", refiller.Key(), "error", err)
 		return
 	}
 	appended := 0
 	for _, t := range picks {
-		if ok, _ := redisc.AppendFreshTrack(ctx, w.rdb, roomID, t); ok {
+		if ok, _ := redisc.AppendFreshTrack(ctx, w.rdb, ref, t); ok {
 			appended++
-			if t.ID != "" {
-				redisc.AddRadioSeen(ctx, w.rdb, roomID, t.ID)
-			}
 		}
 	}
 	if appended > 0 {
-		w.ensureStreamPlaying(ctx, roomID)
-		if err := w.room.SaveTracks(ctx, rm); err != nil {
-			w.log.Error("save tracks after mashup refill failed", "room_id", roomID, "error", err)
+		w.ensureStreamPlaying(ctx, ref)
+		if err := w.stream.SaveTracks(ctx, st); err != nil {
+			w.log.Error("save tracks after stream refill failed", "session", ref.String(), "error", err)
 		}
+		w.manager.Broadcast(ref, w.stream.BuildToDict(ctx, st))
 	}
-	w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
 }
 
 func (w *AutoAdvance) backgroundRefill(ctx context.Context, rm *entity.Room, roomID string) {
-	w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
-
+	w.manager.Broadcast(rm.Ref(), redisc.BuildToDict(ctx, w.rdb, rm))
 	tracks, err := w.radio.Refill(ctx, roomID)
 	if err != nil {
 		w.log.Error("radio refill failed", "room_id", roomID, "error", err)
 		return
 	}
-
-	// AppendFreshTrack re-validates each pick against the live queue: picks
-	// went stale if a skip landed while Refill was doing network I/O.
 	appended := 0
 	for _, t := range tracks {
 		if ok, _ := redisc.AppendFreshTrack(ctx, w.rdb, roomID, t); ok {
 			appended++
 		}
 	}
-
 	if appended > 0 {
 		ps, _ := redisc.GetPlayback(ctx, w.rdb, roomID)
 		if ps != nil && !ps.IsPlaying {
@@ -399,25 +345,9 @@ func (w *AutoAdvance) backgroundRefill(ctx context.Context, rm *entity.Room, roo
 			ps.LastSyncAt = time.Now()
 			redisc.SetPlayback(ctx, w.rdb, roomID, ps)
 		}
-
 		if err := w.room.SaveTracks(ctx, rm); err != nil {
 			w.log.Error("save tracks after refill failed", "room_id", roomID, "error", err)
 		}
 	}
-
-	w.manager.Broadcast(roomID, redisc.BuildToDict(ctx, w.rdb, rm))
-}
-
-func extractRoomID(key string) string {
-	// key is "room:{id}:state" — extract {id}
-	if len(key) < 6 || key[:5] != "room:" {
-		return ""
-	}
-	rest := key[5:]
-	for i, c := range rest {
-		if c == ':' {
-			return rest[:i]
-		}
-	}
-	return rest
+	w.manager.Broadcast(rm.Ref(), redisc.BuildToDict(ctx, w.rdb, rm))
 }

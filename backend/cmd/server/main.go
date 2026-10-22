@@ -57,6 +57,8 @@ func main() {
 
 	userRepo := postgres.NewUserRepo(db.Pool)
 	roomRepo := postgres.NewRoomRepo(db.Pool)
+	streamRepo := postgres.NewStreamRepo(db.Pool)
+	sessionRepo := postgres.NewSessionRepo(db.Pool)
 	trackRepo := postgres.NewTrackRepo(db.Pool)
 
 	if cfg.AdminUsername != "" {
@@ -80,28 +82,30 @@ func main() {
 	var mediaClient repository.MediaClient = mediaSvc
 
 	authUC := usecase.NewAuthUsecase(userRepo, authService, log)
-	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, authService, log, rdb)
+	roomUC := usecase.NewRoomUsecase(roomRepo, userRepo, mediaClient, authService, log, rdb, sessionRepo)
+	streamUC := usecase.NewStreamUsecase(streamRepo, sessionRepo, userRepo, log, rdb)
 	userUC := usecase.NewUserUsecase(userRepo, log)
 	searchUC := usecase.NewSearchUsecase(mediaClient, cfg, log)
 	mediaUC := usecase.NewMediaUsecase(mediaClient, cfg, log, rdb)
 	trackUC := usecase.NewTrackUsecase(trackRepo, mediaClient, cfg, log)
 	playbackUC := usecase.NewPlaybackUsecase(rdb)
-	chatUC := usecase.NewChatUsecase(roomRepo, log, rdb)
+	chatUC := usecase.NewChatUsecase(roomRepo, log, rdb, sessionRepo)
 	radioUC := usecase.NewRadioUsecase(mediaClient, trackRepo, cfg, log, rdb)
+	mashupRefiller := usecase.NewMashupRadioRefiller(trackRepo, cfg, log, rdb)
 
 	// Re-poll any track left "processing" by a previous run.
 	go trackUC.ResumeProcessing()
 
 	connManager := ws.NewConnectionManager(log)
-	wsHandler := ws.NewHandler(connManager, roomUC, playbackUC, chatUC, radioUC, mediaUC, cfg, rdb, log)
+	wsHandler := ws.NewHandler(connManager, roomUC, playbackUC, chatUC, radioUC, mediaUC, cfg, rdb, log, streamUC)
 
-	httpServer := httpDeliv.NewServer(cfg, log, authUC, roomUC, userUC, searchUC, mediaUC, playbackUC, trackUC, connManager, rdb)
+	httpServer := httpDeliv.NewServer(cfg, log, authUC, roomUC, userUC, searchUC, mediaUC, playbackUC, trackUC, connManager, rdb, streamUC)
 
 	// Add WebSocket endpoint to the HTTP server's router
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
-	httpServer.Router.Get("/ws/{roomID}", func(w http.ResponseWriter, r *http.Request) {
+	roomWS := func(w http.ResponseWriter, r *http.Request) {
 		roomID := chi.URLParam(r, "roomID")
 		access := r.URL.Query().Get("access")
 
@@ -129,13 +133,37 @@ func main() {
 		}
 
 		wsHandler.HandleWebSocket(conn, roomID, access, userID)
+	}
+	httpServer.Router.Get("/ws/rooms/{roomID}", roomWS)
+	httpServer.Router.Get("/ws/{roomID}", roomWS) // legacy path
+
+	httpServer.Router.Get("/ws/streams/{streamID}", func(w http.ResponseWriter, r *http.Request) {
+		streamID := chi.URLParam(r, "streamID")
+		var userID string
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			if auth := r.Header.Get("Authorization"); auth != "" {
+				token = strings.TrimPrefix(auth, "Bearer ")
+			}
+		}
+		if token != "" {
+			if uid, err := authService.DecodeToken(token); err == nil {
+				userID = uid
+			}
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Error("websocket upgrade failed", "error", err)
+			return
+		}
+		wsHandler.HandleStreamWebSocket(conn, streamID, userID)
 	})
 
 	// Start background workers
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	autoAdvance := worker.NewAutoAdvance(roomUC, playbackUC, mediaUC, radioUC, connManager, cfg, rdb, log)
+	autoAdvance := worker.NewAutoAdvance(roomUC, playbackUC, mediaUC, radioUC, connManager, cfg, rdb, log, streamUC, mashupRefiller)
 	go autoAdvance.Run(ctx)
 
 	// HTTP server

@@ -329,5 +329,3 @@ func TestTrackPollTimesOut(t *testing.T) {
 		t.Errorf("expected failed after timeout, got %q", m.Status)
 	}
 }
-
-

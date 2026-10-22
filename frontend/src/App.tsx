@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+﻿import { lazy, Suspense, useEffect, useState } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
@@ -15,6 +15,8 @@ const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
 const Home = lazy(() => import('./pages/Home'))
 const Rooms = lazy(() => import('./pages/Rooms'))
+const Streams = lazy(() => import('./pages/Streams'))
+const Stream = lazy(() => import('./pages/Stream'))
 const Mashups = lazy(() => import('./pages/Mashups'))
 const Room = lazy(() => import('./pages/Room'))
 const Profile = lazy(() => import('./pages/Profile'))
@@ -125,6 +127,8 @@ export default function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/" element={<Home />} />
                 <Route path="/rooms" element={<Rooms />} />
+                <Route path="/streams" element={<Streams />} />
+                <Route path="/stream/:streamId" element={<Stream />} />
                 <Route path="/mashups" element={<Mashups />} />
                 <Route path="/room/:roomId" element={<Room />} />
                 <Route path="/user/:userId" element={<Profile />} />
@@ -147,3 +151,4 @@ export default function App() {
     </AuthProvider>
   )
 }
+

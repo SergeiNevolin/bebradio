@@ -11,11 +11,11 @@ import (
 // room_id set, a library row has room_id NULL.
 //
 // Adding a new source (e.g. "spotify", "soundcloud") means:
-//   1. adding a TrackSource* constant here,
-//   2. teaching the queue dispatcher (handleAddToQueue/resolveURLTrack) and,
-//      for library-backed sources, the importer that writes tracks rows,
-//   3. no changes to playback, votes or persistence: they key off IDs,
-//      StreamURL and queue order only.
+//  1. adding a TrackSource* constant here,
+//  2. teaching the queue dispatcher (handleAddToQueue/resolveURLTrack) and,
+//     for library-backed sources, the importer that writes tracks rows,
+//  3. no changes to playback, votes or persistence: they key off IDs,
+//     StreamURL and queue order only.
 const (
 	TrackSourceYouTube = "youtube"
 	TrackSourceUpload  = "upload"
@@ -97,14 +97,14 @@ func TrackFromYouTube(info map[string]any, addedBy string) *Track {
 // TrackFromUpload builds the "processing" row for a fresh user upload.
 func TrackFromUpload(id, ownerID, title, artist string) *Track {
 	return &Track{
-		ID:       id,
-		Source:   TrackSourceUpload,
-		OwnerID:  ownerID,
-		Title:    title,
-		Artist:   artist,
-		Status:   TrackStatusProcessing,
-		AddedBy:  ownerID,
-		AddedAt:  time.Now(),
+		ID:      id,
+		Source:  TrackSourceUpload,
+		OwnerID: ownerID,
+		Title:   title,
+		Artist:  artist,
+		Status:  TrackStatusProcessing,
+		AddedBy: ownerID,
+		AddedAt: time.Now(),
 	}
 }
 

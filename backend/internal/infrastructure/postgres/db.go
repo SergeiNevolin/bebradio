@@ -167,6 +167,64 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS mashup_radio BOOLEAN NOT NULL DEFAULT TRUE`,
 		// 010: индекс под список публичных комнат (WHERE is_private + ORDER BY created_at)
 		`CREATE INDEX IF NOT EXISTS idx_rooms_public_created ON rooms (is_private, created_at DESC)`,
+		// 012: rooms and streams become distinct session types.
+		`CREATE TABLE IF NOT EXISTS sessions (
+			kind VARCHAR(16) NOT NULL,
+			id VARCHAR(8) NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			PRIMARY KEY (kind, id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS streams (
+			id VARCHAR(8) PRIMARY KEY,
+			name VARCHAR(255) NOT NULL DEFAULT 'Stream',
+			owner_id VARCHAR(8) NOT NULL,
+			features JSONB NOT NULL DEFAULT '{}'::jsonb,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		)`,
+		`INSERT INTO streams (id, name, owner_id, features, created_at)
+		 SELECT id, name, owner_id,
+			jsonb_build_object('mashup_radio', jsonb_build_object(
+				'enabled', mashup_radio,
+				'filter', jsonb_build_object('q','','title','','artist','','owner','')))
+			, created_at
+		 FROM rooms WHERE is_stream = true
+		 ON CONFLICT (id) DO NOTHING`,
+		`CREATE TABLE IF NOT EXISTS queue_items (
+			session_kind VARCHAR(16) NOT NULL,
+			session_id VARCHAR(8) NOT NULL,
+			position INTEGER NOT NULL,
+			track JSONB NOT NULL,
+			PRIMARY KEY (session_kind, session_id, position)
+		)`,
+		`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS session_kind VARCHAR(16)`,
+		`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS session_id VARCHAR(8)`,
+		`UPDATE chat_messages c
+		 SET session_kind = CASE WHEN r.is_stream THEN 'stream' ELSE 'room' END,
+		     session_id = c.room_id
+		 FROM rooms r
+		 WHERE c.room_id = r.id AND c.session_id IS NULL`,
+		`INSERT INTO sessions (kind, id, created_at)
+		 SELECT CASE WHEN is_stream THEN 'stream' ELSE 'room' END, id, created_at FROM rooms
+		 ON CONFLICT DO NOTHING`,
+		`INSERT INTO queue_items (session_kind, session_id, position, track)
+		 SELECT CASE WHEN r.is_stream THEN 'stream' ELSE 'room' END, t.room_id, t.position_index,
+			jsonb_build_object(
+				'id', t.id, 'source', t.source, 'title', t.title, 'artist', t.artist,
+				'duration', t.duration, 'url', t.url, 'thumbnail', t.thumbnail,
+				'added_by', t.added_by, 'added_at', t.added_at,
+				'source_url', t.source_url, 'local_path', t.local_path, 'media_id', t.media_id,
+				'position', t.position_index, 'owner_id', COALESCE(t.owner_id, ''),
+				'size_bytes', t.size_bytes, 'status', t.status, 'error', t.error,
+				'has_cover', t.has_cover, 'plays', t.plays, 'likes', t.likes)
+		 FROM tracks t JOIN rooms r ON r.id = t.room_id
+		 WHERE t.room_id IS NOT NULL
+		 ON CONFLICT DO NOTHING`,
+		`UPDATE chat_messages SET room_id = NULL
+		 WHERE room_id IN (SELECT id FROM rooms WHERE is_stream = true)`,
+		`DELETE FROM rooms WHERE is_stream = true`,
+		`DELETE FROM tracks WHERE room_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_queue_items_session ON queue_items (session_kind, session_id, position)`,
+		`CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages (session_kind, session_id, created_at)`,
 	}
 
 	for _, m := range migrations {

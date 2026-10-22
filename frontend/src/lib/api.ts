@@ -1,5 +1,5 @@
 import { getRoomAccess } from './roomAccess'
-import type { Track } from '../types'
+import type { RoomListItem, StreamFilter, StreamListItem, StreamState, Track } from '../types'
 
 let authToken: string | null = null
 let refreshPromise: Promise<RefreshOutcome> | null = null
@@ -241,17 +241,16 @@ export const api = {
   // ── Rooms ───────────────────────────────────────────────────────────
   // GET /api/rooms → []map  (raw array, not { rooms: [] }); чанки ?limit=&offset=
   getRooms: (limit = 50, offset = 0) =>
-    request<Array<{ id: string; name: string; user_count: number; track_count: number; is_playing: boolean; has_password: boolean; auto_radio: boolean; is_stream: boolean }>>(`/api/rooms?limit=${limit}&offset=${offset}`),
+    request<RoomListItem[]>(`/api/rooms?limit=${limit}&offset=${offset}`),
 
   // GET /api/rooms/recent → []map
   getRecentRooms: () =>
-    request<Array<{ id: string; name: string; user_count: number; track_count: number; is_playing: boolean; has_password: boolean; is_stream: boolean }>>('/api/rooms/recent'),
+    request<RoomListItem[]>('/api/rooms/recent'),
 
   // POST /api/rooms → ToDict() + { access }
-  // is_stream marks an admin-run stream (admins only, enforced server-side).
-  createRoom: (name: string, password?: string, opts?: { is_stream?: boolean }) =>
+  createRoom: (name: string, password?: string) =>
     request<{ id: string; name: string; access?: string }>(
-      '/api/rooms', { method: 'POST', body: JSON.stringify({ name, password: password || undefined, is_stream: opts?.is_stream || undefined }) }
+      '/api/rooms', { method: 'POST', body: JSON.stringify({ name, password: password || undefined }) }
     ),
 
   // GET /api/rooms/:roomID → ToDict() or { id, name, locked, has_password }
@@ -308,29 +307,48 @@ export const api = {
       `/api/rooms/${roomId}`, { method: 'PATCH', body: JSON.stringify(settings) }
     ),
 
-  // ── Stream filter (24/7 mashup stream: author/title narrowing) ──
-  // GET /api/rooms/:roomID/stream-filter → { q, title, artist, owner }
-  getStreamFilter: (roomId: string) => {
-    const access = getRoomAccess(roomId)
-    const query = access ? `?access=${encodeURIComponent(access)}` : ''
-    return request<{ q: string; title: string; artist: string; owner: string }>(
-      `/api/rooms/${roomId}/stream-filter${query}`,
-    )
-  },
+  // ── Streams (admin-run 24/7 radio, no voting/password) ──
+  // GET /api/streams/ → StreamListItem[]
+  getStreams: (limit = 50, offset = 0) =>
+    request<StreamListItem[]>(`/api/streams/?limit=${limit}&offset=${offset}`),
 
-  // PUT /api/rooms/:roomID/stream-filter → { q, title, artist, owner }
-  // Owner/admin on stream rooms only; empty strings clear the filter.
-  setStreamFilter: (roomId: string, filter: { q?: string; title?: string; artist?: string; owner?: string }) =>
-    request<{ q: string; title: string; artist: string; owner: string }>(
-      `/api/rooms/${roomId}/stream-filter`, { method: 'PUT', body: JSON.stringify(filter) }
+  // POST /api/streams/ → StreamState (admins only, enforced server-side)
+  createStream: (name: string) =>
+    request<StreamState>('/api/streams/', { method: 'POST', body: JSON.stringify({ name }) }),
+
+  // GET /api/streams/:streamID → StreamState
+  getStream: (streamId: string) =>
+    request<StreamState>(`/api/streams/${streamId}`),
+
+  // DELETE /api/streams/:streamID → { ok: true } (owner/admin)
+  deleteStream: (streamId: string) =>
+    authFetch(`/api/streams/${streamId}`, { method: 'DELETE' }, 'Не удалось удалить поток').then(() => {}),
+
+  // POST /api/streams/:streamID/queue → track.ToDict() (owner/admin)
+  addToStreamQueue: (streamId: string, payload: { source?: string; url?: string; track_id?: string }) =>
+    request<Track>(
+      `/api/streams/${streamId}/queue`, { method: 'POST', body: JSON.stringify(payload) }
+    ),
+  addStreamTrackById: (streamId: string, trackId: string) =>
+    api.addToStreamQueue(streamId, { track_id: trackId }),
+  addStreamTrack: (streamId: string, url: string, source?: string) =>
+    api.addToStreamQueue(streamId, { url, source }),
+
+  // PUT /api/streams/:streamID/features/mashup-radio → StreamState
+  updateMashupRadio: (
+    streamId: string,
+    patch: { enabled?: boolean; filter?: Partial<StreamFilter> },
+  ) =>
+    request<StreamState>(
+      `/api/streams/${streamId}/features/mashup-radio`,
+      { method: 'PUT', body: JSON.stringify(patch) },
     ),
 
-  // POST /api/rooms/:roomID/stream-refill → { added: Track[] }
-  // Owner/admin on stream rooms only. Enqueues N random mashups honouring
-  // the current stream filter. The 24/7 auto-refill keeps running regardless.
-  triggerStreamRefill: (roomId: string, count = 3) =>
+  // POST /api/streams/:streamID/features/mashup-radio/refill → { added: Track[] }
+  triggerStreamRefill: (streamId: string, count = 3) =>
     request<{ added: Track[] }>(
-      `/api/rooms/${roomId}/stream-refill`, { method: 'POST', body: JSON.stringify({ count }) }
+      `/api/streams/${streamId}/features/mashup-radio/refill`,
+      { method: 'POST', body: JSON.stringify({ count }) },
     ),
 
   // DELETE /api/rooms/:roomID → { ok: true }

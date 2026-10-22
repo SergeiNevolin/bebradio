@@ -4,11 +4,11 @@ import "testing"
 
 func TestUserPublicProfile(t *testing.T) {
 	u := &User{
-		ID:         "u1",
-		Email:      "test@example.com",
-		Username:   "testuser",
-		Bio:        "Hello world",
-		AvatarURL:  "http://example.com/avatar.jpg",
+		ID:        "u1",
+		Email:     "test@example.com",
+		Username:  "testuser",
+		Bio:       "Hello world",
+		AvatarURL: "http://example.com/avatar.jpg",
 	}
 
 	profile := u.PublicProfile()
@@ -57,5 +57,3 @@ func TestUserPublicProfileEmpty(t *testing.T) {
 		t.Errorf("expected empty username, got '%v'", profile["username"])
 	}
 }
-
-

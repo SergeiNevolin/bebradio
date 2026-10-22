@@ -53,7 +53,7 @@ func (uc *MediaUsecase) EnsureTrackReady(track *entity.Track) bool {
 	return false
 }
 
-func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID string) bool {
+func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID any) bool {
 	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
 	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
 	if ps == nil || len(tracks) == 0 {
@@ -103,7 +103,7 @@ func (uc *MediaUsecase) EnsureRoomMedia(ctx context.Context, roomID string) bool
 	}
 
 	// The queue may have changed (skip/remove/append) while Ensure() was in
-	// flight — it does network I/O. Never write back the stale snapshot:
+	// flight вЂ” it does network I/O. Never write back the stale snapshot:
 	// re-read and stamp resolved URLs only onto tracks still sitting at the
 	// same index with the same ID. Anything else is retried on a later tick.
 	// (The old code did a blind full-queue SetQueue here and resurrected

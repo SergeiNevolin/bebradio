@@ -11,58 +11,46 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func setupStreamUC(t *testing.T, rdb *redis.Client) (*RadioUsecase, *repository.MockTrackRepo) {
+func setupMashupRefiller(t *testing.T) (*MashupRadioRefiller, *repository.MockTrackRepo, *redis.Client) {
 	t.Helper()
-	mediaClient := repository.NewMockMediaClient()
-	tracks := repository.NewMockTrackRepo()
-	uc := NewRadioUsecase(mediaClient, tracks, testRadioConfig(), radioLog, rdb)
-	return uc, tracks
-}
-
-func streamRoom(rm *entity.Room) *entity.Room {
-	rm.IsStream = true
-	rm.MashupRadio = true
-	return rm
-}
-
-func TestMashupRefillNeedsStream(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	ctx := context.Background()
-	uc, _ := setupStreamUC(t, rdb)
+	tracks := repository.NewMockTrackRepo()
+	return NewMashupRadioRefiller(tracks, testRadioConfig(), radioLog, rdb), tracks, rdb
+}
 
-	// Non-stream never needs mashup refill.
-	setupRadioRoom(t, rdb, "PLAIN", true, "", nil, &redisc.PlaybackState{IsPlaying: true})
-	plain := &entity.Room{ID: "PLAIN"}
-	if uc.NeedsMashupRefill(ctx, "PLAIN", plain) {
-		t.Error("expected false for non-stream room")
+func TestMashupRefillNeedsEnabledFeature(t *testing.T) {
+	uc, _, rdb := setupMashupRefiller(t)
+	ctx := context.Background()
+	ref := entity.NewStreamRef("STREAM")
+	redisc.SetPlayback(ctx, rdb, ref, &redisc.PlaybackState{IsPlaying: true})
+	redisc.SetMashupRadioFeature(ctx, rdb, ref, entity.MashupRadioFeature{Enabled: false})
+
+	if uc.Needs(ctx, ref) {
+		t.Error("expected false when mashup radio is off")
 	}
-	// Stream with the kill switch off never needs it either.
-	off := &entity.Room{ID: "STREAM", IsStream: true, MashupRadio: false}
-	if uc.NeedsMashupRefill(ctx, "STREAM", off) {
-		t.Error("expected false when mashup_radio is off")
+	redisc.SetMashupRadioFeature(ctx, rdb, ref, entity.MashupRadioFeature{Enabled: true})
+	if !uc.Needs(ctx, ref) {
+		t.Error("expected true when queue is empty and feature is enabled")
 	}
 }
 
 func TestMashupRefillFiltersByArtist(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	uc, tracks, rdb := setupMashupRefiller(t)
 	ctx := context.Background()
-	roomID := "STREAM"
-	uc, tracks := setupStreamUC(t, rdb)
+	ref := entity.NewStreamRef("STREAM")
 
 	tracks.Create(&entity.Track{ID: "m1", Source: entity.TrackSourceUpload, Title: "Bootleg A", Artist: "DJ Earworm", Status: entity.TrackStatusReady})
 	tracks.Create(&entity.Track{ID: "m2", Source: entity.TrackSourceUpload, Title: "Bootleg B", Artist: "Another Guy", Status: entity.TrackStatusReady})
 	tracks.Create(&entity.Track{ID: "m3", Source: entity.TrackSourceUpload, Title: "Processing", Artist: "DJ Earworm", Status: entity.TrackStatusProcessing})
 
-	setupRadioRoom(t, rdb, roomID, false, "", nil, &redisc.PlaybackState{IsPlaying: true})
-	redisc.SetStreamFilter(ctx, rdb, roomID, &redisc.StreamFilter{Artist: "earworm"})
-	rm := streamRoom(entity.NewRoom(roomID, "R", "O"))
+	redisc.SetPlayback(ctx, rdb, ref, &redisc.PlaybackState{IsPlaying: true})
+	redisc.SetMashupRadioFeature(ctx, rdb, ref, entity.MashupRadioFeature{
+		Enabled: true,
+		Filter:  entity.StreamFilter{Artist: "earworm"},
+	})
 
-	if !uc.NeedsMashupRefill(ctx, roomID, rm) {
-		t.Fatal("expected mashup refill when queue is empty")
-	}
-	picks, err := uc.RefillMashups(ctx, roomID, rm)
+	picks, err := uc.Refill(ctx, ref)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,51 +59,24 @@ func TestMashupRefillFiltersByArtist(t *testing.T) {
 	}
 }
 
-func TestMashupRefillEmptyFilterLoops(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+func TestMashupRefillLoopsExhaustedBase(t *testing.T) {
+	uc, tracks, rdb := setupMashupRefiller(t)
 	ctx := context.Background()
-	roomID := "LOOP"
-	uc, tracks := setupStreamUC(t, rdb)
+	ref := entity.NewStreamRef("LOOP")
 
 	tracks.Create(&entity.Track{ID: "m1", Source: entity.TrackSourceUpload, Title: "A", Status: entity.TrackStatusReady})
-	setupRadioRoom(t, rdb, roomID, false, "", nil, &redisc.PlaybackState{IsPlaying: true})
-	// Everything seen: refill must loop the base rather than stall.
-	redisc.AddRadioSeen(ctx, rdb, roomID, "m1")
-	rm := streamRoom(entity.NewRoom(roomID, "R", "O"))
+	redisc.SetPlayback(ctx, rdb, ref, &redisc.PlaybackState{IsPlaying: true})
+	redisc.SetMashupRadioFeature(ctx, rdb, ref, entity.MashupRadioFeature{Enabled: true})
+	redisc.AddRadioSeen(ctx, rdb, ref, "m1")
 
-	picks, err := uc.RefillMashups(ctx, roomID, rm)
+	picks, err := uc.Refill(ctx, ref)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(picks) != 1 || picks[0].ID != "m1" {
-		t.Errorf("expected looped pick m1, got %v", picks)
+		t.Fatalf("expected looped pick m1, got %v", picks)
 	}
-}
-
-func TestMashupRefillResetsSeenOnLoop(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	ctx := context.Background()
-	roomID := "RESET"
-	uc, tracks := setupStreamUC(t, rdb)
-
-	tracks.Create(&entity.Track{ID: "m1", Source: entity.TrackSourceUpload, Title: "A", Status: entity.TrackStatusReady})
-	setupRadioRoom(t, rdb, roomID, false, "", nil, &redisc.PlaybackState{IsPlaying: true})
-	redisc.AddRadioSeen(ctx, rdb, roomID, "m1")
-	rm := streamRoom(entity.NewRoom(roomID, "R", "O"))
-
-	picks, err := uc.RefillMashups(ctx, roomID, rm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(picks) != 1 {
-		t.Fatalf("expected looped pick, got %v", picks)
-	}
-	// New rotation started: the old seen set must be gone, otherwise it
-	// would grow unbounded for as long as the 24/7 stream runs. The caller
-	// re-marks whatever it actually appends.
-	if seen, _ := redisc.GetRadioSeen(ctx, rdb, roomID); len(seen) != 0 {
+	if seen, _ := redisc.GetRadioSeen(ctx, rdb, ref); len(seen) != 0 {
 		t.Errorf("expected radio_seen reset on loop, got %v", seen)
 	}
 }

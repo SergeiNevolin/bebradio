@@ -79,10 +79,11 @@ describe('Home', () => {
     localStorage.removeItem('mashup-player')
   })
 
-  it('shelves autodj rooms as popular stations with a badge', async () => {
+  it('does not show autodj rooms on the home page', async () => {
     render(<MemoryRouter><Home /></MemoryRouter>)
-    expect(await screen.findByText('Потоки')).toBeInTheDocument()
-    expect(screen.getAllByText('Nonstop Hits').length).toBeGreaterThanOrEqual(1)
+    expect(await screen.findByText('Party')).toBeInTheDocument()
+    expect(screen.queryByText('Авторадио')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nonstop Hits')).not.toBeInTheDocument()
   })
 
   it('shows live rooms with a browse-all link', async () => {
@@ -91,11 +92,10 @@ describe('Home', () => {
     expect(screen.getAllByText('Party').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('hides the stations section when no room runs autodj', async () => {
-    mockHomeApis(rooms.filter((r) => !r.auto_radio))
+  it('falls back to idle rooms when no rooms are active', async () => {
+    mockHomeApis(rooms.filter((r) => r.id === 'BBB222'))
     render(<MemoryRouter><Home /></MemoryRouter>)
-    await screen.findByText('Комнаты')
-    expect(screen.queryByText('Потоки')).not.toBeInTheDocument()
+    expect(await screen.findByText('Chill')).toBeInTheDocument()
   })
 
   it('shows live rooms with a browse-all link, stations excluded', async () => {

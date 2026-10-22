@@ -13,16 +13,22 @@ import (
 )
 
 type ChatUsecase struct {
-	roomRepo repository.RoomRepository
-	log      *slog.Logger
-	rdb      *redis.Client
+	sessionRepo repository.SessionRepository
+	log         *slog.Logger
+	rdb         *redis.Client
 }
 
-func NewChatUsecase(roomRepo repository.RoomRepository, log *slog.Logger, rdb *redis.Client) *ChatUsecase {
-	return &ChatUsecase{roomRepo: roomRepo, log: log, rdb: rdb}
+func NewChatUsecase(roomRepo repository.RoomRepository, log *slog.Logger, rdb *redis.Client, sessionRepos ...repository.SessionRepository) *ChatUsecase {
+	var sessionRepo repository.SessionRepository
+	if len(sessionRepos) > 0 {
+		sessionRepo = sessionRepos[0]
+	} else if sr, ok := roomRepo.(repository.SessionRepository); ok {
+		sessionRepo = sr
+	}
+	return &ChatUsecase{sessionRepo: sessionRepo, log: log, rdb: rdb}
 }
 
-func (uc *ChatUsecase) SendMessage(ctx context.Context, roomID, userID, username, text string) *entity.ChatMessage {
+func (uc *ChatUsecase) SendMessage(ctx context.Context, session any, userID, username, text string) *entity.ChatMessage {
 	msg := &entity.ChatMessage{
 		ID:        id.NewHex(8),
 		UserID:    userID,
@@ -30,11 +36,13 @@ func (uc *ChatUsecase) SendMessage(ctx context.Context, roomID, userID, username
 		Text:      text,
 		CreatedAt: time.Now(),
 	}
+	ref := redisc.AsRef(session)
 
-	redisc.AppendMessage(ctx, uc.rdb, roomID, msg)
-
-	if err := uc.roomRepo.SaveMessage(roomID, msg); err != nil {
-		uc.log.Error("failed to save chat message", "room_id", roomID, "error", err)
+	redisc.AppendMessage(ctx, uc.rdb, ref, msg)
+	if uc.sessionRepo != nil {
+		if err := uc.sessionRepo.SaveMessage(ref, msg); err != nil {
+			uc.log.Error("failed to save chat message", "session", ref.String(), "error", err)
+		}
 	}
 	return msg
 }

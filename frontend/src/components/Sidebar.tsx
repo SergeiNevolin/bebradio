@@ -18,6 +18,14 @@ function RoomsIcon() {
   )
 }
 
+function StreamsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 3a9 9 0 100 18 9 9 0 000-18Zm0 2c.34 0 .67.03 1 .08V11h5.92c.05.33.08.66.08 1a7 7 0 11-7-7Zm3 7a3 3 0 11-6 0 3 3 0 016 0Z" />
+    </svg>
+  )
+}
+
 function MashupIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -54,6 +62,7 @@ function SettingsIcon() {
 const SECTIONS = [
   { to: '/', label: 'Главная', icon: <HomeIcon />, end: true },
   { to: '/rooms', label: 'Комнаты', icon: <RoomsIcon />, end: false },
+  { to: '/streams', label: 'Потоки', icon: <StreamsIcon />, end: false },
   { to: '/mashups', label: 'Мэшапы', icon: <MashupIcon />, end: false },
   { to: '/karaoke', label: 'Караоке', icon: <KaraokeIcon />, end: false },
 ]

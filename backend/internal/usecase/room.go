@@ -15,6 +15,7 @@ import (
 
 type RoomUsecase struct {
 	roomRepo    repository.RoomRepository
+	sessionRepo repository.SessionRepository
 	userRepo    repository.UserRepository
 	mediaClient repository.MediaClient
 	auth        AuthBridge
@@ -22,9 +23,16 @@ type RoomUsecase struct {
 	rdb         *redis.Client
 }
 
-func NewRoomUsecase(roomRepo repository.RoomRepository, userRepo repository.UserRepository, mediaClient repository.MediaClient, auth AuthBridge, log *slog.Logger, rdb *redis.Client) *RoomUsecase {
+func NewRoomUsecase(roomRepo repository.RoomRepository, userRepo repository.UserRepository, mediaClient repository.MediaClient, auth AuthBridge, log *slog.Logger, rdb *redis.Client, sessionRepos ...repository.SessionRepository) *RoomUsecase {
+	var sessionRepo repository.SessionRepository
+	if len(sessionRepos) > 0 {
+		sessionRepo = sessionRepos[0]
+	} else if sr, ok := roomRepo.(repository.SessionRepository); ok {
+		sessionRepo = sr
+	}
 	return &RoomUsecase{
 		roomRepo:    roomRepo,
+		sessionRepo: sessionRepo,
 		userRepo:    userRepo,
 		mediaClient: mediaClient,
 		auth:        auth,
@@ -40,51 +48,23 @@ func (uc *RoomUsecase) GetOrLoadRoom(ctx context.Context, roomID string) (*entit
 		return nil, err
 	}
 
-	// Hydrate Redis from Postgres exactly once per room lifetime (SETNX makes
-	// concurrent first loads race-free: only the winner hydrates).
-	// Redis is the source of truth afterwards; an empty queue is a
-	// legitimate state (e.g. last track skipped, refill not done yet)
-	// and must NOT trigger re-hydration of stale Postgres rows.
-	acquired, _ := uc.rdb.SetNX(ctx, redisc.RoomKey(roomID, "hydrated"), "1", 0).Result()
-	if acquired {
-		tracks, _ := uc.roomRepo.LoadTracks(roomID)
+	ref := rm.Ref()
+	acquired, _ := uc.rdb.SetNX(ctx, redisc.SessionKey(ref, "hydrated"), "1", 0).Result()
+	if acquired && uc.sessionRepo != nil {
+		tracks, _ := uc.sessionRepo.LoadTracks(ref)
 		if len(tracks) > 0 {
-			redisc.SetQueue(ctx, uc.rdb, roomID, tracks)
+			redisc.SetQueue(ctx, uc.rdb, ref, tracks)
 		}
-		messages, _ := uc.roomRepo.LoadMessages(roomID)
-		if len(messages) > 0 {
-			for _, m := range messages {
-				redisc.AppendMessage(ctx, uc.rdb, roomID, m)
-			}
-		}
-		// NOTE: votes live in Redis only. They are per-track ephemeral state
-		// (cleared whenever a track becomes current), so persisting them to
-		// Postgres buys nothing and only risks resurrecting stale votes.
-		uc.rdb.Set(ctx, redisc.RoomKey(roomID, "hydrated"), "1", 0)
-	}
-
-	// Streams must be discoverable by the autoadvance tick: a room with no
-	// Redis keys at all (never played, Redis flushed) is invisible to the
-	// SCAN-based tick, so its 24/7 refill would never start. Any room access
-	// via HTTP/WS recreates the playback hash; the next tick fills the queue.
-	if rm.IsStream {
-		if ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID); ps == nil {
-			redisc.SetPlayback(ctx, uc.rdb, roomID, &redisc.PlaybackState{})
+		messages, _ := uc.sessionRepo.LoadMessages(ref)
+		for _, m := range messages {
+			redisc.AppendMessage(ctx, uc.rdb, ref, m)
 		}
 	}
-
 	return rm, nil
 }
 
-func (uc *RoomUsecase) CreateRoom(ctx context.Context, name, ownerID, password string, isStream bool) (*entity.Room, string, error) {
+func (uc *RoomUsecase) CreateRoom(ctx context.Context, name, ownerID, password string) (*entity.Room, string, error) {
 	rm := entity.NewRoom(id.New(6), name, ownerID)
-	rm.IsStream = isStream
-	if isStream {
-		// Streams refill from the library out of the box; plain rooms never
-		// consult the flag, so it stays off for them.
-		rm.MashupRadio = true
-	}
-
 	if password != "" {
 		hash, err := uc.auth.HashPassword(password)
 		if err != nil {
@@ -93,11 +73,9 @@ func (uc *RoomUsecase) CreateRoom(ctx context.Context, name, ownerID, password s
 			rm.PasswordHash = &hash
 		}
 	}
-
 	if err := uc.roomRepo.Save(rm); err != nil {
 		return nil, "", err
 	}
-
 	access, err := uc.auth.CreateRoomToken(rm.ID)
 	if err != nil {
 		uc.log.Error("failed to create room token", "room_id", rm.ID, "error", err)
@@ -112,8 +90,6 @@ func (uc *RoomUsecase) ListPublicRooms(ctx context.Context, limit, offset int) (
 		return nil, err
 	}
 
-	// Один пайплайн на все комнаты вместо 4*N последовательных RTT:
-	// HLen presence, LLen очереди (не вся очередь!) и HGet флага игры.
 	type roomCmds struct {
 		presence *redis.IntCmd
 		qlen     *redis.IntCmd
@@ -123,14 +99,13 @@ func (uc *RoomUsecase) ListPublicRooms(ctx context.Context, limit, offset int) (
 	cmds := make([]roomCmds, len(dbRooms))
 	for i, r := range dbRooms {
 		roomID, _ := r["id"].(string)
+		ref := entity.NewRoomRef(roomID)
 		cmds[i] = roomCmds{
-			presence: pipe.HLen(ctx, redisc.RoomKey(roomID, "presence")),
-			qlen:     pipe.LLen(ctx, redisc.RoomKey(roomID, "queue")),
-			playing:  pipe.HGet(ctx, redisc.RoomKey(roomID, "state"), "is_playing"),
+			presence: pipe.HLen(ctx, redisc.SessionKey(ref, "presence")),
+			qlen:     pipe.LLen(ctx, redisc.SessionKey(ref, "queue")),
+			playing:  pipe.HGet(ctx, redisc.SessionKey(ref, "state"), "is_playing"),
 		}
 	}
-	// Ошибки отдельных команд разбираем ниже с дефолтами; падение всего
-	// Redis даёт нули, а не 500 — как раньше при поштучных вызовах.
 	_, _ = pipe.Exec(ctx)
 
 	for i, r := range dbRooms {
@@ -149,7 +124,6 @@ func (uc *RoomUsecase) ListPublicRooms(ctx context.Context, limit, offset int) (
 		} else {
 			r["is_playing"] = false
 		}
-		// has_password уже пришёл из SQL — отдельный FindByID больше не нужен.
 	}
 
 	sort.Slice(dbRooms, func(i, j int) bool {
@@ -158,7 +132,6 @@ func (uc *RoomUsecase) ListPublicRooms(ctx context.Context, limit, offset int) (
 		return a > b
 	})
 
-	// Чанки: режем уже отсортированный по онлайну список.
 	if offset < 0 {
 		offset = 0
 	}
@@ -169,7 +142,6 @@ func (uc *RoomUsecase) ListPublicRooms(ctx context.Context, limit, offset int) (
 	if limit >= 0 && len(dbRooms) > limit {
 		dbRooms = dbRooms[:limit]
 	}
-
 	return dbRooms, nil
 }
 
@@ -189,11 +161,7 @@ func (uc *RoomUsecase) HasRoomAccess(rm *entity.Room, userID, access string) boo
 	return uc.auth.VerifyRoomToken(access, rm.ID)
 }
 
-// IsController reports whether userID may drive playback in a room: owner
-// or admin. In streams this gates next/prev/jump (there is no voting, so
-// manual control must not leak to listeners); explicit seeks are gated by
-// it in every room kind, since a seek moves playback for everyone at once.
-// The server-side autoadvance tick bypasses it.
+// IsController reports whether userID may drive room playback (owner/admin).
 func (uc *RoomUsecase) IsController(rm *entity.Room, userID string) bool {
 	if userID == "" {
 		return false
@@ -220,7 +188,7 @@ func (uc *RoomUsecase) JoinRoom(rm *entity.Room, password string, userID string)
 	return uc.auth.CreateRoomToken(rm.ID)
 }
 
-func (uc *RoomUsecase) UpdateRoomSettings(ctx context.Context, rm *entity.Room, allowAnon, isPrivate, autoRadio, mashupRadio *bool, password *string) error {
+func (uc *RoomUsecase) UpdateRoomSettings(ctx context.Context, rm *entity.Room, allowAnon, isPrivate, autoRadio *bool, password *string) error {
 	if allowAnon != nil {
 		rm.AllowAnonymousAdd = *allowAnon
 	}
@@ -229,9 +197,6 @@ func (uc *RoomUsecase) UpdateRoomSettings(ctx context.Context, rm *entity.Room, 
 	}
 	if autoRadio != nil {
 		rm.AutoRadio = *autoRadio
-	}
-	if mashupRadio != nil {
-		rm.MashupRadio = *mashupRadio
 	}
 	if password != nil {
 		if *password == "" {
@@ -253,11 +218,14 @@ func (uc *RoomUsecase) DeleteRoom(ctx context.Context, rm *entity.Room) error {
 }
 
 func (uc *RoomUsecase) SaveTracks(ctx context.Context, rm *entity.Room) error {
-	tracks, err := redisc.GetQueue(ctx, uc.rdb, rm.ID)
+	if uc.sessionRepo == nil {
+		return nil
+	}
+	tracks, err := redisc.GetQueue(ctx, uc.rdb, rm.Ref())
 	if err != nil {
 		return fmt.Errorf("get queue from redis: %w", err)
 	}
-	return uc.roomRepo.SaveTracksFromSlice(rm.ID, tracks)
+	return uc.sessionRepo.SaveTracks(rm.Ref(), tracks)
 }
 
 func (uc *RoomUsecase) CreateAccessToken(roomID string) (string, error) {
@@ -282,13 +250,14 @@ func (uc *RoomUsecase) RecentRooms(ctx context.Context, userID string, limit int
 
 	for _, r := range dbRooms {
 		roomID, _ := r["id"].(string)
-		count, _ := redisc.GetPresenceCount(ctx, uc.rdb, roomID)
+		ref := entity.NewRoomRef(roomID)
+		count, _ := redisc.GetPresenceCount(ctx, uc.rdb, ref)
 		r["user_count"] = int(count)
 
-		tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
+		tracks, _ := redisc.GetQueue(ctx, uc.rdb, ref)
 		r["track_count"] = len(tracks)
 
-		ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
+		ps, _ := redisc.GetPlayback(ctx, uc.rdb, ref)
 		if ps != nil {
 			r["is_playing"] = ps.IsPlaying
 		}

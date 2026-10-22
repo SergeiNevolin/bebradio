@@ -8,17 +8,17 @@ import (
 )
 
 type SlidingWindowLimiter struct {
-	maxRequests  int
+	maxRequests   int
 	windowSeconds int
-	hits         map[string][]time.Time
-	mu           sync.Mutex
+	hits          map[string][]time.Time
+	mu            sync.Mutex
 }
 
 func New(maxRequests, windowSeconds int) *SlidingWindowLimiter {
 	return &SlidingWindowLimiter{
-		maxRequests:  maxRequests,
+		maxRequests:   maxRequests,
 		windowSeconds: windowSeconds,
-		hits:         make(map[string][]time.Time),
+		hits:          make(map[string][]time.Time),
 	}
 }
 

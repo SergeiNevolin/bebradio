@@ -18,7 +18,7 @@ func NewPlaybackUsecase(rdb *redis.Client) *PlaybackUsecase {
 
 const advanceDedupWindow = 1.0
 
-func (uc *PlaybackUsecase) GoNext(ctx context.Context, roomID string) bool {
+func (uc *PlaybackUsecase) GoNext(ctx context.Context, roomID any) bool {
 	return uc.goNext(ctx, roomID, false)
 }
 
@@ -27,11 +27,11 @@ func (uc *PlaybackUsecase) GoNext(ctx context.Context, roomID string) bool {
 // (voted track must be current), so a forced advance can never double-skip
 // the same transition. Automatic advances (client onEnded, autoadvance tick)
 // keep the suppression via GoNext.
-func (uc *PlaybackUsecase) ForceNext(ctx context.Context, roomID string) bool {
+func (uc *PlaybackUsecase) ForceNext(ctx context.Context, roomID any) bool {
 	return uc.goNext(ctx, roomID, true)
 }
 
-func (uc *PlaybackUsecase) goNext(ctx context.Context, roomID string, force bool) bool {
+func (uc *PlaybackUsecase) goNext(ctx context.Context, roomID any, force bool) bool {
 	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
 	if ps == nil {
 		return false
@@ -97,7 +97,7 @@ func (uc *PlaybackUsecase) goNext(ctx context.Context, roomID string, force bool
 	return true
 }
 
-func (uc *PlaybackUsecase) GoPrev(ctx context.Context, roomID string) bool {
+func (uc *PlaybackUsecase) GoPrev(ctx context.Context, roomID any) bool {
 	ps, _ := redisc.GetPlayback(ctx, uc.rdb, roomID)
 	if ps == nil {
 		return false
@@ -121,7 +121,7 @@ func (uc *PlaybackUsecase) GoPrev(ctx context.Context, roomID string) bool {
 	return true
 }
 
-func (uc *PlaybackUsecase) JumpTo(ctx context.Context, roomID string, index int) bool {
+func (uc *PlaybackUsecase) JumpTo(ctx context.Context, roomID any, index int) bool {
 	tracks, _ := redisc.GetQueue(ctx, uc.rdb, roomID)
 	if index < 0 || index >= len(tracks) {
 		return false
@@ -158,7 +158,7 @@ func (uc *PlaybackUsecase) JumpTo(ctx context.Context, roomID string, index int)
 //   - dislike auto-skip fires only when the voted track IS the current one:
 //     votes on queued tracks must never skip whatever is playing;
 //   - returns true if the vote triggered an auto-skip.
-func (uc *PlaybackUsecase) RegisterVote(ctx context.Context, roomID, userID, trackID string, vote int) bool {
+func (uc *PlaybackUsecase) RegisterVote(ctx context.Context, roomID any, userID, trackID string, vote int) bool {
 	if userID == "" || trackID == "" {
 		return false
 	}
@@ -196,7 +196,7 @@ func (uc *PlaybackUsecase) RegisterVote(ctx context.Context, roomID, userID, tra
 	return uc.ForceNext(ctx, roomID)
 }
 
-func (uc *PlaybackUsecase) SeekTo(ctx context.Context, roomID string, position float64) {
+func (uc *PlaybackUsecase) SeekTo(ctx context.Context, roomID any, position float64) {
 	if position < 0 {
 		position = 0
 	}

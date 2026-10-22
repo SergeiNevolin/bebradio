@@ -16,8 +16,8 @@ import (
 )
 
 var reactionEmojis = map[string]bool{
-	"❤️": true, "🔥": true, "😂": true, "👍": true,
-	"🎉": true, "😮": true, "🙌": true, "💃": true,
+	"вќ¤пёЏ": true, "рџ”Ґ": true, "рџ‚": true, "рџ‘Ќ": true,
+	"рџЋ‰": true, "рџ®": true, "рџ™Њ": true, "рџ’ѓ": true,
 }
 
 type Handler struct {
@@ -26,6 +26,7 @@ type Handler struct {
 	playback *usecase.PlaybackUsecase
 	chat     *usecase.ChatUsecase
 	radio    *usecase.RadioUsecase
+	stream   *usecase.StreamUsecase
 	media    *usecase.MediaUsecase
 	config   *config.Config
 	rdb      *redis.Client
@@ -42,13 +43,19 @@ func NewHandler(
 	config *config.Config,
 	rdb *redis.Client,
 	log *slog.Logger,
+	streams ...*usecase.StreamUsecase,
 ) *Handler {
+	var stream *usecase.StreamUsecase
+	if len(streams) > 0 {
+		stream = streams[0]
+	}
 	return &Handler{
 		manager:  manager,
 		room:     room,
 		playback: playback,
 		chat:     chat,
 		radio:    radio,
+		stream:   stream,
 		media:    media,
 		config:   config,
 		rdb:      rdb,
@@ -137,9 +144,6 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn, roomID, access, userID s
 		if h.radio.NeedsRefill(ctx, roomID, rm.AutoRadio) {
 			go h.backgroundRefill(ctx, rm, roomID)
 		}
-		if rm.IsStream && h.radio.NeedsMashupRefill(ctx, roomID, rm) {
-			go h.backgroundMashupRefill(ctx, rm, roomID)
-		}
 	}
 }
 
@@ -197,12 +201,6 @@ func (h *Handler) handleReaction(ctx context.Context, rm *entity.Room, conn *web
 }
 
 func (h *Handler) handleNext(ctx context.Context, rm *entity.Room, conn *websocket.Conn, roomID string) {
-	// Streams are admin-driven: listeners must not skip tracks manually.
-	// Auto-advance (client onEnded at track end + server tick) still works:
-	// the tick bypasses this gate.
-	if rm.IsStream && !h.room.IsController(rm, h.manager.GetUserID(roomID, conn)) {
-		return
-	}
 	changed := h.playback.GoNext(ctx, roomID)
 	if changed {
 		h.media.EnsureRoomMedia(ctx, roomID)
@@ -213,16 +211,10 @@ func (h *Handler) handleNext(ctx context.Context, rm *entity.Room, conn *websock
 }
 
 func (h *Handler) handlePrev(ctx context.Context, rm *entity.Room, conn *websocket.Conn, roomID string) {
-	if rm.IsStream && !h.room.IsController(rm, h.manager.GetUserID(roomID, conn)) {
-		return
-	}
 	h.playback.GoPrev(ctx, roomID)
 }
 
 func (h *Handler) handleJump(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
-	if rm.IsStream && !h.room.IsController(rm, h.manager.GetUserID(roomID, conn)) {
-		return
-	}
 	if index, ok := msg["index"].(float64); ok {
 		h.playback.JumpTo(ctx, roomID, int(index))
 	}
@@ -262,10 +254,6 @@ func (h *Handler) handleChat(ctx context.Context, rm *entity.Room, conn *websock
 }
 
 func (h *Handler) handleVote(ctx context.Context, rm *entity.Room, conn *websocket.Conn, msg map[string]any, roomID string) {
-	// Streams have no voting: listeners only listen.
-	if rm.IsStream {
-		return
-	}
 	userID := h.manager.GetUserID(roomID, conn)
 	trackID, _ := msg["track_id"].(string)
 	voteVal, _ := msg["vote"].(float64)
@@ -278,10 +266,6 @@ func (h *Handler) handleVote(ctx context.Context, rm *entity.Room, conn *websock
 }
 
 func (h *Handler) handleSkipVote(ctx context.Context, rm *entity.Room, conn *websocket.Conn, roomID string) {
-	// Streams have no voting: listeners only listen.
-	if rm.IsStream {
-		return
-	}
 	userID := h.manager.GetUserID(roomID, conn)
 	if userID == "" {
 		return
@@ -335,37 +319,128 @@ func (h *Handler) backgroundRefill(ctx context.Context, rm *entity.Room, roomID 
 	h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
 }
 
-func (h *Handler) backgroundMashupRefill(ctx context.Context, rm *entity.Room, roomID string) {
-	h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
-
-	picks, err := h.radio.RefillMashups(ctx, roomID, rm)
-	if err != nil {
-		h.log.Error("mashup refill failed", "room_id", roomID, "error", err)
+func (h *Handler) HandleStreamWebSocket(conn *websocket.Conn, streamID, userID string) {
+	if h.stream == nil {
+		h.sendError(conn, "Streams are unavailable")
+		conn.Close()
 		return
 	}
-	appended := 0
-	for _, t := range picks {
-		if ok, _ := redisc.AppendFreshTrack(ctx, h.rdb, roomID, t); ok {
-			appended++
-			if t.ID != "" {
-				redisc.AddRadioSeen(ctx, h.rdb, roomID, t.ID)
+	ctx := context.Background()
+	st, err := h.stream.GetOrLoadStream(ctx, streamID)
+	if err != nil {
+		h.sendError(conn, "Stream not found")
+		conn.Close()
+		return
+	}
+	ref := st.Ref()
+
+	h.manager.Connect(ref, conn)
+	if userID != "" {
+		h.manager.BindUser(ref, conn, userID)
+	}
+	h.manager.SendJSON(ref, conn, h.stream.BuildToDict(ctx, st))
+
+	defer func() {
+		h.manager.Disconnect(ref, conn)
+		redisc.RemovePresence(ctx, h.rdb, ref, conn.RemoteAddr().String())
+		h.manager.Broadcast(ref, h.stream.BuildToDict(ctx, st))
+	}()
+
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		var msg map[string]any
+		if err := json.Unmarshal(message, &msg); err != nil {
+			continue
+		}
+		action, _ := msg["action"].(string)
+		switch action {
+		case "hello":
+			h.handleSessionHello(ctx, ref, conn, msg)
+		case "reaction":
+			h.handleSessionReaction(ctx, ref, conn, msg)
+		case "next":
+			if h.stream.IsController(st, h.manager.GetUserID(ref, conn)) {
+				changed := h.playback.GoNext(ctx, ref)
+				if changed {
+					h.media.EnsureRoomMedia(ctx, ref)
+					if err := h.stream.SaveTracks(ctx, st); err != nil {
+						h.log.Error("save stream tracks after next failed", "stream_id", st.ID, "error", err)
+					}
+				}
 			}
+		case "prev":
+			if h.stream.IsController(st, h.manager.GetUserID(ref, conn)) {
+				h.playback.GoPrev(ctx, ref)
+			}
+		case "jump":
+			if h.stream.IsController(st, h.manager.GetUserID(ref, conn)) {
+				if index, ok := msg["index"].(float64); ok {
+					h.playback.JumpTo(ctx, ref, int(index))
+				}
+			}
+		case "seek":
+			if h.stream.IsController(st, h.manager.GetUserID(ref, conn)) {
+				if pos, ok := msg["position"].(float64); ok {
+					h.playback.SeekTo(ctx, ref, pos)
+				}
+			}
+		case "chat":
+			h.handleSessionChat(ctx, ref, conn, msg)
+		}
+		if action != "sync" {
+			h.manager.Broadcast(ref, h.stream.BuildToDict(ctx, st))
 		}
 	}
-	if appended > 0 {
-		ps, _ := redisc.GetPlayback(ctx, h.rdb, roomID)
-		if ps != nil && !ps.IsPlaying {
-			ps.IsPlaying = true
-			ps.Position = 0
-			ps.LastSyncAt = time.Now()
-			ps.CurrentStartedAt = time.Now()
-			redisc.SetPlayback(ctx, h.rdb, roomID, ps)
-		}
-		if err := h.room.SaveTracks(ctx, rm); err != nil {
-			h.log.Error("save tracks after mashup refill failed", "room_id", roomID, "error", err)
-		}
+}
+
+func (h *Handler) handleSessionHello(ctx context.Context, ref entity.SessionRef, conn *websocket.Conn, msg map[string]any) {
+	userID, _ := msg["user_id"].(string)
+	username, _ := msg["username"].(string)
+	if username == "" {
+		username = "Anonymous"
 	}
-	h.manager.Broadcast(roomID, redisc.BuildToDict(ctx, h.rdb, rm))
+	if len(username) > 30 {
+		username = username[:30]
+	}
+	id := resolvePresenceID(h.manager.GetUserID(ref, conn), userID, conn.RemoteAddr().String())
+	if h.manager.GetUserID(ref, conn) == "" {
+		h.manager.BindUser(ref, conn, id)
+	}
+	redisc.SetPresence(ctx, h.rdb, ref, conn.RemoteAddr().String(), &entity.PresenceInfo{ID: id, Name: username})
+}
+
+func (h *Handler) handleSessionReaction(ctx context.Context, ref entity.SessionRef, conn *websocket.Conn, msg map[string]any) {
+	emoji, _ := msg["emoji"].(string)
+	if !reactionEmojis[emoji] {
+		return
+	}
+	username := "Anonymous"
+	presence, _ := redisc.GetPresence(ctx, h.rdb, ref)
+	if info, ok := presence[conn.RemoteAddr().String()]; ok && info.Name != "" {
+		username = info.Name
+	}
+	h.manager.Broadcast(ref, map[string]any{
+		"type": "reaction", "id": id.NewHex(8), "emoji": emoji, "username": username,
+	})
+}
+
+func (h *Handler) handleSessionChat(ctx context.Context, ref entity.SessionRef, conn *websocket.Conn, msg map[string]any) {
+	text, _ := msg["text"].(string)
+	text = trimSpace(text)
+	if text == "" {
+		return
+	}
+	userID := h.manager.GetUserID(ref, conn)
+	username := "Anonymous"
+	presence, _ := redisc.GetPresence(ctx, h.rdb, ref)
+	if info, ok := presence[conn.RemoteAddr().String()]; ok && info.Name != "" {
+		username = info.Name
+	}
+	chatMsg := h.chat.SendMessage(ctx, ref, userID, username, text)
+	h.manager.Broadcast(ref, map[string]any{"type": "chat", "message": chatMsg.ToDict()})
 }
 
 func (h *Handler) sendError(conn *websocket.Conn, message string) {

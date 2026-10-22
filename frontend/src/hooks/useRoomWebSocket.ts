@@ -4,20 +4,24 @@ import { api } from '../lib/api'
 import { getRoomAccess, setRoomAccess, clearRoomAccess } from '../lib/roomAccess'
 import type { ChatMessage } from '../components/room/Chat'
 import type { FloatingReaction } from '../components/room/Reactions'
-import type { RoomState } from '../types'
+import type { RoomState, StreamState } from '../types'
 
 interface User {
   id: string
   username: string
 }
 
-export function useRoomWebSocket(
-  roomId: string | undefined,
+export type SessionKind = 'room' | 'stream'
+export type SessionState = RoomState | StreamState
+
+function useSessionWebSocket(
+  kind: SessionKind,
+  sessionId: string | undefined,
   user: User | null,
   token: string | null,
   navigate: NavigateFunction,
 ) {
-  const [room, setRoom] = useState<RoomState | null>(null)
+  const [room, setRoom] = useState<SessionState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [locked, setLocked] = useState(false)
@@ -39,16 +43,16 @@ export function useRoomWebSocket(
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const access = getRoomAccess(roomId!)
     const params = new URLSearchParams()
-    if (access) params.set('access', access)
+    if (kind === 'room') {
+      const access = getRoomAccess(sessionId!)
+      if (access) params.set('access', access)
+    }
     // Browsers can't set headers on WS upgrade: auth rides the query.
-    // Without it the server treats us as anonymous (no voting identity,
-    // no admin rights in streams).
     if (token) params.set('token', token)
     const query = params.toString() ? `?${params.toString()}` : ''
-    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}${query}`
-    const ws = new WebSocket(wsUrl)
+    const path = kind === 'stream' ? `/ws/streams/${sessionId}` : `/ws/rooms/${sessionId}`
+    const ws = new WebSocket(`${protocol}//${window.location.host}${path}${query}`)
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -63,11 +67,11 @@ export function useRoomWebSocket(
           ws.close()
           return
         }
-        if (data.type === 'room_deleted') {
+        if (data.type === 'room_deleted' || data.type === 'stream_deleted') {
           unmountedRef.current = true
           ws.close()
-          clearRoomAccess(roomId!)
-          navigate('/', { replace: true })
+          if (kind === 'room') clearRoomAccess(sessionId!)
+          navigate(kind === 'stream' ? '/streams' : '/', { replace: true })
           return
         }
         if (data.type === 'reaction') {
@@ -86,7 +90,7 @@ export function useRoomWebSocket(
         if (data.type === 'chat') {
           setChatMessages((prev) => [...prev.slice(-99), data.message])
         } else {
-          setRoom(data as RoomState)
+          setRoom(data as SessionState)
           if (data.messages) {
             setChatMessages(data.messages)
           }
@@ -102,30 +106,34 @@ export function useRoomWebSocket(
     ws.onerror = () => {
       ws.close()
     }
-  }, [roomId, navigate, identity, token])
+  }, [kind, sessionId, navigate, identity, token])
 
-  const fetchRoom = useCallback(async (): Promise<RoomState | null> => {
+  const fetchRoom = useCallback(async (): Promise<SessionState | null> => {
     try {
-      const data = await api.getRoom(roomId!) as unknown as RoomState
-      if (data.locked) {
-        setRoom(data as RoomState)
+      const data = (kind === 'stream'
+        ? await api.getStream(sessionId!)
+        : await api.getRoom(sessionId!)) as SessionState
+      if (kind === 'room' && (data as RoomState).locked) {
+        setRoom(data)
         setLocked(true)
         return null
       }
-      if (data.access) setRoomAccess(roomId!, data.access)
+      if (kind === 'room' && (data as RoomState).access) {
+        setRoomAccess(sessionId!, (data as RoomState).access!)
+      }
       setLocked(false)
       setRoom(data)
-      if (token) {
-        api.visitRoom(roomId!)
+      if (token && kind === 'room') {
+        api.visitRoom(sessionId!)
       }
       return data
     } catch {
-      setError('Room not found')
+      setError(kind === 'stream' ? 'Поток не найден' : 'Room not found')
       return null
     } finally {
       setLoading(false)
     }
-  }, [roomId, token])
+  }, [kind, sessionId, token])
 
   useEffect(() => {
     unmountedRef.current = false
@@ -140,7 +148,7 @@ export function useRoomWebSocket(
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
       wsRef.current?.close()
     }
-  }, [roomId, fetchRoom, connectWs])
+  }, [sessionId, fetchRoom, connectWs])
 
   const sendWs = useCallback((msg: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -149,8 +157,9 @@ export function useRoomWebSocket(
   }, [])
 
   useEffect(() => {
-    if (room?.current_track?.id !== prevTrackId.current) {
-      prevTrackId.current = room?.current_track?.id ?? null
+    const trackId = room?.current_track?.id ?? null
+    if (trackId !== prevTrackId.current) {
+      prevTrackId.current = trackId
       setUserVote(0)
     }
   }, [room?.current_track?.id])
@@ -212,4 +221,22 @@ export function useRoomWebSocket(
     handleSendChat,
     handlePlayback,
   }
+}
+
+export function useRoomWebSocket(
+  roomId: string | undefined,
+  user: User | null,
+  token: string | null,
+  navigate: NavigateFunction,
+) {
+  return useSessionWebSocket('room', roomId, user, token, navigate)
+}
+
+export function useStreamWebSocket(
+  streamId: string | undefined,
+  user: User | null,
+  token: string | null,
+  navigate: NavigateFunction,
+) {
+  return useSessionWebSocket('stream', streamId, user, token, navigate)
 }

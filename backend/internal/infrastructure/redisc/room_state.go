@@ -5,27 +5,72 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bebradio/backend-go/internal/domain/entity"
 	"github.com/redis/go-redis/v9"
 )
 
-// Redis key layout for room {id}:
+// Redis key layout for any session:
 //
-//	room:{id}:queue          LIST   — JSON-encoded Track objects in play order
-//	room:{id}:state          HASH   — current_index, is_playing, position,
-//	                                  last_sync_at, current_started_at,
-//	                                  last_advance_at, radio_seed_url,
-//	                                  radio_filling
-//	room:{id}:votes          HASH   — track_id → JSON VoteEntry
-//	room:{id}:skip_votes     SET    — user IDs who voted to skip
-//	room:{id}:messages       LIST   — JSON-encoded ChatMessage (capped at 100)
-//	room:{id}:presence       HASH   — conn_addr → JSON PresenceInfo
-//	room:{id}:radio_seen     SET    — media IDs already seeded
+//	session:{kind}:{id}:queue          LIST   JSON-encoded Tracks
+//	session:{kind}:{id}:state          HASH   playback fields
+//	session:{kind}:{id}:votes          HASH   room-only track votes
+//	session:{kind}:{id}:skip_votes     SET    room-only skip votes
+//	session:{kind}:{id}:messages       LIST   JSON-encoded ChatMessage
+//	session:{kind}:{id}:presence       HASH   conn_addr -> PresenceInfo
+//	session:{kind}:{id}:radio_seen     SET    media IDs already seeded
+//	session:{kind}:{id}:feature:mashup-radio HASH enabled + filter
+//
+// kind is "room" or "stream". String arguments are accepted for compatibility
+// and normalized to room sessions.
+
+func AsRef(v any) entity.SessionRef {
+	switch x := v.(type) {
+	case entity.SessionRef:
+		ref := x
+		if ref.Kind == "" {
+			ref.Kind = entity.SessionKindRoom
+		}
+		ref.ID = strings.ToUpper(ref.ID)
+		return ref
+	case *entity.SessionRef:
+		if x == nil {
+			return entity.SessionRef{}
+		}
+		return AsRef(*x)
+	case string:
+		return entity.NewRoomRef(x)
+	default:
+		return entity.SessionRef{}
+	}
+}
+
+func SessionKey(session any, suffix string) string {
+	ref := AsRef(session)
+	return "session:" + string(ref.Kind) + ":" + ref.ID + ":" + suffix
+}
 
 func RoomKey(id, suffix string) string {
-	return "room:" + id + ":" + suffix
+	return SessionKey(entity.NewRoomRef(id), suffix)
+}
+
+func StreamKey(id, suffix string) string {
+	return SessionKey(entity.NewStreamRef(id), suffix)
+}
+
+// SessionRefFromKey parses "session:{kind}:{id}:{suffix}".
+func SessionRefFromKey(key string) (entity.SessionRef, string, bool) {
+	parts := strings.SplitN(key, ":", 4)
+	if len(parts) != 4 || parts[0] != "session" {
+		return entity.SessionRef{}, "", false
+	}
+	kind := entity.SessionKind(parts[1])
+	if kind != entity.SessionKindRoom && kind != entity.SessionKindStream {
+		return entity.SessionRef{}, "", false
+	}
+	return entity.SessionRef{Kind: kind, ID: strings.ToUpper(parts[2])}, parts[3], true
 }
 
 // Playback hash field names, shared so writers and readers cannot drift.
@@ -34,7 +79,7 @@ const (
 	FieldRadioSeedURL = "radio_seed_url"
 )
 
-// ---------- Types ----------
+const FeatureMashupRadio = "feature:mashup-radio"
 
 type PlaybackState struct {
 	CurrentIndex     int
@@ -50,12 +95,9 @@ type PlaybackState struct {
 type VoteEntry struct {
 	LikedBy  []string `json:"liked_by,omitempty"`
 	Disliked []string `json:"disliked_by,omitempty"`
-	// Likes is a legacy unattributed counter from before per-user likes.
-	// Kept for reading old data; new votes go into LikedBy.
-	Likes int `json:"likes,omitempty"`
+	Likes    int      `json:"likes,omitempty"`
 }
 
-// LikeCount returns the total like count (legacy base + per-user likes).
 func (v *VoteEntry) LikeCount() int {
 	if v == nil {
 		return 0
@@ -63,7 +105,6 @@ func (v *VoteEntry) LikeCount() int {
 	return v.Likes + len(v.LikedBy)
 }
 
-// DislikeCount returns the total dislike count.
 func (v *VoteEntry) DislikeCount() int {
 	if v == nil {
 		return 0
@@ -71,8 +112,6 @@ func (v *VoteEntry) DislikeCount() int {
 	return len(v.Disliked)
 }
 
-// ApplyVote sets a user's vote with set semantics, idempotent per user:
-// 1 = like, -1 = dislike, anything else = retract previous vote.
 func (v *VoteEntry) ApplyVote(userID string, vote int) {
 	v.LikedBy = removeString(v.LikedBy, userID)
 	v.Disliked = removeString(v.Disliked, userID)
@@ -96,12 +135,12 @@ func removeString(slice []string, val string) []string {
 
 // ---------- Queue ----------
 
-func GetQueueLen(ctx context.Context, rdb *redis.Client, roomID string) (int64, error) {
-	return rdb.LLen(ctx, RoomKey(roomID, "queue")).Result()
+func GetQueueLen(ctx context.Context, rdb *redis.Client, session any) (int64, error) {
+	return rdb.LLen(ctx, SessionKey(session, "queue")).Result()
 }
 
-func GetQueue(ctx context.Context, rdb *redis.Client, roomID string) ([]*entity.Track, error) {
-	items, err := rdb.LRange(ctx, RoomKey(roomID, "queue"), 0, -1).Result()
+func GetQueue(ctx context.Context, rdb *redis.Client, session any) ([]*entity.Track, error) {
+	items, err := rdb.LRange(ctx, SessionKey(session, "queue"), 0, -1).Result()
 	if err != nil {
 		return nil, fmt.Errorf("lrange queue: %w", err)
 	}
@@ -116,9 +155,9 @@ func GetQueue(ctx context.Context, rdb *redis.Client, roomID string) ([]*entity.
 	return tracks, nil
 }
 
-func SetQueue(ctx context.Context, rdb *redis.Client, roomID string, tracks []*entity.Track) error {
+func SetQueue(ctx context.Context, rdb *redis.Client, session any, tracks []*entity.Track) error {
 	pipe := rdb.Pipeline()
-	key := RoomKey(roomID, "queue")
+	key := SessionKey(session, "queue")
 	pipe.Del(ctx, key)
 	if len(tracks) > 0 {
 		vals := make([]any, len(tracks))
@@ -132,25 +171,17 @@ func SetQueue(ctx context.Context, rdb *redis.Client, roomID string, tracks []*e
 	return err
 }
 
-func AppendTrack(ctx context.Context, rdb *redis.Client, roomID string, track *entity.Track) error {
+func AppendTrack(ctx context.Context, rdb *redis.Client, session any, track *entity.Track) error {
 	b, err := json.Marshal(track)
 	if err != nil {
 		return err
 	}
-	return rdb.RPush(ctx, RoomKey(roomID, "queue"), b).Err()
+	return rdb.RPush(ctx, SessionKey(session, "queue"), b).Err()
 }
 
-// AppendFreshTrack appends track unless it is already queued (same ID) or
-// radio-seen (same media). Successfully appended tracks are marked seen.
-// Returns true if appended.
-//
-// This closes the Refill-vs-skip race: Refill snapshots the queue and then
-// does slow network I/O, so a skip landing mid-flight must not be undone by
-// a stale append (the last-track-never-skips bug). The check-act window here
-// holds no I/O, only fast Redis ops.
-func AppendFreshTrack(ctx context.Context, rdb *redis.Client, roomID string, track *entity.Track) (bool, error) {
+func AppendFreshTrack(ctx context.Context, rdb *redis.Client, session any, track *entity.Track) (bool, error) {
 	if track.MediaID != "" {
-		seen, err := IsRadioSeen(ctx, rdb, roomID, track.MediaID)
+		seen, err := IsRadioSeen(ctx, rdb, session, track.MediaID)
 		if err != nil {
 			return false, err
 		}
@@ -158,7 +189,7 @@ func AppendFreshTrack(ctx context.Context, rdb *redis.Client, roomID string, tra
 			return false, nil
 		}
 	}
-	queue, err := GetQueue(ctx, rdb, roomID)
+	queue, err := GetQueue(ctx, rdb, session)
 	if err != nil {
 		return false, err
 	}
@@ -167,30 +198,27 @@ func AppendFreshTrack(ctx context.Context, rdb *redis.Client, roomID string, tra
 			return false, nil
 		}
 	}
-	if err := AppendTrack(ctx, rdb, roomID, track); err != nil {
+	if err := AppendTrack(ctx, rdb, session, track); err != nil {
 		return false, err
 	}
 	if track.MediaID != "" {
-		if err := AddRadioSeen(ctx, rdb, roomID, track.MediaID); err != nil {
+		if err := AddRadioSeen(ctx, rdb, session, track.MediaID); err != nil {
 			return false, err
 		}
 	}
 	return true, nil
 }
 
-// SetQueueAt replaces the track at index with an updated copy.
-// Callers must verify index+ID against a fresh read first: the queue may
-// have shifted (skip/remove) between their read and this write.
-func SetQueueAt(ctx context.Context, rdb *redis.Client, roomID string, index int, track *entity.Track) error {
+func SetQueueAt(ctx context.Context, rdb *redis.Client, session any, index int, track *entity.Track) error {
 	b, err := json.Marshal(track)
 	if err != nil {
 		return err
 	}
-	return rdb.LSet(ctx, RoomKey(roomID, "queue"), int64(index), b).Err()
+	return rdb.LSet(ctx, SessionKey(session, "queue"), int64(index), b).Err()
 }
 
-func RemoveAt(ctx context.Context, rdb *redis.Client, roomID string, index int) (int, error) {
-	key := RoomKey(roomID, "queue")
+func RemoveAt(ctx context.Context, rdb *redis.Client, session any, index int) (int, error) {
+	key := SessionKey(session, "queue")
 	length, err := rdb.LLen(ctx, key).Result()
 	if err != nil {
 		return 0, err
@@ -198,7 +226,6 @@ func RemoveAt(ctx context.Context, rdb *redis.Client, roomID string, index int) 
 	if index < 0 || int64(index) >= length {
 		return int(length), nil
 	}
-	// Use LSET+LREM: set to a sentinel, then remove it.
 	sentinel := fmt.Sprintf("__del__%d__%d", time.Now().UnixNano(), index)
 	if err := rdb.LSet(ctx, key, int64(index), sentinel).Err(); err != nil {
 		return 0, err
@@ -212,8 +239,8 @@ func RemoveAt(ctx context.Context, rdb *redis.Client, roomID string, index int) 
 
 // ---------- Playback state ----------
 
-func GetPlayback(ctx context.Context, rdb *redis.Client, roomID string) (*PlaybackState, error) {
-	vals, err := rdb.HGetAll(ctx, RoomKey(roomID, "state")).Result()
+func GetPlayback(ctx context.Context, rdb *redis.Client, session any) (*PlaybackState, error) {
+	vals, err := rdb.HGetAll(ctx, SessionKey(session, "state")).Result()
 	if err != nil {
 		return nil, fmt.Errorf("hgetall state: %w", err)
 	}
@@ -248,7 +275,7 @@ func GetPlayback(ctx context.Context, rdb *redis.Client, roomID string) (*Playba
 	return ps, nil
 }
 
-func SetPlayback(ctx context.Context, rdb *redis.Client, roomID string, ps *PlaybackState) error {
+func SetPlayback(ctx context.Context, rdb *redis.Client, session any, ps *PlaybackState) error {
 	vals := map[string]any{
 		"current_index":      strconv.Itoa(ps.CurrentIndex),
 		"is_playing":         boolToInt(ps.IsPlaying),
@@ -259,17 +286,17 @@ func SetPlayback(ctx context.Context, rdb *redis.Client, roomID string, ps *Play
 		"radio_seed_url":     ps.RadioSeedURL,
 		"radio_filling":      boolToInt(ps.RadioFilling),
 	}
-	return rdb.HSet(ctx, RoomKey(roomID, "state"), vals).Err()
+	return rdb.HSet(ctx, SessionKey(session, "state"), vals).Err()
 }
 
-func SetPlaybackField(ctx context.Context, rdb *redis.Client, roomID, field, value string) error {
-	return rdb.HSet(ctx, RoomKey(roomID, "state"), field, value).Err()
+func SetPlaybackField(ctx context.Context, rdb *redis.Client, session any, field, value string) error {
+	return rdb.HSet(ctx, SessionKey(session, "state"), field, value).Err()
 }
 
-// ---------- Votes ----------
+// ---------- Votes (rooms only) ----------
 
-func GetVotes(ctx context.Context, rdb *redis.Client, roomID string) (map[string]*VoteEntry, error) {
-	vals, err := rdb.HGetAll(ctx, RoomKey(roomID, "votes")).Result()
+func GetVotes(ctx context.Context, rdb *redis.Client, session any) (map[string]*VoteEntry, error) {
+	vals, err := rdb.HGetAll(ctx, SessionKey(session, "votes")).Result()
 	if err != nil {
 		return nil, fmt.Errorf("hgetall votes: %w", err)
 	}
@@ -284,52 +311,48 @@ func GetVotes(ctx context.Context, rdb *redis.Client, roomID string) (map[string
 	return result, nil
 }
 
-func SetVote(ctx context.Context, rdb *redis.Client, roomID, trackID string, entry *VoteEntry) error {
+func SetVote(ctx context.Context, rdb *redis.Client, session any, trackID string, entry *VoteEntry) error {
 	b, err := json.Marshal(entry)
 	if err != nil {
 		return err
 	}
-	return rdb.HSet(ctx, RoomKey(roomID, "votes"), trackID, b).Err()
+	return rdb.HSet(ctx, SessionKey(session, "votes"), trackID, b).Err()
 }
 
-// DelVote removes the vote entry for a track that left the queue,
-// so a re-added track with the same ID starts with a clean slate.
-func DelVote(ctx context.Context, rdb *redis.Client, roomID, trackID string) error {
-	return rdb.HDel(ctx, RoomKey(roomID, "votes"), trackID).Err()
+func DelVote(ctx context.Context, rdb *redis.Client, session any, trackID string) error {
+	return rdb.HDel(ctx, SessionKey(session, "votes"), trackID).Err()
 }
 
-// ---------- Skip votes ----------
+// ---------- Skip votes (rooms only) ----------
 
-// ToggleSkipVote toggles a user's skip vote. Returns the new count.
-func ToggleSkipVote(ctx context.Context, rdb *redis.Client, roomID, userID string) (int64, error) {
-	key := RoomKey(roomID, "skip_votes")
+func ToggleSkipVote(ctx context.Context, rdb *redis.Client, session any, userID string) (int64, error) {
+	key := SessionKey(session, "skip_votes")
 	added, err := rdb.SAdd(ctx, key, userID).Result()
 	if err != nil {
 		return 0, err
 	}
 	if added == 0 {
-		// Member existed → remove it (toggle off).
 		rdb.SRem(ctx, key, userID)
 	}
 	return rdb.SCard(ctx, key).Result()
 }
 
-func ResetSkipVotes(ctx context.Context, rdb *redis.Client, roomID string) error {
-	return rdb.Del(ctx, RoomKey(roomID, "skip_votes")).Err()
+func ResetSkipVotes(ctx context.Context, rdb *redis.Client, session any) error {
+	return rdb.Del(ctx, SessionKey(session, "skip_votes")).Err()
 }
 
-func GetSkipVoteCount(ctx context.Context, rdb *redis.Client, roomID string) (int64, error) {
-	return rdb.SCard(ctx, RoomKey(roomID, "skip_votes")).Result()
+func GetSkipVoteCount(ctx context.Context, rdb *redis.Client, session any) (int64, error) {
+	return rdb.SCard(ctx, SessionKey(session, "skip_votes")).Result()
 }
 
 // ---------- Messages ----------
 
-func AppendMessage(ctx context.Context, rdb *redis.Client, roomID string, msg *entity.ChatMessage) error {
+func AppendMessage(ctx context.Context, rdb *redis.Client, session any, msg *entity.ChatMessage) error {
 	b, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	key := RoomKey(roomID, "messages")
+	key := SessionKey(session, "messages")
 	if err := rdb.RPush(ctx, key, b).Err(); err != nil {
 		return err
 	}
@@ -337,8 +360,8 @@ func AppendMessage(ctx context.Context, rdb *redis.Client, roomID string, msg *e
 	return nil
 }
 
-func GetMessages(ctx context.Context, rdb *redis.Client, roomID string) ([]*entity.ChatMessage, error) {
-	items, err := rdb.LRange(ctx, RoomKey(roomID, "messages"), 0, -1).Result()
+func GetMessages(ctx context.Context, rdb *redis.Client, session any) ([]*entity.ChatMessage, error) {
+	items, err := rdb.LRange(ctx, SessionKey(session, "messages"), 0, -1).Result()
 	if err != nil {
 		return nil, fmt.Errorf("lrange messages: %w", err)
 	}
@@ -355,20 +378,20 @@ func GetMessages(ctx context.Context, rdb *redis.Client, roomID string) ([]*enti
 
 // ---------- Presence ----------
 
-func SetPresence(ctx context.Context, rdb *redis.Client, roomID, connAddr string, info *entity.PresenceInfo) error {
+func SetPresence(ctx context.Context, rdb *redis.Client, session any, connAddr string, info *entity.PresenceInfo) error {
 	b, err := json.Marshal(info)
 	if err != nil {
 		return err
 	}
-	return rdb.HSet(ctx, RoomKey(roomID, "presence"), connAddr, b).Err()
+	return rdb.HSet(ctx, SessionKey(session, "presence"), connAddr, b).Err()
 }
 
-func RemovePresence(ctx context.Context, rdb *redis.Client, roomID, connAddr string) error {
-	return rdb.HDel(ctx, RoomKey(roomID, "presence"), connAddr).Err()
+func RemovePresence(ctx context.Context, rdb *redis.Client, session any, connAddr string) error {
+	return rdb.HDel(ctx, SessionKey(session, "presence"), connAddr).Err()
 }
 
-func GetPresence(ctx context.Context, rdb *redis.Client, roomID string) (map[string]*entity.PresenceInfo, error) {
-	vals, err := rdb.HGetAll(ctx, RoomKey(roomID, "presence")).Result()
+func GetPresence(ctx context.Context, rdb *redis.Client, session any) (map[string]*entity.PresenceInfo, error) {
+	vals, err := rdb.HGetAll(ctx, SessionKey(session, "presence")).Result()
 	if err != nil {
 		return nil, fmt.Errorf("hgetall presence: %w", err)
 	}
@@ -383,23 +406,22 @@ func GetPresence(ctx context.Context, rdb *redis.Client, roomID string) (map[str
 	return result, nil
 }
 
-func GetPresenceCount(ctx context.Context, rdb *redis.Client, roomID string) (int64, error) {
-	return rdb.HLen(ctx, RoomKey(roomID, "presence")).Result()
+func GetPresenceCount(ctx context.Context, rdb *redis.Client, session any) (int64, error) {
+	return rdb.HLen(ctx, SessionKey(session, "presence")).Result()
 }
 
 // ---------- Radio seen ----------
 
-func AddRadioSeen(ctx context.Context, rdb *redis.Client, roomID, mediaID string) error {
-	return rdb.SAdd(ctx, RoomKey(roomID, "radio_seen"), mediaID).Err()
+func AddRadioSeen(ctx context.Context, rdb *redis.Client, session any, mediaID string) error {
+	return rdb.SAdd(ctx, SessionKey(session, "radio_seen"), mediaID).Err()
 }
 
-func IsRadioSeen(ctx context.Context, rdb *redis.Client, roomID, mediaID string) (bool, error) {
-	return rdb.SIsMember(ctx, RoomKey(roomID, "radio_seen"), mediaID).Result()
+func IsRadioSeen(ctx context.Context, rdb *redis.Client, session any, mediaID string) (bool, error) {
+	return rdb.SIsMember(ctx, SessionKey(session, "radio_seen"), mediaID).Result()
 }
 
-// GetRadioSeen returns all media IDs the radio must not recommend again.
-func GetRadioSeen(ctx context.Context, rdb *redis.Client, roomID string) (map[string]bool, error) {
-	members, err := rdb.SMembers(ctx, RoomKey(roomID, "radio_seen")).Result()
+func GetRadioSeen(ctx context.Context, rdb *redis.Client, session any) (map[string]bool, error) {
+	members, err := rdb.SMembers(ctx, SessionKey(session, "radio_seen")).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -410,18 +432,12 @@ func GetRadioSeen(ctx context.Context, rdb *redis.Client, roomID string) (map[st
 	return seen, nil
 }
 
-// ResetRadioSeen drops the whole seen set, starting a new rotation. Called
-// when the 24/7 stream has played everything matching its filter: without a
-// reset the set would grow unbounded for as long as the stream runs.
-func ResetRadioSeen(ctx context.Context, rdb *redis.Client, roomID string) error {
-	return rdb.Del(ctx, RoomKey(roomID, "radio_seen")).Err()
+func ResetRadioSeen(ctx context.Context, rdb *redis.Client, session any) error {
+	return rdb.Del(ctx, SessionKey(session, "radio_seen")).Err()
 }
 
-// ---------- Idle tracking (dead-room reaper) ----------
+// ---------- Idle tracking (rooms only) ----------
 
-// The tick marks rooms that look abandoned (no listeners, empty queue,
-// paused) with the time they were first observed idle. A room carrying a
-// marker older than the TTL is evicted. Any sign of life deletes the marker.
 func GetIdleSince(ctx context.Context, rdb *redis.Client, roomID string) (time.Time, bool) {
 	v, err := rdb.Get(ctx, RoomKey(roomID, "idle_since")).Result()
 	if err != nil {
@@ -442,79 +458,143 @@ func ClearIdleSince(ctx context.Context, rdb *redis.Client, roomID string) error
 	return rdb.Del(ctx, RoomKey(roomID, "idle_since")).Err()
 }
 
-// ---------- Stream filter (24/7 mashup stream) ----------
+// ---------- Mashup Radio feature ----------
 
-// StreamFilter narrows which library mashups the 24/7 stream refills from.
-// Empty = whole base. Stored as a Redis hash room:{id}:stream_filter so the
-// autoadvance worker sees it without touching Postgres.
-type StreamFilter struct {
-	Query  string `json:"q"`
-	Title  string `json:"title"`
-	Artist string `json:"artist"`
-	Owner  string `json:"owner"`
-}
+// StreamFilter is kept as an alias so existing callers can keep using the
+// Redis package while filter semantics live in the domain.
+type StreamFilter = entity.StreamFilter
 
-func (f StreamFilter) Empty() bool {
-	return f.Query == "" && f.Title == "" && f.Artist == "" && f.Owner == ""
-}
-
-func GetStreamFilter(ctx context.Context, rdb *redis.Client, roomID string) (*StreamFilter, error) {
-	vals, err := rdb.HGetAll(ctx, RoomKey(roomID, "stream_filter")).Result()
+func GetMashupRadioFeature(ctx context.Context, rdb *redis.Client, session any) (entity.MashupRadioFeature, error) {
+	vals, err := rdb.HGetAll(ctx, SessionKey(session, FeatureMashupRadio)).Result()
 	if err != nil {
-		return nil, err
+		return entity.MashupRadioFeature{}, err
 	}
 	if len(vals) == 0 {
-		return &StreamFilter{}, nil
+		return entity.MashupRadioFeature{}, nil
 	}
-	return &StreamFilter{
-		Query:  vals["q"],
-		Title:  vals["title"],
-		Artist: vals["artist"],
-		Owner:  vals["owner"],
+	return entity.MashupRadioFeature{
+		Enabled: vals["enabled"] == "1",
+		Filter: entity.StreamFilter{
+			Query:  vals["q"],
+			Title:  vals["title"],
+			Artist: vals["artist"],
+			Owner:  vals["owner"],
+		},
 	}, nil
 }
 
-func SetStreamFilter(ctx context.Context, rdb *redis.Client, roomID string, f *StreamFilter) error {
-	if f == nil || f.Empty() {
-		return rdb.Del(ctx, RoomKey(roomID, "stream_filter")).Err()
-	}
-	return rdb.HSet(ctx, RoomKey(roomID, "stream_filter"), map[string]any{
-		"q":      f.Query,
-		"title":  f.Title,
-		"artist": f.Artist,
-		"owner":  f.Owner,
+func SetMashupRadioFeature(ctx context.Context, rdb *redis.Client, session any, feature entity.MashupRadioFeature) error {
+	return rdb.HSet(ctx, SessionKey(session, FeatureMashupRadio), map[string]any{
+		"enabled": boolToInt(feature.Enabled),
+		"q":       feature.Filter.Query,
+		"title":   feature.Filter.Title,
+		"artist":  feature.Filter.Artist,
+		"owner":   feature.Filter.Owner,
 	}).Err()
+}
+
+func GetStreamFilter(ctx context.Context, rdb *redis.Client, session any) (*entity.StreamFilter, error) {
+	feature, err := GetMashupRadioFeature(ctx, rdb, session)
+	if err != nil {
+		return nil, err
+	}
+	return &feature.Filter, nil
+}
+
+func SetStreamFilter(ctx context.Context, rdb *redis.Client, session any, f *entity.StreamFilter) error {
+	feature, err := GetMashupRadioFeature(ctx, rdb, session)
+	if err != nil {
+		return err
+	}
+	if f != nil {
+		feature.Filter = *f
+	}
+	return SetMashupRadioFeature(ctx, rdb, session, feature)
 }
 
 // ---------- Cleanup ----------
 
-func DeleteRoom(ctx context.Context, rdb *redis.Client, roomID string) error {
-	iter := rdb.Scan(ctx, 0, RoomKey(roomID, "*"), 100).Iterator()
+func DeleteSession(ctx context.Context, rdb *redis.Client, session any) error {
+	iter := rdb.Scan(ctx, 0, SessionKey(session, "*"), 100).Iterator()
 	for iter.Next(ctx) {
 		rdb.Del(ctx, iter.Val())
 	}
 	return iter.Err()
 }
 
+func DeleteRoom(ctx context.Context, rdb *redis.Client, roomID string) error {
+	return DeleteSession(ctx, rdb, entity.NewRoomRef(roomID))
+}
+
+func DeleteStream(ctx context.Context, rdb *redis.Client, streamID string) error {
+	return DeleteSession(ctx, rdb, entity.NewStreamRef(streamID))
+}
+
 // ---------- High-level helpers ----------
 
-// BuildToDict assembles the full room state dict from Redis for broadcasting.
 func BuildToDict(ctx context.Context, rdb *redis.Client, rm *entity.Room) map[string]any {
-	tracks, _ := GetQueue(ctx, rdb, rm.ID)
-	ps, _ := GetPlayback(ctx, rdb, rm.ID)
-	votes, _ := GetVotes(ctx, rdb, rm.ID)
-	presence, _ := GetPresence(ctx, rdb, rm.ID)
-	messages, _ := GetMessages(ctx, rdb, rm.ID)
+	ref := rm.Ref()
+	tracks, _ := GetQueue(ctx, rdb, ref)
+	ps, _ := GetPlayback(ctx, rdb, ref)
+	votes, _ := GetVotes(ctx, rdb, ref)
+	result := buildBaseDict(ctx, rdb, ref, rm.Name, rm.OwnerID, tracks, ps)
+	if votes == nil {
+		votes = make(map[string]*VoteEntry)
+	}
+	voteTotals := make(map[string][2]int)
+	for trackID, v := range votes {
+		voteTotals[trackID] = [2]int{v.LikeCount(), v.DislikeCount()}
+	}
+	queue := result["queue"].([]map[string]any)
+	for _, item := range queue {
+		tv := voteTotals[item["id"].(string)]
+		item["likes"] = tv[0]
+		item["dislikes"] = tv[1]
+	}
+	var trackVotes [2]int
+	if ps != nil && ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
+		trackVotes = voteTotals[tracks[ps.CurrentIndex].ID]
+	}
+	if current, ok := result["current_track"].(map[string]any); ok {
+		current["likes"] = trackVotes[0]
+		current["dislikes"] = trackVotes[1]
+	}
+	skipVoters, _ := rdb.SMembers(ctx, SessionKey(ref, "skip_votes")).Result()
+	result["allow_anonymous_add"] = rm.AllowAnonymousAdd
+	result["is_private"] = rm.IsPrivate
+	result["auto_radio"] = rm.AutoRadio
+	result["has_password"] = rm.PasswordHash != nil
+	result["track_votes"] = map[string]int{"likes": trackVotes[0], "dislikes": trackVotes[1]}
+	result["skip_voters"] = skipVoters
+	return result
+}
 
+func BuildStreamToDict(ctx context.Context, rdb *redis.Client, st *entity.Stream) map[string]any {
+	ref := st.Ref()
+	tracks, _ := GetQueue(ctx, rdb, ref)
+	ps, _ := GetPlayback(ctx, rdb, ref)
+	result := buildBaseDict(ctx, rdb, ref, st.Name, st.OwnerID, tracks, ps)
+	result["allow_anonymous_add"] = false
+	result["is_private"] = false
+	result["auto_radio"] = false
+	result["has_password"] = false
+	result["track_votes"] = map[string]int{"likes": 0, "dislikes": 0}
+	result["skip_voters"] = []string{}
+	result["features"] = st.Features
+	result["mashup_radio"] = st.Features.MashupRadio.Enabled
+	result["stream_filter"] = st.Features.MashupRadio.Filter
+	return result
+}
+
+func buildBaseDict(ctx context.Context, rdb *redis.Client, ref entity.SessionRef, name, ownerID string, tracks []*entity.Track, ps *PlaybackState) map[string]any {
 	if ps == nil {
 		ps = &PlaybackState{}
 	}
 	if tracks == nil {
 		tracks = []*entity.Track{}
 	}
-	if votes == nil {
-		votes = make(map[string]*VoteEntry)
-	}
+	presence, _ := GetPresence(ctx, rdb, ref)
+	messages, _ := GetMessages(ctx, rdb, ref)
 	if presence == nil {
 		presence = make(map[string]*entity.PresenceInfo)
 	}
@@ -522,32 +602,18 @@ func BuildToDict(ctx context.Context, rdb *redis.Client, rm *entity.Room) map[st
 		messages = []*entity.ChatMessage{}
 	}
 
-	voteTotals := make(map[string][2]int)
-	for trackID, v := range votes {
-		voteTotals[trackID] = [2]int{v.LikeCount(), v.DislikeCount()}
-	}
-
-	var trackVotes [2]int
-	if ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
-		trackVotes = voteTotals[tracks[ps.CurrentIndex].ID]
-	}
-
-	queueWithVotes := make([]map[string]any, 0, len(tracks))
-	for _, t := range tracks {
-		entry := t.ToDict()
-		tv := voteTotals[t.ID]
-		entry["likes"] = tv[0]
-		entry["dislikes"] = tv[1]
-		queueWithVotes = append(queueWithVotes, entry)
-	}
-
 	seen := make(map[string]string)
 	for _, info := range presence {
 		seen[info.ID] = info.Name
 	}
 	listeners := make([]map[string]any, 0, len(seen))
-	for uid, name := range seen {
-		listeners = append(listeners, map[string]any{"id": uid, "name": name})
+	for uid, n := range seen {
+		listeners = append(listeners, map[string]any{"id": uid, "name": n})
+	}
+
+	queue := make([]map[string]any, 0, len(tracks))
+	for _, t := range tracks {
+		queue = append(queue, t.ToDict())
 	}
 
 	position := ps.Position
@@ -555,65 +621,40 @@ func BuildToDict(ctx context.Context, rdb *redis.Client, rm *entity.Room) map[st
 		position += time.Since(ps.LastSyncAt).Seconds()
 	}
 
-	var currentTrackDict map[string]any
-	if ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
-		currentTrackDict = tracks[ps.CurrentIndex].ToDict()
-		cv := voteTotals[tracks[ps.CurrentIndex].ID]
-		currentTrackDict["likes"] = cv[0]
-		currentTrackDict["dislikes"] = cv[1]
-	}
-
-	msgs := messages
-	if len(msgs) > entity.MaxChatMessages {
-		msgs = msgs[len(msgs)-entity.MaxChatMessages:]
-	}
-	msgDicts := make([]map[string]any, 0, len(msgs))
-	for _, m := range msgs {
-		msgDicts = append(msgDicts, m.ToDict())
-	}
-
-	skipVoters, _ := rdb.SMembers(ctx, RoomKey(rm.ID, "skip_votes")).Result()
-	sf, _ := GetStreamFilter(ctx, rdb, rm.ID)
-
 	result := map[string]any{
-		"id":                  rm.ID,
-		"name":                rm.Name,
-		"owner_id":            rm.OwnerID,
-		"queue":               queueWithVotes,
-		"current_index":       ps.CurrentIndex,
-		"is_playing":          ps.IsPlaying,
-		"position":            position,
-		"user_count":          len(listeners),
-		"listeners":           listeners,
-		"allow_anonymous_add": rm.AllowAnonymousAdd,
-		"is_private":          rm.IsPrivate,
-		"auto_radio":          rm.AutoRadio,
-		"is_stream":           rm.IsStream,
-		"mashup_radio":        rm.MashupRadio,
-		"radio_searching":     ps.RadioFilling,
-		"has_password":        rm.PasswordHash != nil,
-		"track_votes":         map[string]int{"likes": trackVotes[0], "dislikes": trackVotes[1]},
-		"skip_voters":         skipVoters,
-		"messages":            msgDicts,
-		"stream_filter": map[string]any{
-			"q":      sf.Query,
-			"title":  sf.Title,
-			"artist": sf.Artist,
-			"owner":  sf.Owner,
-		},
+		"kind":            ref.Kind,
+		"id":              ref.ID,
+		"name":            name,
+		"owner_id":        ownerID,
+		"queue":           queue,
+		"current_index":   ps.CurrentIndex,
+		"is_playing":      ps.IsPlaying,
+		"position":        position,
+		"user_count":      len(listeners),
+		"listeners":       listeners,
+		"radio_searching": ps.RadioFilling,
+		"messages":        messageDicts(messages),
 	}
-
-	if currentTrackDict != nil {
-		result["current_track"] = currentTrackDict
+	if ps.CurrentIndex >= 0 && ps.CurrentIndex < len(tracks) {
+		result["current_track"] = tracks[ps.CurrentIndex].ToDict()
 	}
-
 	return result
 }
 
-// CurrentTrack loads the current track from Redis.
-func CurrentTrack(ctx context.Context, rdb *redis.Client, roomID string) *entity.Track {
-	tracks, _ := GetQueue(ctx, rdb, roomID)
-	ps, _ := GetPlayback(ctx, rdb, roomID)
+func messageDicts(messages []*entity.ChatMessage) []map[string]any {
+	if len(messages) > entity.MaxChatMessages {
+		messages = messages[len(messages)-entity.MaxChatMessages:]
+	}
+	out := make([]map[string]any, 0, len(messages))
+	for _, m := range messages {
+		out = append(out, m.ToDict())
+	}
+	return out
+}
+
+func CurrentTrack(ctx context.Context, rdb *redis.Client, session any) *entity.Track {
+	tracks, _ := GetQueue(ctx, rdb, session)
+	ps, _ := GetPlayback(ctx, rdb, session)
 	if ps == nil || len(tracks) == 0 {
 		return nil
 	}
@@ -624,29 +665,24 @@ func CurrentTrack(ctx context.Context, rdb *redis.Client, roomID string) *entity
 	return tracks[idx]
 }
 
-// GetCurrentPosition returns the wall-clock playback position.
-func GetCurrentPosition(ctx context.Context, rdb *redis.Client, roomID string) float64 {
-	ps, _ := GetPlayback(ctx, rdb, roomID)
+func GetCurrentPosition(ctx context.Context, rdb *redis.Client, session any) float64 {
+	ps, _ := GetPlayback(ctx, rdb, session)
 	if ps == nil {
 		return 0
 	}
 	if ps.IsPlaying {
-		elapsed := time.Since(ps.LastSyncAt).Seconds()
-		return ps.Position + elapsed
+		return ps.Position + time.Since(ps.LastSyncAt).Seconds()
 	}
 	return ps.Position
 }
 
-// GetTrackVotes returns likes/dislikes for a track from Redis.
-func GetTrackVotes(ctx context.Context, rdb *redis.Client, roomID, trackID string) (likes, dislikes int) {
-	votes, _ := GetVotes(ctx, rdb, roomID)
+func GetTrackVotes(ctx context.Context, rdb *redis.Client, session any, trackID string) (likes, dislikes int) {
+	votes, _ := GetVotes(ctx, rdb, session)
 	if v, ok := votes[trackID]; ok {
 		return v.LikeCount(), v.DislikeCount()
 	}
 	return 0, 0
 }
-
-// ---------- Helpers ----------
 
 func boolToInt(b bool) string {
 	if b {

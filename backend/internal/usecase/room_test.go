@@ -36,7 +36,7 @@ func TestCreateRoom(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, access, err := uc.CreateRoom(ctx, "Test Room", "owner1", "", false)
+	rm, access, err := uc.CreateRoom(ctx, "Test Room", "owner1", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestCreateRoomWithPassword(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, err := uc.CreateRoom(ctx, "Private Room", "owner1", "secret123", false)
+	rm, _, err := uc.CreateRoom(ctx, "Private Room", "owner1", "secret123")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestGetOrLoadRoom(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom(ctx, "Test Room", "owner1", "", false)
+	rm, _, _ := uc.CreateRoom(ctx, "Test Room", "owner1", "")
 
 	found, err := uc.GetOrLoadRoom(ctx, rm.ID)
 	if err != nil {
@@ -301,7 +301,7 @@ func TestUpdateRoomSettings(t *testing.T) {
 
 	f := false
 	tr := true
-	if err := uc.UpdateRoomSettings(ctx, rm, &tr, &f, nil, nil, nil); err != nil {
+	if err := uc.UpdateRoomSettings(ctx, rm, &tr, &f, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -310,31 +310,6 @@ func TestUpdateRoomSettings(t *testing.T) {
 	}
 	if rm.IsPrivate {
 		t.Error("expected IsPrivate false")
-	}
-}
-
-func TestUpdateRoomSettingsMashupRadio(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	ctx := context.Background()
-
-	roomRepo := repository.NewMockRoomRepo()
-	userRepo := repository.NewMockUserRepo()
-	mediaClient := repository.NewMockMediaClient()
-	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
-
-	rm := entity.NewRoom("X", "R", "O")
-	if rm.MashupRadio {
-		t.Fatal("expected MashupRadio default false for plain rooms")
-	}
-
-	off := false
-	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, &off, nil); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if rm.MashupRadio {
-		t.Error("expected MashupRadio false after update")
 	}
 }
 
@@ -352,7 +327,7 @@ func TestUpdateRoomSettingsSetPassword(t *testing.T) {
 	rm := entity.NewRoom("X", "R", "O")
 
 	pw := "newpassword"
-	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, nil, &pw); err != nil {
+	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, &pw); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -377,7 +352,7 @@ func TestUpdateRoomSettingsRemovePassword(t *testing.T) {
 	rm.PasswordHash = &hash
 
 	pw := ""
-	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, nil, &pw); err != nil {
+	if err := uc.UpdateRoomSettings(ctx, rm, nil, nil, nil, &pw); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -397,7 +372,7 @@ func TestDeleteRoom(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom(ctx, "To Delete", "owner1", "", false)
+	rm, _, _ := uc.CreateRoom(ctx, "To Delete", "owner1", "")
 
 	err := uc.DeleteRoom(ctx, rm)
 	if err != nil {
@@ -421,7 +396,7 @@ func TestListPublicRooms(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	uc.CreateRoom(ctx, "Public Room", "owner1", "", false)
+	uc.CreateRoom(ctx, "Public Room", "owner1", "")
 
 	rooms, err := uc.ListPublicRooms(ctx, 50, 0)
 	if err != nil {
@@ -443,10 +418,10 @@ func TestListPublicRoomsExposesAutoRadio(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom(ctx, "Station", "owner1", "", false)
+	rm, _, _ := uc.CreateRoom(ctx, "Station", "owner1", "")
 	rm.AutoRadio = true
 	roomRepo.Save(rm)
-	uc.CreateRoom(ctx, "Plain", "owner1", "", false)
+	uc.CreateRoom(ctx, "Plain", "owner1", "")
 
 	rooms, err := uc.ListPublicRooms(ctx, 50, 0)
 	if err != nil {
@@ -479,7 +454,7 @@ func TestListPublicRoomsExcludesPrivate(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom(ctx, "Private Room", "owner1", "", false)
+	rm, _, _ := uc.CreateRoom(ctx, "Private Room", "owner1", "")
 	rm.IsPrivate = true
 	roomRepo.Save(rm)
 
@@ -500,11 +475,11 @@ func TestListPublicRoomsLimitOffsetAndCounts(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	busy, _, _ := uc.CreateRoom(ctx, "Busy", "owner1", "", false)
-	quiet, _, _ := uc.CreateRoom(ctx, "Quiet", "owner1", "", false)
-	_, _, _ = uc.CreateRoom(ctx, "Locked", "owner1", "secret", false)
+	busy, _, _ := uc.CreateRoom(ctx, "Busy", "owner1", "")
+	quiet, _, _ := uc.CreateRoom(ctx, "Quiet", "owner1", "")
+	_, _, _ = uc.CreateRoom(ctx, "Locked", "owner1", "secret")
 
-	// Онлайн/очередь/игра одним пайплайном, а не поштучно.
+	// РћРЅР»Р°Р№РЅ/РѕС‡РµСЂРµРґСЊ/РёРіСЂР° РѕРґРЅРёРј РїР°Р№РїР»Р°Р№РЅРѕРј, Р° РЅРµ РїРѕС€С‚СѓС‡РЅРѕ.
 	rdb.HSet(ctx, redisc.RoomKey(busy.ID, "presence"), "c1", "{}", "c2", "{}")
 	rdb.RPush(ctx, redisc.RoomKey(busy.ID, "queue"), "{}", "{}")
 	rdb.HSet(ctx, redisc.RoomKey(busy.ID, "state"), "is_playing", "1")
@@ -517,7 +492,7 @@ func TestListPublicRoomsLimitOffsetAndCounts(t *testing.T) {
 	if len(rooms) != 2 {
 		t.Fatalf("expected 2 rooms on first chunk, got %d", len(rooms))
 	}
-	// Сортировка по онлайну: Busy (2) первая.
+	// РЎРѕСЂС‚РёСЂРѕРІРєР° РїРѕ РѕРЅР»Р°Р№РЅСѓ: Busy (2) РїРµСЂРІР°СЏ.
 	if rooms[0]["name"] != "Busy" {
 		t.Errorf("expected Busy first, got %v", rooms[0]["name"])
 	}
@@ -531,7 +506,7 @@ func TestListPublicRoomsLimitOffsetAndCounts(t *testing.T) {
 		t.Errorf("expected is_playing=true, got %v", rooms[0]["is_playing"])
 	}
 
-	// Второй чанк.
+	// Р’С‚РѕСЂРѕР№ С‡Р°РЅРє.
 	tail, err := uc.ListPublicRooms(ctx, 10, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -540,7 +515,7 @@ func TestListPublicRoomsLimitOffsetAndCounts(t *testing.T) {
 		t.Fatalf("expected 1 room on second chunk, got %d", len(tail))
 	}
 
-	// has_password — из SQL/мока, без отдельного FindByID.
+	// has_password вЂ” РёР· SQL/РјРѕРєР°, Р±РµР· РѕС‚РґРµР»СЊРЅРѕРіРѕ FindByID.
 	all, _ := uc.ListPublicRooms(ctx, 10, 0)
 	byName := map[string]map[string]any{}
 	for _, r := range all {
@@ -566,7 +541,7 @@ func TestGetOrLoadRoomDoesNotResurrectSkippedTracks(t *testing.T) {
 	auth := repository.NewMockAuthBridge()
 	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
 
-	rm, _, _ := uc.CreateRoom(ctx, "Skip Room", "owner1", "", false)
+	rm, _, _ := uc.CreateRoom(ctx, "Skip Room", "owner1", "")
 
 	// Stale Postgres rows, as left behind by a skip that wasn't persisted yet.
 	roomRepo.Tracks[rm.ID] = []*entity.Track{{ID: "stale1"}, {ID: "stale2"}}
@@ -597,33 +572,5 @@ func TestGetOrLoadRoomDoesNotResurrectSkippedTracks(t *testing.T) {
 	q, _ = redisc.GetQueue(ctx, rdb, rm.ID)
 	if len(q) != 0 {
 		t.Errorf("skipped tracks resurrected: expected empty queue, got %d tracks", len(q))
-	}
-}
-
-func TestCreateRoomStreamFlag(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	ctx := context.Background()
-
-	roomRepo := repository.NewMockRoomRepo()
-	userRepo := repository.NewMockUserRepo()
-	mediaClient := repository.NewMockMediaClient()
-	auth := repository.NewMockAuthBridge()
-	uc := NewRoomUsecase(roomRepo, userRepo, mediaClient, auth, testLog2, rdb)
-
-	rm, _, err := uc.CreateRoom(ctx, "Stream", "owner1", "", true)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !rm.IsStream {
-		t.Error("expected IsStream flag on the created room")
-	}
-
-	plain, _, err := uc.CreateRoom(ctx, "Plain", "owner1", "", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if plain.IsStream {
-		t.Error("expected regular rooms to stay non-streams")
 	}
 }

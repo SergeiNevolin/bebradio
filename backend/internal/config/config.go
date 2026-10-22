@@ -7,16 +7,16 @@ import (
 )
 
 type Config struct {
-	DatabaseURL   string
-	SecretKey     string
+	DatabaseURL     string
+	SecretKey       string
 	MusicServiceURL string
-	RedisURL      string
-	CORSOrigins   []string
+	RedisURL        string
+	CORSOrigins     []string
 
-	JWTAccessMinutes int    // access-токен: короткий, ротируется через /api/auth/refresh
-	JWTRefreshDays   int    // refresh-кука: долгоживущая (дни)
-	RoomTokenExpireHours int // токены доступа в комнату по ссылке (room_access)
-	AuthCookieSecure bool   // флаг Secure для refresh-куки (true на https)
+	JWTAccessMinutes     int  // access-токен: короткий, ротируется через /api/auth/refresh
+	JWTRefreshDays       int  // refresh-кука: долгоживущая (дни)
+	RoomTokenExpireHours int  // токены доступа в комнату по ссылке (room_access)
+	AuthCookieSecure     bool // флаг Secure для refresh-куки (true на https)
 
 	MaxDuration     int
 	MaxChatMessages int
@@ -47,14 +47,14 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		DatabaseURL:    getEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/bebradio"),
-		SecretKey:      getEnv("SECRET_KEY", "bebradio-secret-key-change-in-production"),
+		DatabaseURL:     getEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/bebradio"),
+		SecretKey:       getEnv("SECRET_KEY", "bebradio-secret-key-change-in-production"),
 		MusicServiceURL: getEnvWithFallback("MUSIC_SERVICE_URL", "MEDIA_SERVICE_URL", "http://127.0.0.1:8100"),
-		RedisURL:       getEnv("REDIS_URL", "redis://localhost:6379"),
-		CORSOrigins:    strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000"), ","),
+		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379"),
+		CORSOrigins:     strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000"), ","),
 
-		JWTAccessMinutes: getEnvInt("JWT_ACCESS_EXPIRE_MINUTES", 15),
-		JWTRefreshDays:   getEnvInt("JWT_REFRESH_EXPIRE_DAYS", 30),
+		JWTAccessMinutes:     getEnvInt("JWT_ACCESS_EXPIRE_MINUTES", 15),
+		JWTRefreshDays:       getEnvInt("JWT_REFRESH_EXPIRE_DAYS", 30),
 		RoomTokenExpireHours: getEnvInt("ROOM_TOKEN_EXPIRE_HOURS", getEnvInt("JWT_EXPIRE_HOURS", 72)),
 		AuthCookieSecure:     getEnvBool("AUTH_COOKIE_SECURE", false),
 		MaxDuration:          getEnvInt("MAX_DURATION", 3600),

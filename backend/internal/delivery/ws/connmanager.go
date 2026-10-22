@@ -6,12 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bebradio/backend-go/internal/domain/entity"
+	"github.com/bebradio/backend-go/internal/infrastructure/redisc"
 	"github.com/gorilla/websocket"
 )
 
-// connEntry serializes concurrent writers to one connection: gorilla allows a
-// single concurrent writer, while Broadcast and SendJSON run on arbitrary
-// goroutines (HTTP handlers, WS loop, autoadvance ticker).
 type connEntry struct {
 	conn   *websocket.Conn
 	mu     sync.Mutex
@@ -20,17 +19,11 @@ type connEntry struct {
 
 type ConnectionManager struct {
 	mu          sync.RWMutex
-	connections map[string]map[*websocket.Conn]*connEntry
-	// throttle collapses full-state snapshot storms per room (chatty rooms
-	// otherwise serialize and push the whole queue on every vote, message
-	// and reaction). See Broadcast.
-	throttle map[string]*broadcastSlot
-	log      *slog.Logger
+	connections map[entity.SessionRef]map[*websocket.Conn]*connEntry
+	throttle    map[entity.SessionRef]*broadcastSlot
+	log         *slog.Logger
 }
 
-// broadcastMinInterval caps full-room snapshot traffic: at most one
-// snapshot per room per interval goes out immediately, anything arriving
-// sooner collapses into a single latest-wins flush.
 const broadcastMinInterval = 250 * time.Millisecond
 
 type broadcastSlot struct {
@@ -42,81 +35,79 @@ type broadcastSlot struct {
 
 func NewConnectionManager(log *slog.Logger) *ConnectionManager {
 	return &ConnectionManager{
-		connections: make(map[string]map[*websocket.Conn]*connEntry),
-		throttle:    make(map[string]*broadcastSlot),
+		connections: make(map[entity.SessionRef]map[*websocket.Conn]*connEntry),
+		throttle:    make(map[entity.SessionRef]*broadcastSlot),
 		log:         log,
 	}
 }
 
-func (cm *ConnectionManager) Connect(roomID string, conn *websocket.Conn) {
+func (cm *ConnectionManager) Connect(session any, conn *websocket.Conn) {
+	ref := redisc.AsRef(session)
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	if cm.connections[roomID] == nil {
-		cm.connections[roomID] = make(map[*websocket.Conn]*connEntry)
+	if cm.connections[ref] == nil {
+		cm.connections[ref] = make(map[*websocket.Conn]*connEntry)
 	}
-	cm.connections[roomID][conn] = &connEntry{conn: conn}
+	cm.connections[ref][conn] = &connEntry{conn: conn}
 }
 
-// BindUser records the authenticated user_id for a connection.
-func (cm *ConnectionManager) BindUser(roomID string, conn *websocket.Conn, userID string) {
+func (cm *ConnectionManager) BindUser(session any, conn *websocket.Conn, userID string) {
+	ref := redisc.AsRef(session)
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	if entry, ok := cm.connections[roomID][conn]; ok {
+	if entry, ok := cm.connections[ref][conn]; ok {
 		entry.userID = userID
 	}
 }
 
-// GetUserID returns the user_id bound during hello, or an empty string.
-func (cm *ConnectionManager) GetUserID(roomID string, conn *websocket.Conn) string {
+func (cm *ConnectionManager) GetUserID(session any, conn *websocket.Conn) string {
+	ref := redisc.AsRef(session)
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	if entry, ok := cm.connections[roomID][conn]; ok {
+	if entry, ok := cm.connections[ref][conn]; ok {
 		return entry.userID
 	}
 	return ""
 }
 
-func (cm *ConnectionManager) Disconnect(roomID string, conn *websocket.Conn) {
+func (cm *ConnectionManager) Disconnect(session any, conn *websocket.Conn) {
+	ref := redisc.AsRef(session)
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	if conns, ok := cm.connections[roomID]; ok {
+	if conns, ok := cm.connections[ref]; ok {
 		delete(conns, conn)
 		if len(conns) == 0 {
-			delete(cm.connections, roomID)
+			delete(cm.connections, ref)
 		}
 	}
-	// No listeners left: drop any coalesced snapshot and its timer so a
-	// dead room holds no goroutines or payloads.
-	if len(cm.connections[roomID]) == 0 {
-		if slot, ok := cm.throttle[roomID]; ok {
+	if len(cm.connections[ref]) == 0 {
+		if slot, ok := cm.throttle[ref]; ok {
 			if slot.timer != nil {
 				slot.timer.Stop()
 			}
-			delete(cm.throttle, roomID)
+			delete(cm.throttle, ref)
 		}
 	}
 }
 
-func (cm *ConnectionManager) Broadcast(roomID string, data any) {
-	// Targeted messages (chat, reactions) carry a "type" key and are small:
-	// they always go out immediately. Full room snapshots have no "type"
-	// key and collapse latest-wins under the throttle.
+func (cm *ConnectionManager) Broadcast(session any, data any) {
+	ref := redisc.AsRef(session)
 	if !isSnapshot(data) {
-		cm.send(roomID, data)
+		cm.send(ref, data)
 		return
 	}
 
 	now := time.Now()
 	cm.mu.Lock()
-	slot, ok := cm.throttle[roomID]
+	slot, ok := cm.throttle[ref]
 	if !ok {
 		slot = &broadcastSlot{}
-		cm.throttle[roomID] = slot
+		cm.throttle[ref] = slot
 	}
 	if !slot.armed() && now.Sub(slot.lastSent) >= broadcastMinInterval {
 		slot.lastSent = now
 		cm.mu.Unlock()
-		cm.send(roomID, data)
+		cm.send(ref, data)
 		return
 	}
 	slot.pending = data
@@ -126,13 +117,11 @@ func (cm *ConnectionManager) Broadcast(roomID string, data any) {
 		if delay < 0 {
 			delay = 0
 		}
-		slot.timer = time.AfterFunc(delay, func() { cm.flushRoom(roomID) })
+		slot.timer = time.AfterFunc(delay, func() { cm.flushRoom(ref) })
 	}
 	cm.mu.Unlock()
 }
 
-// isSnapshot reports whether data is a full room-state dump (as opposed to
-// a small targeted event like {"type": "chat"/"reaction", ...}).
 func isSnapshot(data any) bool {
 	m, ok := data.(map[string]any)
 	if !ok {
@@ -146,10 +135,9 @@ func (slot *broadcastSlot) armed() bool {
 	return slot.timer != nil
 }
 
-// flushRoom delivers the latest coalesced snapshot, if any.
-func (cm *ConnectionManager) flushRoom(roomID string) {
+func (cm *ConnectionManager) flushRoom(ref entity.SessionRef) {
 	cm.mu.Lock()
-	slot, ok := cm.throttle[roomID]
+	slot, ok := cm.throttle[ref]
 	if !ok || !slot.hasPending {
 		if ok {
 			slot.timer = nil
@@ -164,14 +152,13 @@ func (cm *ConnectionManager) flushRoom(roomID string) {
 	slot.lastSent = time.Now()
 	cm.mu.Unlock()
 
-	cm.send(roomID, data)
+	cm.send(ref, data)
 }
 
-func (cm *ConnectionManager) send(roomID string, data any) {
-	// Snapshot under a read lock; slow writes must not block other rooms.
+func (cm *ConnectionManager) send(ref entity.SessionRef, data any) {
 	cm.mu.RLock()
-	entries := make([]*connEntry, 0, len(cm.connections[roomID]))
-	for _, entry := range cm.connections[roomID] {
+	entries := make([]*connEntry, 0, len(cm.connections[ref]))
+	for _, entry := range cm.connections[ref] {
 		entries = append(entries, entry)
 	}
 	cm.mu.RUnlock()
@@ -202,30 +189,31 @@ func (cm *ConnectionManager) send(roomID string, data any) {
 	}
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	if live, ok := cm.connections[roomID]; ok {
+	if live, ok := cm.connections[ref]; ok {
 		for _, conn := range dead {
 			delete(live, conn)
 		}
 		if len(live) == 0 {
-			delete(cm.connections, roomID)
+			delete(cm.connections, ref)
 		}
 	}
 }
 
-func (cm *ConnectionManager) GetCount(roomID string) int {
+func (cm *ConnectionManager) GetCount(session any) int {
+	ref := redisc.AsRef(session)
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	return len(cm.connections[roomID])
+	return len(cm.connections[ref])
 }
 
-func (cm *ConnectionManager) SendJSON(roomID string, conn *websocket.Conn, data any) {
+func (cm *ConnectionManager) SendJSON(session any, conn *websocket.Conn, data any) {
+	ref := redisc.AsRef(session)
 	cm.mu.RLock()
-	entry, ok := cm.connections[roomID][conn]
+	entry, ok := cm.connections[ref][conn]
 	cm.mu.RUnlock()
 	if !ok {
-		// Already disconnected: best-effort direct write, as before.
 		if err := conn.WriteJSON(data); err != nil {
-			cm.log.Error("failed to send json", "room_id", roomID, "error", err)
+			cm.log.Error("failed to send json", "session", ref.String(), "error", err)
 		}
 		return
 	}
@@ -233,6 +221,6 @@ func (cm *ConnectionManager) SendJSON(roomID string, conn *websocket.Conn, data 
 	defer entry.mu.Unlock()
 	entry.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	if err := entry.conn.WriteJSON(data); err != nil {
-		cm.log.Error("failed to send json", "room_id", roomID, "error", err)
+		cm.log.Error("failed to send json", "session", ref.String(), "error", err)
 	}
 }

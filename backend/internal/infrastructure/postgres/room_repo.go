@@ -12,8 +12,6 @@ type RoomRepo struct {
 	pool *pgxpool.Pool
 }
 
-// nullIfEmpty maps "" to NULL so optional text columns stay NULL instead of
-// accumulating empty strings.
 func nullIfEmpty(s string) any {
 	if s == "" {
 		return nil
@@ -26,33 +24,46 @@ func NewRoomRepo(pool *pgxpool.Pool) *RoomRepo {
 }
 
 func (r *RoomRepo) Save(room *entity.Room) error {
-	_, err := r.pool.Exec(context.Background(),
-		`INSERT INTO rooms (id, name, owner_id, allow_anonymous_add, is_private, password_hash, auto_radio, is_stream, mashup_radio, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	ctx := context.Background()
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx,
+		`INSERT INTO rooms (id, name, owner_id, allow_anonymous_add, is_private, password_hash, auto_radio, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			allow_anonymous_add = EXCLUDED.allow_anonymous_add,
 			is_private = EXCLUDED.is_private,
 			password_hash = EXCLUDED.password_hash,
-			auto_radio = EXCLUDED.auto_radio,
-			is_stream = EXCLUDED.is_stream,
-			mashup_radio = EXCLUDED.mashup_radio`,
+			auto_radio = EXCLUDED.auto_radio`,
 		room.ID, room.Name, room.OwnerID, room.AllowAnonymousAdd, room.IsPrivate,
-		room.PasswordHash, room.AutoRadio, room.IsStream, room.MashupRadio, room.CreatedAt,
+		room.PasswordHash, room.AutoRadio, room.CreatedAt,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO sessions (kind, id, created_at) VALUES ('room', $1, $2)
+		 ON CONFLICT DO NOTHING`, room.ID, room.CreatedAt,
+	); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *RoomRepo) FindByID(id string) (*entity.Room, error) {
 	row := r.pool.QueryRow(context.Background(),
-		`SELECT id, name, owner_id, allow_anonymous_add, is_private, password_hash, auto_radio, is_stream, mashup_radio, created_at
+		`SELECT id, name, owner_id, allow_anonymous_add, is_private, password_hash, auto_radio, created_at
 		 FROM rooms WHERE id = $1`, id,
 	)
-
 	rm := &entity.Room{}
 	var passwordHash *string
 	err := row.Scan(&rm.ID, &rm.Name, &rm.OwnerID, &rm.AllowAnonymousAdd, &rm.IsPrivate,
-		&passwordHash, &rm.AutoRadio, &rm.IsStream, &rm.MashupRadio, &rm.CreatedAt)
+		&passwordHash, &rm.AutoRadio, &rm.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("room not found: %w", err)
 	}
@@ -68,22 +79,24 @@ func (r *RoomRepo) Delete(id string) error {
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, `DELETE FROM chat_messages WHERE room_id = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM chat_messages WHERE session_kind = 'room' AND session_id = $1`, id); err != nil {
 		return fmt.Errorf("delete messages: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM tracks WHERE room_id = $1`, id); err != nil {
-		return fmt.Errorf("delete tracks: %w", err)
+	if _, err := tx.Exec(ctx, `DELETE FROM queue_items WHERE session_kind = 'room' AND session_id = $1`, id); err != nil {
+		return fmt.Errorf("delete queue: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE kind = 'room' AND id = $1`, id); err != nil {
+		return fmt.Errorf("delete session: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM rooms WHERE id = $1`, id); err != nil {
 		return fmt.Errorf("delete room: %w", err)
 	}
-
 	return tx.Commit(ctx)
 }
 
 func (r *RoomRepo) ListPublic() ([]map[string]any, error) {
 	rows, err := r.pool.Query(context.Background(),
-		`SELECT id, name, auto_radio, is_stream, mashup_radio, password_hash IS NOT NULL AS has_password
+		`SELECT id, name, auto_radio, password_hash IS NOT NULL AS has_password
 		 FROM rooms WHERE is_private = false ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -94,88 +107,21 @@ func (r *RoomRepo) ListPublic() ([]map[string]any, error) {
 	var rooms []map[string]any
 	for rows.Next() {
 		var id, name string
-		var autoRadio, isStream, mashupRadio, hasPassword bool
-		if err := rows.Scan(&id, &name, &autoRadio, &isStream, &mashupRadio, &hasPassword); err != nil {
+		var autoRadio, hasPassword bool
+		if err := rows.Scan(&id, &name, &autoRadio, &hasPassword); err != nil {
 			continue
 		}
 		rooms = append(rooms, map[string]any{
 			"id":           id,
 			"name":         name,
 			"auto_radio":   autoRadio,
-			"is_stream":    isStream,
-			"mashup_radio": mashupRadio,
-			"user_count": 0,
-			"track_count": 0,
-			"is_playing": false,
+			"user_count":   0,
+			"track_count":  0,
+			"is_playing":   false,
 			"has_password": hasPassword,
 		})
 	}
 	return rooms, nil
-}
-
-func (r *RoomRepo) SaveTracks(room *entity.Room) error {
-	// No-op: real saving is done via SaveTracksFromSlice from Redis.
-	return nil
-}
-
-func (r *RoomRepo) LoadTracks(roomID string) ([]*entity.Track, error) {
-	rows, err := r.pool.Query(context.Background(),
-		`SELECT id, source, title, artist, url, thumbnail, duration, added_by, source_url,
-			local_path, media_id, position_index, added_at,
-			COALESCE(owner_id, ''), size_bytes, status, error, has_cover, plays, likes
-		 FROM tracks WHERE room_id = $1 ORDER BY position_index`, roomID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tracks []*entity.Track
-	for rows.Next() {
-		t := &entity.Track{}
-		err := rows.Scan(&t.ID, &t.Source, &t.Title, &t.Artist, &t.URL, &t.Thumbnail, &t.Duration,
-			&t.AddedBy, &t.SourceURL, &t.LocalPath, &t.MediaID, &t.Position, &t.AddedAt,
-			&t.OwnerID, &t.SizeBytes, &t.Status, &t.Error, &t.HasCover, &t.Plays, &t.Likes)
-		if err != nil {
-			continue
-		}
-		tracks = append(tracks, t)
-	}
-	return tracks, nil
-}
-
-func (r *RoomRepo) SaveMessage(roomID string, msg *entity.ChatMessage) error {
-	_, err := r.pool.Exec(context.Background(),
-		`INSERT INTO chat_messages (id, room_id, user_id, username, text, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		msg.ID, roomID, msg.UserID, msg.Username, msg.Text, msg.CreatedAt,
-	)
-	return err
-}
-
-func (r *RoomRepo) LoadMessages(roomID string) ([]*entity.ChatMessage, error) {
-	rows, err := r.pool.Query(context.Background(),
-		`SELECT id, user_id, username, text, created_at
-		 FROM chat_messages WHERE room_id = $1 ORDER BY created_at DESC LIMIT 200`, roomID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var msgs []*entity.ChatMessage
-	for rows.Next() {
-		m := &entity.ChatMessage{}
-		if err := rows.Scan(&m.ID, &m.UserID, &m.Username, &m.Text, &m.CreatedAt); err != nil {
-			continue
-		}
-		msgs = append(msgs, m)
-	}
-	// DESC LIMIT gives newest-first; reverse to chronological order.
-	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
-		msgs[i], msgs[j] = msgs[j], msgs[i]
-	}
-	return msgs, nil
 }
 
 func (r *RoomRepo) RecordVisit(userID, roomID string) error {
@@ -190,7 +136,7 @@ func (r *RoomRepo) RecordVisit(userID, roomID string) error {
 
 func (r *RoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, error) {
 	rows, err := r.pool.Query(context.Background(),
-		`SELECT r.id, r.name, r.is_stream, v.visited_at
+		`SELECT r.id, r.name, v.visited_at
 		 FROM user_room_visits v
 		 JOIN rooms r ON r.id = v.room_id
 		 WHERE v.user_id = $1 AND r.is_private = false
@@ -205,49 +151,11 @@ func (r *RoomRepo) RecentRooms(userID string, limit int) ([]map[string]any, erro
 	var rooms []map[string]any
 	for rows.Next() {
 		var id, name string
-		var isStream bool
 		var visitedAt interface{}
-		if err := rows.Scan(&id, &name, &isStream, &visitedAt); err != nil {
+		if err := rows.Scan(&id, &name, &visitedAt); err != nil {
 			continue
 		}
-		rooms = append(rooms, map[string]any{
-			"id":        id,
-			"name":      name,
-			"is_stream": isStream,
-		})
+		rooms = append(rooms, map[string]any{"id": id, "name": name})
 	}
 	return rooms, nil
-}
-
-// SaveTracksFromSlice writes queue tracks from a slice (Redis write-through).
-func (r *RoomRepo) SaveTracksFromSlice(roomID string, tracks []*entity.Track) error {
-	ctx := context.Background()
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := tx.Exec(ctx, `DELETE FROM tracks WHERE room_id = $1`, roomID); err != nil {
-		return fmt.Errorf("delete old tracks: %w", err)
-	}
-
-	for i, track := range tracks {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO tracks (id, room_id, source, title, artist, url, thumbnail, duration,
-				added_by, position_index, source_url, local_path, media_id, added_at,
-				owner_id, size_bytes, status, error, has_cover, plays, likes)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-				$15, $16, $17, $18, $19, $20, $21)`,
-			track.ID, roomID, track.Source, track.Title, track.Artist, track.URL, track.Thumbnail,
-			track.Duration, track.AddedBy, i, track.SourceURL, track.LocalPath,
-			track.MediaID, track.AddedAt,
-			nullIfEmpty(track.OwnerID), track.SizeBytes, track.Status, track.Error,
-			track.HasCover, track.Plays, track.Likes,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
 }

@@ -149,11 +149,11 @@ func TestBackgroundRefillDoesNotPreSetRadioFilling(t *testing.T) {
 	}
 	mediaClient.ResolveFn = func(url string) (map[string]any, error) {
 		return map[string]any{
-			"title":    "Song",
-			"duration": 200,
+			"title":      "Song",
+			"duration":   200,
 			"source_url": url,
-			"media_id": "m1",
-			"id":       "row_1",
+			"media_id":   "m1",
+			"id":         "row_1",
 		}, nil
 	}
 
@@ -322,11 +322,11 @@ func TestBackgroundRefillSetsIsPlaying(t *testing.T) {
 	}
 	mediaClient.ResolveFn = func(url string) (map[string]any, error) {
 		return map[string]any{
-			"title":    "Song",
-			"duration": 200,
+			"title":      "Song",
+			"duration":   200,
 			"source_url": url,
-			"media_id": "m1",
-			"id":       "row_1",
+			"media_id":   "m1",
+			"id":         "row_1",
 		}, nil
 	}
 
@@ -405,76 +405,6 @@ func boundConn(d *handlerDeps, roomID, userID string) *websocket.Conn {
 		d.manager.BindUser(roomID, conn, userID)
 	}
 	return conn
-}
-
-func streamRoomForGate(t *testing.T, d *handlerDeps, roomID string) *entity.Room {
-	t.Helper()
-	rm := entity.NewRoom(roomID, "Stream", "owner1")
-	rm.IsStream = true
-	rm.MashupRadio = true
-	d.roomRepo.Save(rm)
-	d.userRepo.Users["admin1"] = &entity.User{ID: "admin1", Username: "admin", Role: "admin"}
-	d.userRepo.Users["owner1"] = &entity.User{ID: "owner1", Username: "owner"}
-	d.userRepo.Users["intruder"] = &entity.User{ID: "intruder", Username: "mallory"}
-	storeRoomRedis(t, d, rm,
-		[]*entity.Track{{ID: "t1", Title: "A"}, {ID: "t2", Title: "B"}},
-		&redisc.PlaybackState{CurrentIndex: 0, IsPlaying: true})
-	return rm
-}
-
-func TestStreamNextGatedToControllers(t *testing.T) {
-	d := setupHandler(t)
-	ctx := context.Background()
-	rm := streamRoomForGate(t, d, "S1")
-
-	// Intruder (regular user): no advance.
-	d.handler.handleNext(ctx, rm, boundConn(d, "S1", "intruder"), "S1")
-	if tracks, _ := redisc.GetQueue(ctx, d.rdb, "S1"); len(tracks) != 2 {
-		t.Fatalf("intruder next must not advance, queue=%d", len(tracks))
-	}
-
-	// Owner: advances.
-	d.handler.handleNext(ctx, rm, boundConn(d, "S1", "owner1"), "S1")
-	if tracks, _ := redisc.GetQueue(ctx, d.rdb, "S1"); len(tracks) != 1 {
-		t.Fatalf("owner next must advance, queue=%d", len(tracks))
-	}
-
-	// Admin: advances (fresh queue first).
-	storeRoomRedis(t, d, rm,
-		[]*entity.Track{{ID: "t1", Title: "A"}, {ID: "t2", Title: "B"}},
-		&redisc.PlaybackState{CurrentIndex: 0, IsPlaying: true})
-	d.handler.handleNext(ctx, rm, boundConn(d, "S1", "admin1"), "S1")
-	if tracks, _ := redisc.GetQueue(ctx, d.rdb, "S1"); len(tracks) != 1 {
-		t.Fatalf("admin next must advance, queue=%d", len(tracks))
-	}
-
-	// Plain rooms stay open to everyone.
-	plain := entity.NewRoom("P1", "Plain", "owner1")
-	d.roomRepo.Save(plain)
-	storeRoomRedis(t, d, plain,
-		[]*entity.Track{{ID: "t1", Title: "A"}, {ID: "t2", Title: "B"}},
-		&redisc.PlaybackState{CurrentIndex: 0, IsPlaying: true})
-	d.handler.handleNext(ctx, plain, boundConn(d, "P1", "intruder"), "P1")
-	if tracks, _ := redisc.GetQueue(ctx, d.rdb, "P1"); len(tracks) != 1 {
-		t.Fatalf("plain room next must stay open, queue=%d", len(tracks))
-	}
-}
-
-func TestStreamSeekGatedToControllers(t *testing.T) {
-	d := setupHandler(t)
-	ctx := context.Background()
-	rm := streamRoomForGate(t, d, "S2")
-
-	seek := map[string]any{"action": "sync", "position": float64(999)}
-	d.handler.handleSeek(ctx, rm, boundConn(d, "S2", "intruder"), seek, "S2")
-	if ps, _ := redisc.GetPlayback(ctx, d.rdb, "S2"); ps.Position == 999 {
-		t.Fatal("intruder sync must not move stream position")
-	}
-
-	d.handler.handleSeek(ctx, rm, boundConn(d, "S2", "owner1"), seek, "S2")
-	if ps, _ := redisc.GetPlayback(ctx, d.rdb, "S2"); ps.Position != 999 {
-		t.Fatalf("owner sync must move stream position, got %v", ps.Position)
-	}
 }
 
 func TestPlainRoomSeekGatedToControllers(t *testing.T) {

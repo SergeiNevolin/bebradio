@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../lib/api'
 import { useRoomEntry } from '../hooks/useRoomEntry'
+import { useStreamEntry } from '../hooks/useStreamEntry'
 import { usePlayer } from '../context/PlayerContext'
 import RoomCard from '../components/RoomCard'
 import Shelf from '../components/media/Shelf'
@@ -9,7 +10,7 @@ import { HeartFillIcon } from '../components/player/icons'
 import { tintForId, monoGlyph } from '../lib/mashupArt'
 import type { KaraokePreview } from '../lib/karaokePreview'
 import { karaokeCoverUrl } from '../lib/karaokePreview'
-import { type RoomListItem, type Track } from '../types'
+import { type RoomListItem, type StreamListItem, type Track } from '../types'
 import styles from './Home.module.css'
 
 const POPULAR_ROOMS_LIMIT = 20
@@ -40,11 +41,13 @@ function plural(n: number, one: string, few: string, many: string): string {
 
 export default function Home() {
   const [rooms, setRooms] = useState<RoomListItem[]>([])
+  const [streams, setStreams] = useState<StreamListItem[]>([])
   const [roomsLoading, setRoomsLoading] = useState(true)
   const [topTracks, setTopTracks] = useState<Track[]>([])
   const [tracksLoading, setTracksLoading] = useState(true)
   const [karaokeSongs, setKaraokeSongs] = useState<KaraokePreview[]>([])
   const entry = useRoomEntry()
+  const streamEntry = useStreamEntry()
   const { player, registerTracks, toggleTrack, applyLike, previewSong, setPreviewSong, setQueueOpen } = usePlayer()
 
   const fetchRooms = async () => {
@@ -55,13 +58,23 @@ export default function Home() {
     setRoomsLoading(false)
   }
 
+  const fetchStreams = async () => {
+    try {
+      setStreams(await api.getStreams(POPULAR_ROOMS_LIMIT))
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     fetchRooms()
+    fetchStreams()
     api.listTracks('', 'top', POPULAR_TRACKS_LIMIT)
       .then(setTopTracks)
       .catch(() => {})
       .finally(() => setTracksLoading(false))
-    const interval = setInterval(fetchRooms, 5000)
+    const interval = setInterval(() => {
+      fetchRooms()
+      fetchStreams()
+    }, 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -76,15 +89,14 @@ export default function Home() {
     return () => { alive = false }
   }, [])
 
-  const stations = rooms
-    .filter((r) => r.auto_radio)
-    .sort((a, b) => b.user_count - a.user_count)
-    .slice(0, POPULAR_ROOMS_LIMIT)
-
-  const liveRooms = rooms
+  const activeRooms = rooms
     .filter((r) => !r.auto_radio && (r.user_count > 0 || (r.track_count ?? 0) > 0))
     .sort((a, b) => Number(b.is_playing) - Number(a.is_playing) || b.user_count - a.user_count)
-    .slice(0, POPULAR_ROOMS_LIMIT)
+
+  const liveRooms = (activeRooms.length > 0
+    ? activeRooms
+    : rooms.filter((r) => !r.auto_radio)
+  ).slice(0, POPULAR_ROOMS_LIMIT)
 
   useEffect(() => {
     registerTracks(topTracks)
@@ -95,11 +107,24 @@ export default function Home() {
   return (
     <div className={`${styles.home} ${player.current ? styles.homeWithPlayer : ''}`}>
       {entry.error && <div className="error-msg">{entry.error}</div>}
+      {streamEntry.error && <div className="error-msg">{streamEntry.error}</div>}
 
-      {stations.length > 0 && (
-        <Shelf title="Потоки" linkTo="/rooms">
-          {stations.map((room) => (
-            <RoomCard key={room.id} room={room} onOpen={entry.openRoomById} />
+      {streams.length > 0 && (
+        <Shelf title="Потоки" linkTo="/streams">
+          {streams.map((stream) => (
+            <RoomCard
+              key={stream.id}
+              room={{
+                id: stream.id,
+                name: stream.name,
+                user_count: stream.user_count,
+                track_count: stream.track_count ?? 0,
+                is_playing: stream.is_playing,
+                has_password: false,
+                auto_radio: true,
+              }}
+              onOpen={streamEntry.openStreamById}
+            />
           ))}
         </Shelf>
       )}
@@ -219,6 +244,7 @@ export default function Home() {
       </Shelf>
 
       {entry.entryModals}
+      {streamEntry.entryModals}
     </div>
   )
 }

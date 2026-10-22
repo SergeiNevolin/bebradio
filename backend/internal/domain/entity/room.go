@@ -17,14 +17,6 @@ type Room struct {
 	IsPrivate         bool      `json:"is_private"`
 	PasswordHash      *string   `json:"-"`
 	AutoRadio         bool      `json:"auto_radio"`
-	// IsStream marks an admin-run stream: only admins add tracks,
-	// voting is disabled, everyone else listens.
-	IsStream          bool      `json:"is_stream"`
-	// MashupRadio keeps a stream queue full automatically: the worker refills
-	// random ready library mashups (honouring the stream filter) whenever the
-	// queue runs low. Off = the stream plays only manually added tracks and
-	// pauses when they run out.
-	MashupRadio       bool      `json:"mashup_radio"`
 }
 
 type PresenceInfo struct {
@@ -40,4 +32,8 @@ func NewRoom(id, name, ownerID string) *Room {
 		AllowAnonymousAdd: true,
 		CreatedAt:         time.Now(),
 	}
+}
+
+func (r *Room) Ref() SessionRef {
+	return NewRoomRef(r.ID)
 }

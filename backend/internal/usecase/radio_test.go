@@ -340,11 +340,11 @@ func TestRefillSetsAndClearsFilling(t *testing.T) {
 	}
 	mediaClient.ResolveFn = func(url string) (map[string]any, error) {
 		return map[string]any{
-			"title":    "Song",
-			"duration": 200,
+			"title":      "Song",
+			"duration":   200,
 			"source_url": url,
-			"media_id": "m1",
-			"id":       "row_1",
+			"media_id":   "m1",
+			"id":         "row_1",
 		}, nil
 	}
 
@@ -414,11 +414,11 @@ func TestRefillCalledAfterNeedsRefill(t *testing.T) {
 	}
 	mediaClient.ResolveFn = func(url string) (map[string]any, error) {
 		return map[string]any{
-			"title":    "Radio Song",
-			"duration": 180,
+			"title":      "Radio Song",
+			"duration":   180,
 			"source_url": url,
-			"media_id": "radio_m1",
-			"id":       "row_r1",
+			"media_id":   "radio_m1",
+			"id":         "row_r1",
 		}, nil
 	}
 

@@ -44,8 +44,6 @@ export interface RoomListItem {
   // True for autodj rooms (auto_radio). Exposed by GET /api/rooms so the
   // home page can shelf them as radio stations.
   auto_radio?: boolean
-  // True for admin-run streams: only admins add tracks, no voting.
-  is_stream?: boolean
 }
 
 // Which library mashups the 24/7 stream refills from. Empty = whole base.
@@ -56,8 +54,27 @@ export interface StreamFilter {
   owner: string
 }
 
+export interface MashupRadioFeature {
+  enabled: boolean
+  filter: StreamFilter
+}
+
+export interface StreamFeatures {
+  mashup_radio: MashupRadioFeature
+}
+
+export interface StreamListItem {
+  id: string
+  name: string
+  user_count: number
+  track_count?: number
+  is_playing: boolean
+  features: StreamFeatures
+}
+
 export interface RoomState {
   id: string
+  kind?: 'room' | 'stream'
   name: string
   owner_id: string
   queue: Track[]
@@ -70,13 +87,7 @@ export interface RoomState {
   allow_anonymous_add: boolean
   is_private: boolean
   auto_radio?: boolean
-  // Admin-run stream: only admins add tracks, voting is disabled.
-  is_stream?: boolean
-  // 24/7 mashup auto-refill kill switch (streams). Default true.
-  mashup_radio?: boolean
-  // 24/7 mashup refill filter (author/title). Present on stream rooms.
-  stream_filter?: StreamFilter
-  // True while auto-radio is fetching related tracks in the background.
+  // True while auto-radio (rooms) or a stream refiller is fetching tracks.
   radio_searching?: boolean
   has_password: boolean
   track_votes: { likes: number; dislikes: number }
@@ -87,4 +98,13 @@ export interface RoomState {
   locked?: boolean
   // Issued to the room owner (and after a successful password check via /join).
   access?: string
+}
+
+// Admin-run 24/7 stream. Same runtime shape as a room (queue, playback,
+// chat, listeners) but with typed features and no voting/password.
+export interface StreamState extends RoomState {
+  kind: 'stream'
+  features: StreamFeatures
+  mashup_radio: boolean
+  stream_filter: StreamFilter
 }
