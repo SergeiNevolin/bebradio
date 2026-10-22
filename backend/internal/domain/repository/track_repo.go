@@ -45,7 +45,8 @@ type TrackRepository interface {
 	// Empty filter behaves like List.
 	ListFiltered(filter TrackFilter, sort string, limit, offset int, viewerID string) ([]*entity.Track, error)
 	// ListRandomReady returns up to limit ready library tracks matching filter,
-	// in random order, excluding excludeIDs. Used by the 24/7 stream refill.
+	// in random order, excluding excludeIDs (track IDs or media IDs). Used by
+	// the 24/7 stream refill.
 	ListRandomReady(filter TrackFilter, limit int, excludeIDs []string) ([]*entity.Track, error)
 	ListByOwner(ownerID string, limit, offset int) ([]*entity.Track, error)
 	ListLikedByUser(userID string, limit, offset int) ([]*entity.Track, error)

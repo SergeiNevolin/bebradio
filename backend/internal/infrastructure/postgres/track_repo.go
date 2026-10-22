@@ -188,7 +188,7 @@ func (r *TrackRepo) ListFiltered(f repository.TrackFilter, sort string, limit, o
 }
 
 // ListRandomReady feeds the 24/7 stream: only ready rows, random order,
-// excluding already queued / recently played ids.
+// excluding already queued / recently played track IDs or media IDs.
 func (r *TrackRepo) ListRandomReady(f repository.TrackFilter, limit int, excludeIDs []string) ([]*entity.Track, error) {
 	if limit <= 0 {
 		limit = 3
@@ -203,7 +203,8 @@ func (r *TrackRepo) ListRandomReady(f repository.TrackFilter, limit int, exclude
 			placeholders[i] = fmt.Sprintf("$%d", len(queryArgs)+1)
 			queryArgs = append(queryArgs, id)
 		}
-		where += ` AND t.id NOT IN (` + strings.Join(placeholders, ",") + `)`
+		excluded := strings.Join(placeholders, ",")
+		where += ` AND t.id NOT IN (` + excluded + `) AND COALESCE(t.media_id, '') NOT IN (` + excluded + `)`
 	}
 	limPos := len(queryArgs) + 1
 	queryArgs = append(queryArgs, limit)

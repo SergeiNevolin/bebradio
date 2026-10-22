@@ -477,7 +477,7 @@ func (m *MockTrackRepo) ListRandomReady(f TrackFilter, limit int, excludeIDs []s
 	}
 	out := make([]*entity.Track, 0)
 	for id, v := range m.Items {
-		if excluded[id] {
+		if excluded[id] || (v.MediaID != "" && excluded[v.MediaID]) {
 			continue
 		}
 		cp := *v

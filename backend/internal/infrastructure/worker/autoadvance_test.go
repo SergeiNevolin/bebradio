@@ -110,6 +110,31 @@ func TestTickRefillsColdStream(t *testing.T) {
 	}
 }
 
+func TestTickLoopsExhaustedStreamLibrary(t *testing.T) {
+	d := setupWorker(t)
+	st := saveStream(t, d, "LOOP", true)
+	tr := readyTrack("m1", "Bootleg A", "DJ X")
+	tr.MediaID = "media-m1"
+	d.tracks.Create(tr)
+
+	if _, err := d.stream.GetOrLoadStream(d.ctx, st.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := redisc.AddRadioSeen(d.ctx, d.rdb, st.Ref(), tr.MediaID); err != nil {
+		t.Fatal(err)
+	}
+	d.w.tick(d.ctx)
+
+	waitFor(t, "library loop refill", func() bool {
+		n, _ := redisc.GetQueueLen(d.ctx, d.rdb, st.Ref())
+		return n == 1
+	})
+	ps, _ := redisc.GetPlayback(d.ctx, d.rdb, st.Ref())
+	if ps == nil || !ps.IsPlaying {
+		t.Error("expected the stream to restart after the library was exhausted")
+	}
+}
+
 func TestTickLeavesDisabledMashupStreamEmpty(t *testing.T) {
 	d := setupWorker(t)
 	st := saveStream(t, d, "OFF", false)
