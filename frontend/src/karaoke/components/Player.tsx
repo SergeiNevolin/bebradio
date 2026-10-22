@@ -523,14 +523,17 @@ export default function Player() {
         n -= 1
         if (n <= 0) {
           window.clearInterval(countTimer.current)
-          // оригинал всегда играет рядом приглушённым — переходы без пауз
-          if (origRef.current) {
+          // оригинал держим рядом приглушённым только если он уже из памяти
+          // (blob): стрим-оригинал на старте лишь конкурирует за канал с минусом,
+          // а переходы на пропусках всё равно ресинкаются тик-эффектом.
+          const o = origRef.current
+          if (o && o.getAttribute('src')?.startsWith('blob:')) {
             try {
-              origRef.current.currentTime = audioRef.current?.currentTime ?? 0
+              o.currentTime = audioRef.current?.currentTime ?? 0
             } catch {
               /* ignore */
             }
-            void origRef.current.play().catch(() => undefined)
+            void o.play().catch(() => undefined)
           }
           audioRef.current
             ?.play()
@@ -763,54 +766,54 @@ export default function Player() {
       .catch(() => undefined)
   }, [])
 
-  // Предзагрузка аудио в blob: греем с открытия песни, подменяем src как только
-  // догрелось. Нюанс стабильности: подмена src посреди пения СЛЫШИМОЙ дорожки
-  // рвёт звук (перезагрузка декодера + AbortError стартующего play) — именно это
-  // и давало «прерывисто» при переходе на плюс, когда blob оригинала приходил
-  // уже по ходу песни. Поэтому слышимую играющую дорожку не трогаем: URL
-  // откладываем в pendingBlob и подбираем на паузе/seek/рестарте. Фоновую
-  // (приглушённую) можно менять свободно — её не слышно.
+  // Подмена src на догревшийся blob. Слышимую И УЖЕ ЗВУЧАЩУЮ дорожку не трогаем:
+  // смена src рвёт декодер и стартующий play (AbortError) — источник «прерывисто».
+  // На паузе (стартовый экран, отсчёт, пауза) подмена безопасна и желательна —
+  // тогда первый старт идёт из памяти, а не с сети. Отложенное берём на
+  // паузе/seek/рестарте (pendingBlob).
+  const swapToBlob = useCallback((el: HTMLAudioElement | null, url: string, role: 'minus' | 'orig') => {
+    if (!el || el.getAttribute('src') === url) return
+    const audible = role === 'minus' ? !useOrig.current : useOrig.current
+    if (audible && !el.paused) {
+      pendingBlob.current[role] = url
+      return
+    }
+    const wasPlaying = !el.paused
+    const t = Number.isFinite(el.currentTime) ? el.currentTime : 0
+    el.src = url
+    try {
+      el.currentTime = t
+    } catch {
+      /* ignore */
+    }
+    // Подмена могла оборвать стартующий play() — дожимаем, если реально играли.
+    if (wasPlaying) void el.play().catch(() => undefined)
+  }, [])
+
+  // Предзагрузка в blob: минус греем сразу (нужен на старте), оригинал — следом,
+  // чтобы две полные загрузки не конкурировали за канал в момент старта. Вместе с
+  // preload="metadata" у <audio> это убирает двойную загрузку «стрим + blob».
   useEffect(() => {
     if (!song) return
     const id = song.id
+    const minusUrl = song.audio
+    const origUrl = song.original
     pendingBlob.current = {}
     lastSyncRef.current = 0
     let cancelled = false
-    const swapToBlob = (el: HTMLAudioElement | null, url: string, role: 'minus' | 'orig'): void => {
-      if (cancelled || !el || el.getAttribute('src') === url) return
-      const audible = role === 'minus' ? !useOrig.current : useOrig.current
-      const playing = phaseRef.current === 'playing' || phaseRef.current === 'countdown'
-      if (audible && playing) {
-        pendingBlob.current[role === 'minus' ? 'minus' : 'orig'] = url
-        return
-      }
-      const t = Number.isFinite(el.currentTime) ? el.currentTime : 0
-      const ph = phaseRef.current
-      el.src = url
-      try {
-        el.currentTime = t
-      } catch {
-        /* ignore */
-      }
-      // Подмена могла оборвать стартующий play() (AbortError): если поём
-      // или стартуем — дожимаем play, иначе begin/пользователь сделают сами.
-      if (ph === 'countdown' || ph === 'playing') {
-        void el.play().catch(() => undefined)
-      }
-    }
-    void warmSongAudio(id, 'minus', song.audio).then((url) => {
-      if (url) swapToBlob(audioRef.current, url, 'minus')
-    })
-    if (song.original) {
-      void warmSongAudio(id, 'orig', song.original).then((url) => {
-        if (url) swapToBlob(origRef.current, url, 'orig')
+    const alive = () => !cancelled && useKaraoke.getState().song?.id === id
+    void warmSongAudio(id, 'minus', minusUrl).then((blob) => {
+      if (blob && alive()) swapToBlob(audioRef.current, blob, 'minus')
+      if (!origUrl) return
+      void warmSongAudio(id, 'orig', origUrl).then((o) => {
+        if (o && alive()) swapToBlob(origRef.current, o, 'orig')
       })
-    }
+    })
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [song?.id])
+  }, [song?.id, swapToBlob])
 
   if (!song) return null
   const segs = segsSorted
@@ -822,14 +825,14 @@ export default function Player() {
   return (
     <div className={`flex w-full flex-col px-5 max-sm:pb-[env(safe-area-inset-bottom)] ${singing ? 'h-full' : 'h-[calc(100%-64px)]'}`}>
       <audio ref={audioRef} src={song.audio}
-        preload="auto" onEnded={onEnded}
+        preload="metadata" onEnded={onEnded}
         onWaiting={() => setWaiting(true)}
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
         onLoadedMetadata={(e) => onBackingLoaded(e.currentTarget)} />
       {/* вторая дорожка: оригинал с вокалом для пропусков «не поём» */}
       {song.original && (
-        <audio ref={origRef} src={song.original} preload="auto" muted
+        <audio ref={origRef} src={song.original} preload="metadata" muted
           onWaiting={() => { if (useOrig.current) setWaiting(true) }}
           onPlaying={() => setWaiting(false)}
           onCanPlay={() => setWaiting(false)} />
